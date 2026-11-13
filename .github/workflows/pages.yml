@@ -8,6 +8,8 @@ name: Pages
 on:
   push:
     branches: [web/main]
+  # « Run workflow » in Actions › Pages : a deploy by hand (the first one, a re-run of the site)
+  workflow_dispatch:
 
 permissions:
   contents: read
