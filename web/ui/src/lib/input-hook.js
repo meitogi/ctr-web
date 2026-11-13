@@ -5,6 +5,9 @@
 //                                    per input update
 //   players                          couch mode (players.js) : next() swap command, report(slots)
 //   blocked()                        true while the Settings panel holds the input
+//   unlockAll()                      true while the home page's « Unlock everything » box is checked
+//                                    (include/platform/native_web_ui.h : the menus open everything
+//                                    but Adventure, the save is never written)
 // watchPads : a rAF poll of navigator.getGamepads for the page's own uses (Settings, the ready
 // screen) — the pad itself is SDL's, this only watches.
 import { parsePadId } from './pads.js'
@@ -29,7 +32,7 @@ export function deviceInts(device) {
 }
 
 /**
- * @param {{ get: () => { keyboard: number[], gamepad: number[], duo: boolean, keyboardLeft: number[], keyboardRight: number[] } }} settings
+ * @param {{ get: () => { keyboard: number[], gamepad: number[], unlockAll: boolean, duo: boolean, keyboardLeft: number[], keyboardRight: number[] } }} settings
  * @param {{ blocked: () => boolean }} ui
  * @param {{ players?: { next: () => number, report: (slots: object[]) => void } }} [opts]
  */
@@ -54,6 +57,7 @@ export function createInputHook(settings, ui, { players = null } = {}) {
     },
     players,
     blocked: () => ui.blocked(),
+    unlockAll: () => !!settings.get().unlockAll,
   }
 }
 

@@ -143,3 +143,12 @@ test('« Who plays » reaches the game as 4 ints : mode, vendor, product, rank (
   hook.pull(old, 0, 16, 32, 48) // a game without the device pointer : nothing written there
   assert.deepEqual([...old.subarray(52, 56)], [7, 7, 7, 7])
 })
+
+test('« Unlock everything » reaches the game as the page\'s box says (include/platform/native_web_ui.h)', async () => {
+  const { createInputHook } = await import('../src/lib/input-hook.js')
+  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, unlockAll: true }
+  const hook = createInputHook({ get: () => s }, { blocked: () => false })
+  assert.equal(hook.unlockAll(), true)
+  s = { ...s, unlockAll: false }
+  assert.equal(hook.unlockAll(), false)
+})

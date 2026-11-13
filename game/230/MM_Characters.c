@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_web_ui.h>
 
 enum
 {
@@ -176,7 +177,7 @@ s32 MM_Characters_GetNextDriver(s32 direction, s16 characterID)
 	    // if desired driver is not unlocked by default
 	    (unlocked != MM_CHARACTER_UNLOCK_ALWAYS) &&
 
-	    !CHECK_ADV_BIT(GAME_PROGRESS.unlocks, unlocked))
+	    !WEB_UNLOCKED(unlocked))
 	{
 		// set new driver to the driver you already have
 		nextIcon = characterID;
@@ -959,7 +960,12 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 	case MM_CHARACTER_SELECT_LAYOUT_4P:
 
 		// If Fake Crash is unlocked, do not draw "Select Character"
+#if defined(__EMSCRIPTEN__)
+		// the page's « Unlock everything » : Fake Crash's row is there too (include/platform/native_web_ui.h)
+		if ((GAME_PROGRESS.unlocks[0] & UNLOCK_FAKE_CRASH) || WEB_UNLOCK_ALL_OPEN)
+#else
 		if (GAME_PROGRESS.unlocks[0] & UNLOCK_FAKE_CRASH)
+#endif
 		{
 			goto dontDrawSelectCharacter;
 		}
@@ -1318,7 +1324,7 @@ outerPlayerLoopComplete:
 			    // if character is unlocked
 			    // from the global unlock bitfield
 			    // also the variable written by cheats
-			    CHECK_ADV_BIT(GAME_PROGRESS.unlocks, unlockRequirement))
+			    WEB_UNLOCKED(unlockRequirement))
 			{
 				register struct TransitionMeta *iconTransition CTR_PSX_REGISTER("$3");
 				register struct MetaDataCHAR *iconCharacterMetadata CTR_PSX_REGISTER("$4");
@@ -1545,7 +1551,7 @@ outerPlayerLoopComplete:
 		    // if character is unlocked
 		    // from the global unlock bitfield
 		    // also the variable written by cheats
-		    CHECK_ADV_BIT(GAME_PROGRESS.unlocks, unlockRequirement))
+		    WEB_UNLOCKED(unlockRequirement))
 		{
 			iconRect.x = MM_CHARACTER_SELECT_TRANSITION_META[playerIndex].currX + preInputCharacterMeta->posX;
 			iconRect.y = MM_CHARACTER_SELECT_TRANSITION_META[playerIndex].currY + (s16)iconMetaTail[0];

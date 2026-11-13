@@ -12,7 +12,7 @@
   import { BUTTONS } from './lib/mappings.js'
   import { T } from './lib/strings.js'
   import { ui } from './state.svelte.js'
-  import { live } from './store.js'
+  import { live, settings } from './store.js'
 
   let { handleFile, startGame, layout = null } = $props()
   let input = $state()
@@ -73,6 +73,13 @@
       </ul>
     {/if}
 
+    {#if !ui.progress}
+      <label id="unlock-all" class="unlock">
+        <input id="unlock-all-box" type="checkbox" checked={live.current.unlockAll} onchange={(e) => settings.patch({ unlockAll: e.currentTarget.checked })} />
+        <span>{T.unlockAll}<small>{T.unlockAllHelp}</small></span>
+      </label>
+    {/if}
+
     <p id="boot-status" class="dim small" aria-live="polite">{ui.status}</p>
     <div id="drop-error" class="error" role="alert" hidden={!ui.error}>{ui.error}</div>
   </div>
@@ -96,6 +103,9 @@
   .press { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 22px 0 4px; font-size: 18px; animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.55; } }
   .other { margin: 16px 0 0; }
+  .unlock { display: flex; align-items: center; gap: 12px; margin-top: 18px; text-align: left; cursor: pointer; }
+  .unlock input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .unlock small { display: block; color: var(--ink-dim); font-size: 12px; }
   .link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
   .disc { width: 60px; height: 60px; color: var(--warm); margin-bottom: 8px; }
   .disp { font-family: var(--display); font-size: 22px; letter-spacing: 0.01em; }

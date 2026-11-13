@@ -10,6 +10,7 @@
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
 #include <stddef.h>
+#include <platform/native_web_ui.h>
 #endif
 
 #define NATIVE_INPUT_MAX_CONTROLLERS       PLATFORM_INPUT_PAD_COUNT
@@ -333,6 +334,13 @@ internal void NativeInput_ApplyRemotePads(void)
 EM_JS(void, NativeInput_WebPullMappings, (s32 *keyboard, s32 *keyboard2, s32 *gamepad, s32 *duo, s32 *device), {
 	const input = Module['ctrInput'];
 	if (input) input.pull(HEAP32, keyboard >> 2, gamepad >> 2, keyboard2 >> 2, duo >> 2, device >> 2);
+});
+
+// include/platform/native_web_ui.h : 1 while the home page's « Unlock everything » box is checked.
+int g_nativeWebUnlockAll;
+EM_JS(int, NativeInput_WebUnlockAll, (void), {
+	const input = Module['ctrInput'];
+	return input && input.unlockAll && input.unlockAll() ? 1 : 0;
 });
 
 // 1 while the Settings panel is open : its keys and pad presses are not the game's.
@@ -1171,6 +1179,7 @@ void Platform_InputUpdate(void)
 	SDL_PumpEvents();
 #if defined(__EMSCRIPTEN__)
 	NativeInput_WebPullMappings(&s_keyboardMapping.kc_square, &s_keyboardMapping2.kc_square, &s_controllerMapping.gc_square, &s_webDuo, s_webDevice);
+	g_nativeWebUnlockAll = NativeInput_WebUnlockAll();
 	NativeInput_WebApplyDevice();
 	NativeInput_WebApplyPlayerCommands();
 	NativeInput_WebPlaceKeyboard2();
