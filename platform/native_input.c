@@ -263,6 +263,9 @@ internal void NativeInput_WriteInstalledSnapshots(void)
 // keyboard pass : a guest's pad replaces whatever was in its slot, slot 0 stays
 // the host's. Returns the mask of slots a guest holds (bit n = slot n) and
 // writes their PSX pad packets (status, id, buttons, analog) at dst.
+// the slots guests held at the last read : a pad of this machine plugged later never opens there
+// (the page counts the host's own players among the four, web/share/panel.js)
+global_variable s32 s_webRemotePadMask;
 EM_JS(int, NativeInput_WebReadRemotePads, (u8 *dst), {
 	const share = Module['ctrShare'];
 	return share ? share.readPads(HEAPU8, dst) : 0;
@@ -273,6 +276,7 @@ internal void NativeInput_ApplyRemotePads(void)
 {
 	u8 packets[(NATIVE_INPUT_MAX_CONTROLLERS - 1) * NATIVE_INPUT_PAD_PACKET_BYTES];
 	const s32 mask = NativeInput_WebReadRemotePads(packets);
+	s_webRemotePadMask = mask;
 
 
 	for (s32 slot = 1; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
@@ -500,7 +504,8 @@ internal s32 NativeInput_WebFreeSlot(void)
 {
 	for (s32 slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
-		if ((s_controllers[slot].controller == NULL) && (slot != s_keyboardControllerSlot) && (slot != s_keyboard2ControllerSlot))
+		if ((s_controllers[slot].controller == NULL) && (slot != s_keyboardControllerSlot) && (slot != s_keyboard2ControllerSlot) &&
+		    ((s_webRemotePadMask & (1 << slot)) == 0))
 		{
 			return slot;
 		}
@@ -1011,6 +1016,13 @@ internal s32 NativeInput_FindSlotForDeviceIndex(Sint32 deviceIndex)
 
 	for (slot = 0; slot < NATIVE_INPUT_MAX_CONTROLLERS; slot++)
 	{
+#if defined(__EMSCRIPTEN__)
+		// a Share guest's seat is not this machine's
+		if ((s_webRemotePadMask & (1 << slot)) != 0)
+		{
+			continue;
+		}
+#endif
 		if ((s_controllerToSlotMapping[slot] < 0) && (s_controllers[slot].controller == NULL))
 		{
 			return slot;
