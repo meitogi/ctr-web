@@ -33,8 +33,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { installMeter, readMeter, resetMeter } from './audio-meter.mjs'
-import { PLAYER, bootToMenu, brief, menuTo, say, state, until } from './ctr.mjs'
-import { runDirOf, shot } from './online.suite.mjs'
+import { PLAYER, bootToMenu, brief, menuTo, runDirOf, say, shot, state, until } from './ctr.mjs'
 
 export const meta = { url: 'http://localhost:8093/index.html', login: false, player: PLAYER }
 

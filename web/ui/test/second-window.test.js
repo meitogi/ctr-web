@@ -6,10 +6,10 @@ import { KEYS, createSettings } from '../src/lib/settings.js'
 
 test('second window url : the room link kept whole, ?bot ?mute ?dev added', () => {
   const online = 'http://localhost:8090/index.html?sound#room=abc&key=def&relay=wss%3A%2F%2Fr'
-  const u = new URL(secondWindowUrl(online, 'battle'))
+  const u = new URL(secondWindowUrl(online, 'share'))
   assert.equal(u.pathname, '/index.html')
   assert.equal(u.hash, '#room=abc&key=def&relay=wss%3A%2F%2Fr')
-  assert.equal(u.searchParams.get('dev'), 'battle')
+  assert.equal(u.searchParams.get('dev'), 'share')
   assert.ok(u.searchParams.has('bot') && u.searchParams.has('mute') && u.searchParams.has('sound'))
   const share = new URL(secondWindowUrl('http://localhost:8090/share/guest.html#room=x&key=y', 'share'))
   assert.equal(share.pathname, '/share/guest.html')
@@ -17,12 +17,11 @@ test('second window url : the room link kept whole, ?bot ?mute ?dev added', () =
 })
 
 test('page role : ?dev only for a known mode', () => {
-  assert.deepEqual(pageRole('?bot=1&mute=1&dev=vs'), { bot: true, second: 'vs' })
+  assert.deepEqual(pageRole('?bot=1&mute=1&dev=share'), { bot: true, second: 'share' })
+  assert.deepEqual(pageRole('?dev=vs'), { bot: false, second: null }, 'no Netplay in this edition')
   assert.deepEqual(pageRole('?dev=nope'), { bot: false, second: null })
   assert.deepEqual(pageRole(''), { bot: false, second: null })
-  assert.deepEqual(Object.keys(SECOND), ['vs', 'battle', 'share', 'arcade'])
-  assert.equal(SECOND.arcade.room, 'online')
-  assert.equal(SECOND.battle.room, 'online')
+  assert.deepEqual(Object.keys(SECOND), ['share'])
   assert.equal(SECOND.share.menu, 'VS.')
 })
 
@@ -43,16 +42,12 @@ test("the bot's settings stay in memory : « Bot », the keyboard, nothing writt
   assert.equal(createSettings(player).get().device.mode, 'gamepad')
 })
 
-test('host : Share through the panel, Online through its page', async () => {
+test('host : Share through the panel, and no other room in this edition', async () => {
   const calls = []
-  const g = {
-    ctrShareApi: { start: async () => { calls.push('share') }, link: () => 'http://h/share/guest.html#room=1' },
-    __ctrOnline: { host: async () => { calls.push('online') }, state: () => ({ link: 'http://h/index.html#room=2' }) },
-  }
+  const g = { ctrShareApi: { start: async () => { calls.push('share') }, link: () => 'http://h/share/guest.html#room=1' } }
   await assert.rejects(host('solo', g), /no room/)
+  await assert.rejects(host('online', g), /no room/)
   assert.equal(await host('share', g), 'http://h/share/guest.html#room=1')
-  assert.equal(await host('online', g), 'http://h/index.html#room=2')
-  assert.deepEqual(calls, ['share', 'online'])
-  await assert.rejects(host('online', { __ctrOnline: { host: async () => {}, state: () => ({ link: '', error: 'relay down' }) } }), /relay down/)
+  assert.deepEqual(calls, ['share'])
   await assert.rejects(host('share', {}, { timeout: 50, every: 10 }), /never loaded/)
 })

@@ -1,4 +1,4 @@
-// The page's default relay (../relay-default.js) : one source for the three modules and
+// The page's default relay (../relay-default.js) : one source for Share's panel and
 // web/dev.sh ; a build may name another (window.__CTR_RELAY, preload-flag.js), nothing else may.
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -59,11 +59,11 @@ test('preload-flag.js\'s values reach DEFAULT_RELAY and DEFAULT_RELAY_KEY', asyn
   }
 });
 
-test('the address is written once : the three modules import it, dev.sh reads its line', () => {
-  for (const f of ['online/page.js', 'share/panel.js', 'ui/src/lib/join.js', 'dev.sh']) {
+test('the address is written once : Share imports it, dev.sh reads its line', () => {
+  for (const f of ['share/panel.js', 'dev.sh']) {
     assert.ok(!read(f).includes(BUILT_IN_RELAY), `${f} writes the address itself`);
   }
-  for (const f of ['online/page.js', 'share/panel.js', 'ui/src/lib/join.js']) {
+  for (const f of ['share/panel.js']) {
     assert.match(read(f), /relay-default\.js/, f);
   }
   assert.match(read('dev.sh'), /BUILT_IN_RELAY.*relay-default\.js/);

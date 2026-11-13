@@ -22,8 +22,10 @@ export const isLocal = (peerId) => typeof peerId === 'string' && peerId.startsWi
  * @param {() => number} [o.now] - milliseconds
  * @param {number} [o.staleMs=500] - a guest silent this long reads as nothing held (its slot
  *   stays connected) : the pad channel drops packets, a lost release must not hold a button
+ * @param {() => number} [o.busy] - the slots a device of the host's machine holds (bit n = slot
+ *   n) : never handed to a guest, so the host's local players count among the four
  */
-export function createSlots({ now = () => performance.now(), staleMs = 500 } = {}) {
+export function createSlots({ now = () => performance.now(), staleMs = 500, busy = () => 0 } = {}) {
   const owner = [null, null, null, null]; // slot → peerId
   const pads = [null, null, null, null]; // slot → {seq, id, buttons, analog, at}
 
@@ -38,8 +40,9 @@ export function createSlots({ now = () => performance.now(), staleMs = 500 } = {
     take(peerId) {
       const had = slotOf(peerId);
       if (had) return had;
+      const local = busy();
       for (let s = FIRST_SLOT; s < SLOT_COUNT; s++) {
-        if (owner[s] === null) {
+        if (owner[s] === null && !(local & (1 << s))) {
           owner[s] = peerId;
           pads[s] = null;
           return s;

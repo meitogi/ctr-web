@@ -1,4 +1,4 @@
-// The page's settings, one place : player name, volume / mute, skip intro, keyboard and gamepad
+// The page's settings, one place : player name, volume / mute, keyboard and gamepad
 // mappings, two players on one keyboard (duo) and its two key sets, who plays on this page
 // (device : auto, keyboard only, gamepad only and which one). Persisted in localStorage ; a missing or blocked storage (private mode) only means
 // nothing is remembered.
@@ -22,7 +22,6 @@ export const KEYS = {
   name: 'ctr-online.name',
   volume: 'ctr-ui.volume',
   muted: 'ctr-ui.muted',
-  skipIntro: 'ctr-ui.skip-intro',
   keyboard: 'ctr-ui.keyboard',
   gamepad: 'ctr-ui.gamepad',
   duo: 'ctr-ui.duo',
@@ -71,7 +70,6 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     name: cleanName(read(storage, KEYS.name) ?? ''),
     volume: Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : DEFAULT_VOLUME,
     muted: read(storage, KEYS.muted) === '1',
-    skipIntro: read(storage, KEYS.skipIntro) !== '0',
     keyboard: loadMapping(storage, KEYS.keyboard, DEFAULT_KEYBOARD),
     gamepad: loadMapping(storage, KEYS.gamepad, DEFAULT_GAMEPAD),
     duo: read(storage, KEYS.duo) === '1',
@@ -85,7 +83,6 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.name, s.name)
   write(storage, KEYS.volume, s.volume)
   write(storage, KEYS.muted, s.muted ? '1' : null)
-  write(storage, KEYS.skipIntro, s.skipIntro ? null : '0')
   saveMapping(storage, KEYS.keyboard, s.keyboard, DEFAULT_KEYBOARD)
   saveMapping(storage, KEYS.gamepad, s.gamepad, DEFAULT_GAMEPAD)
   write(storage, KEYS.duo, s.duo ? '1' : null)

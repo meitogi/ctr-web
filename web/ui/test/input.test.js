@@ -131,7 +131,7 @@ test('« Who plays » reaches the game as 4 ints : mode, vendor, product, rank (
   assert.deepEqual(deviceInts({ mode: 'gamepad', pad: { id: '054c-0ce6-Wireless Controller', nth: 0 } }), [2, 0x054c, 0x0ce6, 0])
   assert.deepEqual(deviceInts({ mode: 'gamepad', pad: { id: 'Pro Controller', nth: 0 } }), [2, 0, 0, 0], 'no ids (Safari) : the first pad')
 
-  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, keyboardRight: DEFAULT_KEYBOARD, keyboardLeft: DEFAULT_KEYBOARD, duo: false, skipIntro: true, device: { mode: 'keyboard', pad: null } }
+  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, keyboardRight: DEFAULT_KEYBOARD, keyboardLeft: DEFAULT_KEYBOARD, duo: false, device: { mode: 'keyboard', pad: null } }
   const hook = createInputHook({ get: () => s }, { blocked: () => false })
   const heap = new Int32Array(64)
   hook.pull(heap, 0, 16, 32, 48, 52)

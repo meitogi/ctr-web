@@ -5,10 +5,8 @@
 //                                    per input update
 //   players                          couch mode (players.js) : next() swap command, report(slots)
 //   blocked()                        true while the Settings panel holds the input
-//   introSkip()                      true once per recent press while « Skip intro » is on
-//                                    (include/platform/native_web_ui.h)
-// Also tracks those presses : keydown (no repeats, not F1–F12) and pad buttons going down
-// (watchPads, a rAF poll of navigator.getGamepads — the pad itself is SDL's, this only watches).
+// watchPads : a rAF poll of navigator.getGamepads for the page's own uses (Settings, the ready
+// screen) — the pad itself is SDL's, this only watches.
 import { parsePadId } from './pads.js'
 import { keyboardSets } from './settings.js'
 
@@ -30,20 +28,14 @@ export function deviceInts(device) {
   return Number.isInteger(v) && Number.isInteger(p) ? [mode, v, p, pad.nth] : [mode, 0, 0, 0]
 }
 
-const PRESS_WINDOW_MS = 1000
-
 /**
- * @param {{ get: () => { keyboard: number[], gamepad: number[], skipIntro: boolean, duo: boolean, keyboardLeft: number[], keyboardRight: number[] } }} settings
- * @param {{ blocked: () => boolean, skipAll?: () => boolean }} ui
- * @param {{ now?: () => number, players?: { next: () => number, report: (slots: object[]) => void } }} [opts]
+ * @param {{ get: () => { keyboard: number[], gamepad: number[], duo: boolean, keyboardLeft: number[], keyboardRight: number[] } }} settings
+ * @param {{ blocked: () => boolean }} ui
+ * @param {{ players?: { next: () => number, report: (slots: object[]) => void } }} [opts]
  */
-export function createInputHook(settings, ui, { now = () => performance.now(), players = null } = {}) {
-  let lastPress = -Infinity
+export function createInputHook(settings, ui, { players = null } = {}) {
   let device = null
   let ints = [0, 0, 0, 0]
-  const press = () => {
-    if (settings.get().skipIntro) lastPress = now()
-  }
   return {
     pull(heap32, kb, pad, kb2, duo, dev) {
       const s = settings.get()
@@ -62,19 +54,6 @@ export function createInputHook(settings, ui, { now = () => performance.now(), p
     },
     players,
     blocked: () => ui.blocked(),
-    introSkip() {
-      // a room link at boot : every intro wait ends at once (session 32e)
-      if (ui.skipAll?.()) return true
-      if (!settings.get().skipIntro || now() - lastPress > PRESS_WINDOW_MS) return false
-      lastPress = -Infinity
-      return true
-    },
-    /** A key or pad button went down (the page's listeners call this). */
-    press,
-    /** keydown listener body : counts a press unless it is a repeat or a debug F-key. */
-    onKey(e) {
-      if (!e.repeat && !/^F([1-9]|1[0-2])$/.test(e.code)) press()
-    },
   }
 }
 

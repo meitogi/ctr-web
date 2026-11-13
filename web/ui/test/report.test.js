@@ -8,13 +8,17 @@ import { ISSUES, MAX_URL, MODES, browserOf, issueUrl, modeOf } from '../src/lib/
 const FORM = readFileSync(new URL('../../../.github/ISSUE_TEMPLATE/bug.yml', import.meta.url), 'utf8')
 const formIds = [...FORM.matchAll(/^\s+id: (\S+)$/gm)].map((m) => m[1])
 
+test('the link opens this repository\'s own bug form (meitogi/ctr-web, not Second Lap\'s)', () => {
+  assert.equal(ISSUES, 'https://github.com/meitogi/ctr-web/issues/new')
+})
+
 test('the link opens the bug form and fills each field by its id', () => {
-  const url = new URL(issueUrl({ version: 'v1.0.0-b.10', browser: 'Firefox 133 · Windows', mode: MODES.netplayGuest, lang: 'en', state: 'phase=running' }))
+  const url = new URL(issueUrl({ version: 'v1.0.0-b.10', browser: 'Firefox 133 · Windows', mode: MODES.shareGuest, lang: 'en', state: 'phase=running' }))
   assert.equal(`${url.origin}${url.pathname}`, ISSUES)
   assert.equal(url.searchParams.get('template'), 'bug.yml')
   assert.equal(url.searchParams.get('version'), 'v1.0.0-b.10')
   assert.equal(url.searchParams.get('browser'), 'Firefox 133 · Windows')
-  assert.equal(url.searchParams.get('mode'), 'Netplay guest')
+  assert.equal(url.searchParams.get('mode'), 'Share guest')
   assert.equal(url.searchParams.get('lang'), 'en')
   assert.equal(url.searchParams.get('state'), 'phase=running')
 })
@@ -45,10 +49,8 @@ test('a long state is cut to keep the link under GitHub\'s limit, and says so', 
 
 test('the mode of the page', () => {
   assert.equal(modeOf(), 'Solo')
-  assert.equal(modeOf({ sharing: true }), 'Couch host')
-  assert.equal(modeOf({ guest: true }), 'Couch guest')
-  assert.equal(modeOf({ netplay: 'host' }), 'Netplay host')
-  assert.equal(modeOf({ netplay: 'guest', sharing: true }), 'Netplay guest')
+  assert.equal(modeOf({ sharing: true }), 'Share host')
+  assert.equal(modeOf({ guest: true }), 'Share guest')
 })
 
 test('the browser and the OS from a user agent', () => {

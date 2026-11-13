@@ -4,6 +4,9 @@
 // Game state comes from window.__ctr (platform/web_debug_bridge.c, debug web
 // builds only), never from pixels.
 
+import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import * as autopilot from '../../ui/src/lib/autopilot.js'
 import { MAIN_MENU, onMainMenu, menuTo as autoMenuTo } from '../../ui/src/lib/autopilot.js'
 
 // The suites' page options. pressFrames : a press must outlast one game frame
@@ -154,4 +157,34 @@ export async function vblankAdvances(ctx, ms = 2000) {
 	// 59.82 Hz : allow a wide band, the point is « advancing at game speed ».
 	if (n < (ms / 1000) * 40) throw new Error(`VBlank advanced ${n} in ${ms} ms (from ${a.vblank} to ${b.vblank})`)
 	return n
+}
+
+/** The racing line driven by autopilot.js over `js` (a page's or another browser's), until `deadline`. */
+export async function drive(p, js, deadline, state = 'window.__ctr') {
+	return autopilot.drive({
+		out: p,
+		read: () => js(`const c = ${state}; if (!c) return null; const { track, ...s } = c; return s`),
+		track: () => js(`return (${state})?.track ?? null`),
+		deadline,
+	})
+}
+
+/** The run's proof folder : the newest one under --set proofs=<root> holding `file`. */
+export function runDirOf(root, file) {
+	if (!root) return null
+	const dirs = readdirSync(root).map(d => join(root, d)).filter(d => existsSync(join(d, file)))
+	return dirs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? null
+}
+
+/**
+ * A screenshot of the host's page. ctx.shot's capture (fromSurface: false) comes back flat grey
+ * on the headless agent browser (LOG ## T3) : the same file is rewritten from the compositor's
+ * surface, which shows the game.
+ */
+export async function shot(ctx, label) {
+	const proof = await ctx.shot(label)
+	const dir = proof?.file ? runDirOf(ctx.args.proofs, proof.file) : null
+	const r = await ctx.conn.send('Page.captureScreenshot', { format: 'png', fromSurface: true }, ctx.sid)
+	if (dir && r?.data) writeFileSync(join(dir, proof.file), Buffer.from(r.data, 'base64'))
+	return proof
 }

@@ -3,8 +3,8 @@
 //   node --test web/share/test/*.test.js
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gateGuest, gateHost } from '../../net/admit.js';
 import { createShareGuest } from '../guest.js';
+import { createSlots } from '../slots.js';
 import { BITRATE, createShareHost } from '../host.js';
 import { BTN, ONLINE_MODE, PAD_ID, TAG, decodeControl, encodeControl, padFromKeys } from '../protocol.js';
 import { fakeStream, guestRoom, hostRoom, pair, tick } from './fake.mjs';
@@ -107,6 +107,7 @@ test('a fourth guest is refused as full, after its first pad', async () => {
   const { p, guest } = await joined(room, 'd');
   assert.equal(guest.state, 'refused');
   assert.equal(guest.code, 'full');
+  assert.equal(guest.message, 'Too many players : this game already has four.');
   assert.equal(p.host.pc.transceivers.length, 0, 'no media for a refused guest');
   assert.equal(host.guests.d, undefined);
   assert.deepEqual(host.refusals, [{ peerId: 'd', code: 'full', path: 'direct-lan' }]);
@@ -327,54 +328,12 @@ test('32f : a guest\'s page says it watches (LOBBY {watching}) ; the host keeps 
   assert.equal(host.watched(), false);
 });
 
-// ---- session 28b : a Share room has a door (web/net/admit.js), as a Netplay room's ----
-const gated = (id, { pass, name = 'Bee', onWait } = {}) => {
-  const p = pair(id);
-  const guest = createShareGuest(gateGuest(guestRoom({ link: p.guest }), { pass, me: `me-${id}`, name, onWait }), { name });
-  return { p, guest };
-};
-
-test('28b : a guest who typed the code waits at the door — no slot, no stream — until the host says yes', async () => {
-  const room = hostRoom();
-  const door = gateHost(room, { pass: 'the-links-pass' });
-  const host = createShareHost({ room: door, stream: fakeStream() });
-  let waited = 0;
-  const { p, guest } = gated('g1', { onWait: () => waited++ });
-  room.add(p.host);
-  const connecting = guest.connect();
-  await tick(20);
-  assert.equal(guest.state, 'connecting');
-  assert.equal(waited, 1);
-  assert.deepEqual(door.asking(), { name: 'Bee' });
-  assert.deepEqual(Object.keys(host.guests), [], 'the host\'s Share has not seen this guest yet');
-  door.answer(true);
-  await connecting;
-  await tick(20);
-  assert.equal(guest.state, 'connected');
-  assert.equal(guest.slot, 1);
-  assert.equal(host.guests.g1.state, 'streaming');
-  assert.equal(door.asking(), null);
-});
-
-test('28b : the host\'s no closes the guest as refused ; the link\'s pass comes straight in, never asked', async () => {
-  const room = hostRoom();
-  const door = gateHost(room, { pass: 'the-links-pass' });
-  const host = createShareHost({ room: door, stream: fakeStream() });
-  const knock = gated('g1');
-  room.add(knock.p.host);
-  const connecting = knock.guest.connect();
-  await tick(20);
-  door.answer(false);
-  await connecting;
-  assert.deepEqual([knock.guest.state, knock.guest.code], ['closed', 'refused']);
-  assert.deepEqual(Object.keys(host.guests), []);
-
-  let asked = 0;
-  const byLink = gated('g2', { pass: 'the-links-pass', onWait: () => asked++ });
-  room.add(byLink.p.host);
-  await byLink.guest.connect();
-  await tick(20);
-  assert.equal(byLink.guest.state, 'connected');
-  assert.equal(asked, 0);
-  assert.equal(door.asking(), null);
+test('the host\'s own players count : a guest takes the next seat no local device holds, a fifth player is refused', async () => {
+  let local = 1 << 1; // a second gamepad of the host's machine is P2
+  const slots = createSlots({ busy: () => local });
+  assert.equal(slots.take('a'), 2);
+  assert.equal(slots.take('b'), 3);
+  assert.equal(slots.take('c'), 0, 'P1 the host, P2 its pad, P3 and P4 guests : four');
+  local = 0; // the pad unplugged : its seat is free again
+  assert.equal(slots.take('c'), 1);
 });

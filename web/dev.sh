@@ -1,11 +1,11 @@
 #!/bin/bash
-# web/dev.sh — the one dev entry point (wtf ctr build / dev / prod) : one game build, Online built
-# in and switched on at run time (solo by default), the page on one port.
+# web/dev.sh — the one dev entry point (build / dev / prod) of the bare edition : the game as it is,
+# Share and the local pads, the page on one port. (Second Lap, built on this repository, has its own.)
 #
 #   web/dev.sh build [debug|release]    (re)build the game into build-web-<config> ; a page reload
 #                                       in a running `dev` picks the new wasm up
 #   web/dev.sh dev                      Vite's dev server on 8090 : the page's sources with hot
-#                                       reload (web/ui, index.html, share/, online/, net/), the
+#                                       reload (web/ui, index.html, share/, net/), the
 #                                       game from build-web-debug (built first if missing)
 #   web/dev.sh prod [debug|release]     the site exactly as web/pages/assemble.sh publishes it,
 #                                       served on 8090 (release : guard.sh checks it first)
@@ -61,7 +61,7 @@ cmd_build() {
   build="$tree/build-web-$config"
   echo "== building the $config game in $build (a few minutes the first time)"
   # the CMake cache keeps the options of the last configure : always pass them
-  build_with_progress "$build.log" "$tree/web/build-web.sh" "$config" -DCTR_ONLINE=ON -DCTR_WEB_PRELOAD_DISC=OFF || exit 1
+  build_with_progress "$build.log" "$tree/web/build-web.sh" "$config" -DCTR_WEB_PRELOAD_DISC=OFF || exit 1
   # the disc the agent-browser bots store in their browser (web/*/bot.sh), linked, never copied
   [ -f "$tree/assets/ctr-u.bin" ] && ln -sf "$tree/assets/ctr-u.bin" "$build/ctr-u.bin"
   return 0
@@ -117,10 +117,10 @@ cmd_dev() {
 
 $(print_links)
   Forward $PAGE and $RELAY (the local relay) in VS Code's Ports panel, same local numbers.
-  The page's sources reload as you edit them ; the game : wtf ctr build in another terminal,
+  The page's sources reload as you edit them ; the game : web/dev.sh build in another terminal,
   then reload the page.
-  Debug build, from the main menu : Settings › Dev › « Second window » (Online VS, Online Battle
-  or Share) opens a guest beside this window, playing as Bot ; the log and the game state too.
+  Debug build, from the main menu : Settings › Dev › « Second window » (Share) opens a guest
+  beside this window, playing as Bot ; the log and the game state too.
 Vite log : $build.vite.log   (Ctrl-C here stops everything)
 EOF
   wait

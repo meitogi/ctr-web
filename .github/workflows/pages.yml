@@ -1,9 +1,8 @@
 name: Pages
 
-# Builds the browser client (one build : Solo, Share and Online at the root,
-# /online/ a redirect, web/pages/assemble.sh) and publishes it to GitHub Pages — custom domain
-# ctr.suuuper.app, set in Settings > Pages (see TEST-PLAN-13.md, this
-# workflow never writes it). web/pages/guard.sh is the last lock : it fails
+# Builds the browser client (the bare edition : the game, Share and the local pads, at the root,
+# web/pages/assemble.sh) and publishes it to GitHub Pages — custom domain ctr.suuuper.app, set in
+# Settings > Pages (this workflow never writes it). web/pages/guard.sh is the last lock : it fails
 # the deploy if any game data would leave this repo.
 
 on:
@@ -49,17 +48,16 @@ jobs:
 
       # web/build-web.sh sources $EMSDK/emsdk_env.sh itself (emcc, emcmake and
       # emsdk's own node on PATH for the duration of that script only) ; cmake
-      # is already on ubuntu-latest's PATH. One build since session 14 : the
-      # CTR_ONLINE=ON game plays solo until a room is joined.
+      # is already on ubuntu-latest's PATH.
       # A fork's page points at its own relay : two repository variables (Settings › Secrets and
       # variables › Actions › Variables), read by web/build-web.sh. Unset : web/net/relay-default.js's
       # relay, no key. CTR_RELAY_KEY is built into the page, so it is public : anyone reads it in the
       # page's source — a variable, never a secret ; leave it unset for a relay that stays private.
-      - name: Build (Solo + Share + Online)
+      - name: Build
         env:
           CTR_RELAY_URL: ${{ vars.CTR_RELAY_URL }}
           CTR_RELAY_KEY: ${{ vars.CTR_RELAY_KEY }}
-        run: web/build-web.sh release -DCTR_WEB_PRELOAD_DISC=OFF -DCTR_ONLINE=ON
+        run: web/build-web.sh release -DCTR_WEB_PRELOAD_DISC=OFF
 
       - name: Assemble the site
         run: web/pages/assemble.sh build-web-release site

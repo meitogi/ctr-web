@@ -2,14 +2,15 @@
 // (.github/ISSUE_TEMPLATE/bug.yml — one query key per field `id`). Free of the DOM : node tests it
 // (test/report.test.js) ; Settings › System wires it.
 //
-// Nothing private goes in the link : no room code, no relay or relay key, no player name. The
+// Nothing private goes in the link : no room link, no relay or relay key, no player name. The
 // `state` field is for a release-safe copy of the page's state (a later session) : the caller hands
 // over only what may be public.
 
-export const ISSUES = 'https://github.com/meitogi/ctr-native-web/issues/new'
+// this edition's own repository : its issues are its own (Second Lap, built on it, has its own)
+export const ISSUES = 'https://github.com/meitogi/ctr-web/issues/new'
 
 /** The bug form's mode field, as the form lists them. */
-export const MODES = { solo: 'Solo', couchHost: 'Couch host', couchGuest: 'Couch guest', netplayHost: 'Netplay host', netplayGuest: 'Netplay guest' }
+export const MODES = { solo: 'Solo', shareHost: 'Share host', shareGuest: 'Share guest' }
 
 /** Past this the link is cut (GitHub answers 414 to a URL that long) : `state` is shortened first. */
 export const MAX_URL = 6000
@@ -44,14 +45,11 @@ export function browserOf(ua = '') {
 
 /**
  * The page's mode as the form names it.
- * @param {{guest?: boolean, sharing?: boolean, netplay?: 'host' | 'guest' | null}} at - a Couch
- *   guest's page ; the host sharing its game ; in a Netplay room, and as what
+ * @param {{guest?: boolean, sharing?: boolean}} at - a Share guest's page ; the host sharing its game
  */
-export function modeOf({ guest = false, sharing = false, netplay = null } = {}) {
-  if (guest) return MODES.couchGuest
-  if (netplay === 'host') return MODES.netplayHost
-  if (netplay === 'guest') return MODES.netplayGuest
-  if (sharing) return MODES.couchHost
+export function modeOf({ guest = false, sharing = false } = {}) {
+  if (guest) return MODES.shareGuest
+  if (sharing) return MODES.shareHost
   return MODES.solo
 }
 

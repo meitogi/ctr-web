@@ -32,7 +32,6 @@
 
   // what covers the video : null while the game plays
   const screen = $derived.by(() => {
-    if (g?.state === 'waiting') return { kind: 'wait', text: T.guestWaitingHost, back: true }
     if (!g || g.state === 'idle' || g.state === 'connecting') return { kind: 'wait', text: T.guestConnecting }
     if (g.state === 'nolink') return { kind: 'error', text: T.guestNoLink }
     if (g.state === 'refused') return { kind: 'error', text: g.code === 'online-mode' ? T.guestOnline : g.code === 'full' ? T.guestFull : g.message }
@@ -56,9 +55,7 @@
     if (e.type !== 'keydown') return
     if (e.code === 'Escape') {
       e.preventDefault()
-      // waiting at the host's door (a code typed on the home page) : Escape is its Back
-      if (screen?.back && !ui.settingsOpen) actions.back()
-      else if (ui.listening) ui.listening = null
+      if (ui.listening) ui.listening = null
       else setOpen(!ui.settingsOpen)
     }
   }
@@ -70,7 +67,6 @@
     const stopPads = watchPads((index, button) => {
       if (ui.listening?.device === 'gamepad') bindPadButton(button, ui, settings)
       else if (button === 16) setOpen(!ui.settingsOpen)
-      else if (button === 3 && screen?.back && !ui.settingsOpen) actions.back() // Triangle : the wait's Back
     })
     return () => {
       window.removeEventListener('keydown', onKey, { capture: true })
@@ -112,7 +108,6 @@
       <p id="overlay-text">{screen.text}</p>
       {#if screen.detail}<small>{screen.detail}</small>{/if}
       {#if screen.retry}<button id="overlay-retry" type="button" class="back" onclick={() => location.reload()}>{T.guestRetry}</button>{/if}
-      {#if screen.back}<button id="overlay-back" type="button" class="back" onclick={() => actions.back()}>{T.guestBack} · Esc</button>{/if}
     </div>
   </div>
 {/if}

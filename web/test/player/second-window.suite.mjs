@@ -24,8 +24,7 @@ import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { capture } from '/opt/devcontainer/base/skills/visual-loop/scripts/cdp.mjs'
 import { makePlayer, pageScript } from '/opt/devcontainer/base/skills/visual-loop/lib/player.mjs'
-import { HEARTBEAT_MS, PLAYER, bootToMenu, recordWithSound, say } from './ctr.mjs'
-import { runDirOf, shot } from './online.suite.mjs'
+import { HEARTBEAT_MS, PLAYER, bootToMenu, recordWithSound, runDirOf, say, shot } from './ctr.mjs'
 import { D } from '../../ui/src/dev/strings.js'
 
 export const meta = {

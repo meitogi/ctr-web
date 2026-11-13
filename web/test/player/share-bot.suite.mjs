@@ -30,8 +30,7 @@
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { HEARTBEAT_MS, PLAYER, bootToMenu, menuTo, recordWithSound, say, state, until } from './ctr.mjs'
-import { drive } from './online.suite.mjs'
+import { HEARTBEAT_MS, PLAYER, bootToMenu, drive, menuTo, recordWithSound, say, state, until } from './ctr.mjs'
 import { createPicker } from '../../ui/src/lib/autopilot.js'
 import { share } from './share.suite.mjs'
 

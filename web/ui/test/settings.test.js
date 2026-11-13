@@ -14,7 +14,7 @@ const memory = (init = {}) => {
 test('defaults on an empty storage : a random name, drawn once and stored', () => {
   const storage = memory()
   const s = createSettings(storage, { random: () => 0 }).get()
-  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, skipIntro: true, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE })
+  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE })
   assert.equal(storage.map.get(KEYS.name), NAMES[0]) // Online reads this key
   assert.equal(createSettings(storage, { random: () => 0.99 }).get().name, NAMES[0]) // not drawn again
 })
@@ -52,9 +52,9 @@ test('round trip : every field survives a reload of the page', () => {
   const a = createSettings(storage)
   const keyboard = bind(DEFAULT_KEYBOARD, 'cross', 22)
   const keyboardRight = bind(DEFAULT_KEYBOARD_RIGHT, 'start', 42)
-  a.patch({ name: 'Crash', volume: 0.35, muted: true, skipIntro: false, keyboard, duo: true, keyboardRight })
+  a.patch({ name: 'Crash', volume: 0.35, muted: true, keyboard, duo: true, keyboardRight })
   const b = createSettings(storage).get()
-  assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, skipIntro: false, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE })
+  assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE })
   assert.equal(storage.map.has(KEYS.keyboardLeft), false)
   assert.equal(storage.map.has(KEYS.gamepad), false) // defaults are not written
 })

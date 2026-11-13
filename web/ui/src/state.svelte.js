@@ -15,25 +15,17 @@ export const ui = $state({
   confirm: null,
   settingsOpen: false,
   tab: 'players',
-  // the Multiplayer tab's panel (an adopted id : 'share', 'online')
+  // the Multiplayer tab's panel (an adopted id : 'share')
   multi: null,
   // Share's guest page : { slot, host, list: [{ slot, name }] } from the host's messages
   room: null,
-  // an Online room's guest in the lobby (web/online/page.js) : the local keys and pads go to the
-  // host, not to this game
-  lobbyGuest: false,
-  // a room link opened at boot (session 32e), or a Netplay code typed on the home page (28b) :
-  // null, or { state: 'joining' | 'waiting' (the host's yes) | 'racing' | 'failed', reason }
-  joining: null,
-  // « or join a room » on the home page (28b, Join.svelte) : null, or { ids, at, said, phase :
-  // 'dials' | 'looking' | 'nokey' | 'disc' (a Netplay room and no disc : the drop zone, saying why) }
-  join: null,
-  // a Netplay guest out of the room's race (its QUIT, a lost link ; web/online/page.js, session
-  // 32f) : null, or { cup } — the band over the host's picture until the room takes it again
-  waiting: null,
+  // Share on this page (web/share/panel.js) : { sharing, starting, link, error, guests, seats } ;
+  // shareCard : the link's card under the Share button is shown
+  share: null,
+  shareCard: false,
   // Share's guest page : the connection as web/share/guest-page.js reports it (guest.js)
   guest: null,
-  // panels other modules hand over (web/online/page.js, web/share/panel.js) : { id, title, el }
+  // panels other modules hand over (web/share/panel.js) : { id, title, el }
   adopted: [],
   // { id, title, detail, family, leaving }
   toasts: [],

@@ -4,7 +4,7 @@
 // whole directory is rewritten : guest.js needs no rule of its own) ; `npm run build` alone writes
 // dist/.
 // `vite` (serve, web/dev.sh dev) : the dev server with hot reload, rooted at web/ — the page's
-// SOURCES (index.html, share/, online/, net/, disc.js), never the build's copies — and the game
+// SOURCES (index.html, share/, net/, disc.js), never the build's copies — and the game
 // files only the build makes (ctr_native.js / .wasm, preload-flag.js, audio/spu.wasm) from CTR_GAME_DIR.
 // __CTR_DEV__ : the debug-only pieces (the home's second window, the Bot switch, Settings › Dev) ;
 // true under serve and in a Debug build (emscripten.cmake sets CTR_DEV=1), false in Release, where

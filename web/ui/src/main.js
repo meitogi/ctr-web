@@ -2,14 +2,12 @@
 // drop overlay, the speaker / Settings buttons, the Settings sidebar, toasts. Exposes
 // globalThis.ctrUI for the other page modules :
 //   ctrUI.settings            the settings store (settings.js) — name, volume, mappings…
-//   ctrUI.adopt(id, title, el)  put another module's panel in a Settings tab (web/online/page.js,
-//                             web/share/panel.js) ; returns { open(), close() }
+//   ctrUI.adopt(id, title, el)  put another module's panel in a Settings tab (web/share/panel.js) ;
+//                             returns { open(), close() }
 //   ctrUI.toast(title, detail, family, { sticky, action, ms })
 //   ctrUI.text                 the strings (lib/strings.js, EN / FR) — Share's join / leave toasts
 //   ctrUI.players              couch mode (lib/players.js) : slots as the game reports them, swap(a, b)
-//   ctrUI.lobby(on)            an Online room's guest in the lobby : the game gets no local input
-//   ctrUI.joinSaid(code, n)    a code typed on the home page did not join once the game ran (the
-//                             host's no…) : back to the home page's dials, the reason in red
+//   ctrUI.share(state)         Share's state for the page's Share button (web/share/panel.js)
 //   ctrUI.guestInput()         the player's mapping as web/share/protocol.js reads it (guest-input.js)
 // Debug builds (__CTR_DEV__) load src/dev/ : the « Bot » switch and Settings › Dev with its second
 // window ; a window opened as that second one (?dev=<mode>) boots by itself.
@@ -18,12 +16,9 @@ import { mount } from 'svelte'
 import App from './App.svelte'
 import './app.css'
 import { findCachedDisc, forgetDisc, probeDisc, storeDiscStream } from '../../disc.js'
-import { parseCode, codeText } from '../../net/code.js'
-import { formatRoomLink } from '../../net/link.js'
 import { resolveDisc } from './lib/discsource.js'
 import { guestInput } from './lib/guest-input.js'
 import { createInputHook } from './lib/input-hook.js'
-import { DEFAULT_RELAY_KEY, SAID, findRoom, keptRelay, press } from './lib/join.js'
 import { createPlayers } from './lib/players.js'
 import { LANG, T, errorText } from './lib/strings.js'
 import { ui } from './state.svelte.js'
@@ -46,7 +41,7 @@ document.documentElement.lang = LANG
 // ---- the game's input hook ----
 // The game gets no local input while the player is in the Settings panel (its keyboard focus is
 // there, a key is being bound, or a confirmation is up) ; with the panel open and the focus on the
-// game (a click on it), the game plays — the Online tab stays open beside a race. With the Bot
+// game (a click on it), the game plays — Settings stays open beside a race. With the Bot
 // switch on (debug builds), the panel's focus does not stop the bot's keys.
 const inPanel = () => !!document.activeElement?.closest?.('#ctr-settings')
 // Couch mode : the game reports its four player slots, Settings › Players swaps them.
@@ -54,15 +49,12 @@ const players = createPlayers({
   onChange: (slots) => { ui.players = slots },
   onAnalog: (slot, pad) => toast(pad.analog ? T.analogOn(slot + 1) : T.analogOff(slot + 1), pad.analog ? '' : T.analogOffHelp, pad.family),
 })
-const input = createInputHook(settings, { blocked: () => ui.phase === 'running' && (ui.lobbyGuest || ui.listening !== null || ui.confirm !== null || (ui.settingsOpen && inPanel() && !ui.bot)), skipAll: () => !!ui.joining }, { players })
+const input = createInputHook(settings, { blocked: () => ui.phase === 'running' && (ui.listening !== null || ui.confirm !== null || (ui.settingsOpen && inPanel() && !ui.bot)) }, { players })
 if (Module) Module.ctrInput = input
 
 // ---- boot ----
 function bootGame(serial) {
   ui.disc = ui.disc ?? { serial, size: 0 }
-  // a room link, or a Netplay code typed on the home page : the boot screen says « Joining the
-  // room… » until the host's picture (page.js)
-  if (joinsAtBoot()) ui.joining = { state: 'joining' }
   ui.phase = 'starting'
   ui.status = T.booting
   const script = document.createElement('script')
@@ -109,8 +101,6 @@ async function storeAndBoot(found, { reload }) {
   }
   ui.progress = null
   globalThis.__ctrDisc = stored
-  // the disc a Netplay code was waiting for (28b) : the game boots into that room
-  if (ui.join?.phase === 'disc') bootInto(ui.join.ids)
   bootGame(probe.serial)
 }
 
@@ -169,112 +159,6 @@ export function dismissToast(id) {
   ui.toasts = ui.toasts.filter((t) => t.id !== id)
 }
 
-/** The joining screen's Back (or Escape) : out of the room, the player's own title — or, for a code typed on the home page, its dials. */
-export function joinBack() {
-  const code = hashParam('c')
-  if (code && !location.hash.includes('room=')) return joinSaid(code, 0)
-  ui.joining = null
-  history.replaceState(null, '', location.pathname + location.search)
-  globalThis.ctrUI.onJoinBack?.()
-}
-// ---- « or join a room » : a room's code on the home page, before the game starts (28b) ----
-// The dials are Join.svelte ; the code is kept from one visit to the next, as the game's JOIN keeps
-// its own. The relay and its key are the Netplay settings' (web/online/page.js stores them : that
-// module only loads with the game).
-const read = (key) => { try { return localStorage.getItem(key) } catch { return null } }
-const write = (key, value) => { try { localStorage.setItem(key, value) } catch { /* private mode */ } }
-const where = () => {
-  const rk = (read('ctr-online.rk') ?? DEFAULT_RELAY_KEY).trim()
-  return { relay: keptRelay((read('ctr-online.relay') ?? '').trim(), rk), rk }
-}
-const hashParam = (name) => new URLSearchParams(location.hash.slice(1)).get(name)
-const joinsAtBoot = () => location.hash.includes('room=') || !!parseCode(hashParam('c'))
-let looking = 0 // a newer look, or Back, drops the one on its way
-const setDials = (d) => {
-  ui.join = { ...ui.join, ids: d.ids, at: d.at, said: d.changed ? 0 : ui.join.said }
-  write('ctr-ui.joinCode', codeText(d.ids))
-}
-/** The game boots into the room of `ids` : page.js reads `#c=` once it is there. */
-function bootInto(ids) {
-  history.replaceState(null, '', `${location.pathname}${location.search}#c=${codeText(ids)}`)
-  ui.join = null
-}
-/** Back on the home page's dials with what went wrong (a number of lib/join.js SAID, 0 : nothing) : the page loads again, the game with it. */
-function joinSaid(code, status) {
-  history.replaceState(null, '', `${location.pathname}${location.search}#join=${code}${status ? `&said=${status}` : ''}`)
-  location.reload()
-}
-/** `#join=<code>&said=<n>` (back from a room that did not take us), or `#c=` reloaded : the dials, as they were. */
-function openFromHash() {
-  const ids = parseCode(hashParam('join') ?? hashParam('c'))
-  if (!ids) return
-  const status = Number(hashParam('said')) || 0
-  history.replaceState(null, '', location.pathname + location.search)
-  join.open(ids, status)
-}
-export const join = {
-  where,
-  open(ids = parseCode(read('ctr-ui.joinCode')) ?? [0, 0, 0], status = 0) {
-    ui.error = ''
-    ui.join = { ids, at: 0, said: status, phase: status === SAID.noKey || status === SAID.keyRefused ? 'nokey' : 'dials' }
-  },
-  /** Back : the home page as it was. */
-  close() { looking++; ui.join = null },
-  /** Back from a waiting card or the Netplay drop zone : the dials, kept. */
-  toDials() { looking++; ui.join = { ...ui.join, phase: 'dials' } },
-  press(key) {
-    if (ui.join?.phase !== 'dials') return
-    const d = press(ui.join, key)
-    setDials(d)
-    if (d.join) join.go()
-  },
-  pick(i) { ui.join = { ...ui.join, at: i } },
-  turn(i, key) { ui.join = { ...ui.join, at: i }; join.press(key) },
-  more() { ui.join = { ...ui.join, at: ui.join.ids.length - 1 }; join.press('right') },
-  saveKey(relay, rk) {
-    write('ctr-online.relay', relay)
-    write('ctr-online.rk', rk)
-    join.go()
-  },
-  /** The dials sent : the relay says who hosts the room and which kind it is ; then on by its kind. */
-  async go() {
-    const mine = ++looking
-    const ids = ui.join.ids
-    ui.join = { ...ui.join, phase: 'looking', said: 0 }
-    let found
-    try {
-      found = await findRoom(ids, where())
-    } catch (e) {
-      if (mine !== looking) return
-      const status = e.said ?? SAID.offline
-      ui.join = { ...ui.join, said: status, phase: status === SAID.noKey || status === SAID.keyRefused ? 'nokey' : 'dials' }
-      return
-    }
-    if (mine !== looking) return
-    if (found.kind === 'share') {
-      // the host's screen, no disc : the guest page, where the host is asked (web/share/guest-page.js)
-      location.href = formatRoomLink(new URL('share/guest.html', location.href).href, found.link)
-    } else if (ui.phase === 'ready') {
-      bootInto(ids)
-      startGame()
-    } else {
-      // a Netplay room and no disc : the drop zone, saying why ; storeAndBoot goes on from there
-      ui.join = { ...ui.join, phase: 'disc' }
-    }
-  },
-}
-
-// page.js : the joining screen's state ; nothing once it is gone (a room joined later from the
-// panel has no boot screen)
-const joining = (j) => { if (ui.joining) ui.joining = j }
-// page.js : the watching band (32f) ; its Back leaves the room
-const waiting = (w) => { if (JSON.stringify(ui.waiting) !== JSON.stringify(w)) ui.waiting = w }
-/** The watching band's Back (Escape, Triangle, a click) : out of the room, the player's own main menu. */
-export function waitBack() {
-  ui.waiting = null
-  globalThis.ctrUI.onWaitBack?.()
-}
-
 // Adopted panels live in a hidden parking spot while their tab is not shown, so their elements
 // stay in the document (scripts and suites reach them by id).
 const parking = Object.assign(document.createElement('div'), { id: 'ctr-parked', hidden: true })
@@ -288,10 +172,9 @@ function adopt(id, title, el) {
   }
 }
 
-// An Online room's guest in the lobby (web/online/page.js) : the game ignores the local devices
-// and the page sends them to the host as a Share guest does — with the player's own mapping.
-const lobby = (on) => { ui.lobbyGuest = !!on }
-globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, lobby, joining, waiting, joinSaid, guestInput: () => guestInput(settings.get()) }
+// Share's panel tells what the page's Share button shows (web/share/panel.js render)
+const share = (s) => { if (JSON.stringify(ui.share) !== JSON.stringify(s)) ui.share = s }
+globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, share, guestInput: () => guestInput(settings.get()) }
 
 // Test-only hook (session 3) : the agent browser runs on another machine than the files, so CDP's
 // DOM.setFileInputFiles cannot point at them ; suites fetch a same-origin fixture into the same
@@ -304,7 +187,7 @@ globalThis.__ctrTestHandleFileFromUrl = async (url) => {
 
 if (__CTR_DEV__) import('./dev/index.js').then((dev) => dev.install({ toast }))
 
-mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame, joinBack, waitBack, join } })
+mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame } })
 
 ;(async () => {
   if (globalThis.__CTR_WEB_PRELOAD) {
@@ -318,7 +201,6 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   if (!cached) {
     ui.phase = 'boot'
     ui.status = ''
-    openFromHash()
     return
   }
   ui.status = T.checking(cached.name || 'ctr-u.bin')
@@ -336,9 +218,6 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   globalThis.__ctrDisc = cached
   ui.phase = 'ready'
   ui.status = ''
-  // a room link : no press, the game boots behind « Joining the room… » (session 32e)
-  if (location.hash.includes('room=')) startGame()
-  else openFromHash()
   // the second window of Settings › Dev (debug) : in the room already, nobody to press
   if (__CTR_DEV__ && role.second) startGame()
 })()

@@ -14,6 +14,7 @@
   import Glyph from './Glyph.svelte'
   import Hud from './Hud.svelte'
   import Settings from './Settings.svelte'
+  import ShareButton from './ShareButton.svelte'
   import Toasts from './Toasts.svelte'
   import { scancodeOf } from './lib/keys.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
@@ -26,7 +27,7 @@
   import { ui } from './state.svelte.js'
   import { settings } from './store.js'
 
-  let { input, handleFile, forgetStoredDisc, startGame, joinBack, waitBack, join } = $props()
+  let { input, handleFile, forgetStoredDisc, startGame } = $props()
 
   const running = $derived(ui.phase === 'running' || ui.phase === 'starting')
   let layout = $state(null)
@@ -138,39 +139,6 @@
   }
   // the ready screen : the PSX buttons that start the game, as indices into a mapping
   const START_BUTTONS = [BUTTONS.indexOf('cross'), BUTTONS.indexOf('start')]
-  // the joining card and the watching band (32f) : Triangle is their Back, as on every screen
-  const TRIANGLE = BUTTONS.indexOf('triangle')
-  const triangleKey = (e) => {
-    const sc = scancodeOf(e.code)
-    return sc >= 0 && claimed(settings.get()).some((m) => m[TRIANGLE] === sc)
-  }
-  const back = () => (ui.joining ? joinBack : ui.waiting ? waitBack : null)
-  // « or join a room » (28b) : while the home page shows the room code, the keys and the pad are
-  // the dials' — the game's own menu keys (the player's mapping) and the arrows, Enter, Escape
-  const SQUARE = BUTTONS.indexOf('square')
-  const DIAL_KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'start', NumpadEnter: 'start', Backspace: 'square', Delete: 'square' }
-  const DIAL_BUTTONS = ['up', 'down', 'left', 'right', 'cross', 'square', 'start']
-  const joinBackOut = () => (ui.join.phase === 'dials' ? join.close() : join.toDials())
-  /** The dial press a mapped value stands for (`mapping` : the player's keyboard or gamepad row). */
-  const dialPress = (mapping, value) => DIAL_BUTTONS.find((b) => mapping[BUTTONS.indexOf(b)] === value)
-  function joinKey(e) {
-    if (e.type !== 'keydown' || e.metaKey || e.ctrlKey || e.altKey) return
-    if (e.code === 'Escape' || (!typing() && triangleKey(e))) { e.preventDefault(); joinBackOut(); return }
-    if (ui.join.phase !== 'dials' || typing()) return
-    const sc = scancodeOf(e.code)
-    const key = DIAL_KEYS[e.code] ?? (sc >= 0 ? claimed(settings.get()).map((m) => dialPress(m, sc)).find(Boolean) : null)
-    // Enter or Space on a button (Back, Join, an arrow) is that button's
-    if (!key || (onAControl() && (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space'))) return
-    e.preventDefault()
-    join.press(key)
-  }
-  function joinPad(button) {
-    const gamepad = settings.get().gamepad
-    const sdl = STANDARD_TO_SDL[button]
-    if (gamepad[TRIANGLE] === sdl) return joinBackOut()
-    const key = dialPress(gamepad, sdl)
-    if (key) join.press(key)
-  }
   function startKey(e) {
     if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') return true
     const sc = scancodeOf(e.code)
@@ -178,18 +146,14 @@
   }
   function onKeyCapture(e) {
     // the Bot switch's keys (src/dev/keys.js, debug builds) : for the game and the pad, never for
-    // this page's own shortcuts — only « Skip intro » counts them
-    if (e.ctrBot) { if (e.type === 'keydown') input.onKey(e); return }
-    if (ui.join && !running && !ui.progress) { joinKey(e); return }
+    // this page's own shortcuts
+    if (e.ctrBot) return
     if (ui.phase === 'ready' && e.type === 'keydown' && !e.repeat && !ui.confirm && !onAControl() && !e.metaKey && !e.ctrlKey && !e.altKey && startKey(e)) {
       e.preventDefault()
       startGame()
       return
     }
-    if (e.type === 'keydown') {
-      input.onKey(e) // « Skip intro » counts presses
-      claimKey(e)
-    }
+    if (e.type === 'keydown') claimKey(e)
     if (ui.listening && ui.listening.device !== 'gamepad') {
       e.preventDefault()
       e.stopImmediatePropagation()
@@ -200,13 +164,6 @@
     if (ui.confirm) {
       if (e.code === 'Escape') { e.preventDefault(); ui.confirm = null }
       e.stopImmediatePropagation()
-      return
-    }
-    if ((e.code === 'Escape' || (!e.repeat && !ui.settingsOpen && !typing() && triangleKey(e))) && back()) {
-      // the joining screen's way back (session 32e), the watching band's (32f)
-      e.preventDefault()
-      e.stopImmediatePropagation()
-      back()()
       return
     }
     if (e.code === 'Escape' && running) {
@@ -236,17 +193,12 @@
   }
   function onPadDown(index, button) {
     if (!soundHint && globalThis.ctrAudio?.context?.state === 'suspended') soundHint = ctrToast(T.clickForSound, '', '', { sticky: true })
-    if (ui.join && !running && !ui.progress) { joinPad(button); return }
-    // the home page's « or join a room » : Square (Cross plays)
-    if ((ui.phase === 'ready' || ui.phase === 'boot') && !ui.confirm && !ui.progress && settings.get().gamepad[SQUARE] === STANDARD_TO_SDL[button]) { join.open(); return }
     if (ui.phase === 'ready' && !ui.confirm) {
       const gamepad = settings.get().gamepad
       if (START_BUTTONS.some((b) => gamepad[b] === STANDARD_TO_SDL[button])) startGame()
       return
     }
-    input.press() // « Skip intro »
     if (button === 16 && running) { setOpen(!ui.settingsOpen); return }
-    if (!ui.settingsOpen && !ui.confirm && back() && settings.get().gamepad[TRIANGLE] === STANDARD_TO_SDL[button]) { back()(); return }
     if (ui.listening?.device === 'gamepad') {
       bindPadButton(button, ui, settings)
       return
@@ -297,19 +249,14 @@
   })
 </script>
 
-<div id="boot" class:hidden={running && !ui.progress && !ui.joining}>
-  <Boot {handleFile} {startGame} {joinBack} {join} {layout} />
+<div id="boot" class:hidden={running && !ui.progress}>
+  <Boot {handleFile} {startGame} {layout} />
 </div>
 
-{#if running && ui.waiting && !ui.joining}
-  <div id="ctr-waiting" role="status" aria-live="polite">
-    <span>{ui.waiting.cup ? T.watchCup : T.watchRace}</span>
-    <button type="button" class="btn" onclick={waitBack}>{T.waitBack} <Glyph kind="psx" value="triangle" size={20} /> / Esc</button>
-  </div>
-{/if}
-
 {#if running}
-  <Hud onsettings={() => setOpen(!ui.settingsOpen)} />
+  <Hud onsettings={() => setOpen(!ui.settingsOpen)}>
+    {#snippet extra()}<ShareButton />{/snippet}
+  </Hud>
   {#if ui.settingsOpen}
     <Settings {forgetStoredDisc} {layout} onclose={() => setOpen(false)} />
   {/if}
@@ -343,10 +290,6 @@
 
 <style>
   #boot.hidden { display: none; }
-  #ctr-waiting { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 18px;
-    max-width: calc(100vw - 32px); box-sizing: border-box; padding: 12px 14px 12px 22px; border-radius: 18px;
-    background: var(--panel); border: 1px solid var(--line); color: var(--ink); font-size: 17px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); }
-  #ctr-waiting span { flex: 1; }
   #ctr-drop-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; pointer-events: none;
     background: rgba(8, 10, 16, 0.55); backdrop-filter: blur(10px); animation: fade 140ms ease-out; }
   @keyframes fade { from { opacity: 0; } }

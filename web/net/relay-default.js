@@ -1,6 +1,5 @@
-// The relay a page uses when Settings › Netplay has none typed — the one place it is written. The
-// Netplay panel (web/online/page.js), Share's (web/share/panel.js) and the home page's room code
-// (web/ui/src/lib/join.js) import it ; web/dev.sh reads BUILT_IN_RELAY's line.
+// The relay a page uses when Settings › Share has none typed — the one place it is written. Share's
+// panel (web/share/panel.js) imports it ; web/dev.sh reads BUILT_IN_RELAY's line.
 //
 // A fork that publishes its own page points it at its own relay without editing this file :
 // CTR_RELAY_URL at build time (web/build-web.sh → web/emscripten.cmake writes window.__CTR_RELAY
@@ -8,8 +7,7 @@
 // it from the repository variable of the same name). Without it, the built-in address.
 //
 // The built-in relay is public : it asks for no key, and holds its own limits (relay/README.md,
-// « An open relay »). A relay with a key is one a player sets in Settings › Netplay, with its key
-// there or in the room link (rk=).
+// « An open relay »). A relay with a key is one a player sets in Settings › Share, with its key.
 //
 // CTR_RELAY_KEY (window.__CTR_RELAY_KEY, the same way) is for a fork whose own relay has a key and
 // whose players should never type it : a key built into a public page is public — anyone reads it

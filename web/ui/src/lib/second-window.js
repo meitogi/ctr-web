@@ -7,10 +7,7 @@
  * row its own menus are walked to (lib/autopilot.js menuTo, src/dev/second.js).
  */
 export const SECOND = {
-  vs: { room: 'online', menu: 'NETPLAY', battle: false },
-  battle: { room: 'online', menu: 'NETPLAY', battle: true },
   share: { room: 'share', menu: 'VS.', battle: false },
-  arcade: { room: 'online', menu: 'NETPLAY', battle: false, arcade: true },
 }
 
 /** Polls `get()` until it returns something, every `every` ms ; null after `timeout`. */
@@ -24,9 +21,8 @@ export async function waitFor(get, { timeout = 60_000, every = 100, sleep = (ms)
 
 /**
  * Hosts the room of `mode` in the running game : Share through the Share panel
- * (web/share/panel.js ctrShareApi.start), Online through the Online panel (web/online/page.js
- * __ctrOnline.host, P2P or relay from its saved settings). Resolves with the room link (the
- * guest's address). `g` : globalThis.
+ * (web/share/panel.js ctrShareApi.start). Resolves with the room link (the guest's address).
+ * `g` : globalThis.
  */
 export async function host(mode, g = globalThis, opts) {
   if (mode === 'share') {
@@ -35,14 +31,6 @@ export async function host(mode, g = globalThis, opts) {
     await api.start()
     const link = api.link()
     if (!link) throw new Error('Share did not start (see Settings › Multiplayer)')
-    return link
-  }
-  if (mode === 'online') {
-    const online = await waitFor(() => g.__ctrOnline, opts)
-    if (!online) throw new Error('the Online panel never loaded (not a CTR_ONLINE build ?)')
-    await online.host()
-    const link = online.state().link
-    if (!link) throw new Error(online.state().error || 'the room did not open (see Settings › Multiplayer)')
     return link
   }
   throw new Error(`no room for ${mode}`)

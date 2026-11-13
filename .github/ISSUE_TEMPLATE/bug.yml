@@ -1,5 +1,5 @@
 name: Something went wrong
-description: A bug, a crash, a freeze, a room that will not open, a sound that is off.
+description: A bug, a crash, a freeze, a Share link that will not open, a sound that is off.
 title: "[bug] "
 labels: [bug]
 body:
@@ -14,7 +14,7 @@ body:
     attributes:
       label: What happened
       description: what you did, step by step, and what the page or the game did.
-      placeholder: "picked NETPLAY › VS, friend joined by code, at the character select the screen froze…"
+      placeholder: "pressed Share, a friend opened the link, at the character select their screen froze…"
     validations:
       required: true
   - type: textarea
@@ -27,8 +27,8 @@ body:
     id: mode
     attributes:
       label: Mode
-      description: "Solo, Couch host, Couch guest, Netplay host or Netplay guest."
-      placeholder: Netplay guest
+      description: "Solo, Share host or Share guest."
+      placeholder: Share guest
     validations:
       required: true
   - type: input
@@ -60,7 +60,7 @@ body:
     id: state
     attributes:
       label: The state
-      description: "if the page gave you a copy of its state, paste it here as it is. it holds nothing private : no room code, no relay key, no name."
+      description: "if the page gave you a copy of its state, paste it here as it is. it holds nothing private : no room link, no relay key, no name."
       render: text
   - type: textarea
     id: more

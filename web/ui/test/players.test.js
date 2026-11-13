@@ -32,7 +32,7 @@ test('the two keyboard halves : the user\'s keys, nothing shared, nothing on a d
 })
 
 test('pull : the solo keys alone, the two halves in duo, the flag in its own int', () => {
-  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: Array(16).fill(7), duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, skipIntro: true }
+  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: Array(16).fill(7), duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT }
   const hook = createInputHook({ get: () => s }, { blocked: () => false })
   const heap = new Int32Array(100)
   // C : (keyboard, keyboard2, gamepad, duo) → pull(HEAP32, kb, pad, kb2, duo)

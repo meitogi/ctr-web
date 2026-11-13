@@ -61,7 +61,7 @@ else()
 endif()
 
 # The version (web/build-web.sh : git describe --tags --match 'v*') : Settings › System reads it
-# from the same small file, the Netplay build's title draws it (game/230/MM_MenuFlow.c)
+# from the same small file
 set(CTR_WEB_VERSION "dev" CACHE STRING "The version shown on the page and the title")
 file(APPEND "${CMAKE_BINARY_DIR}/preload-flag.js" "window.__CTR_VERSION = \"${CTR_WEB_VERSION}\";\n")
 target_compile_definitions(ctr_native PRIVATE CTR_WEB_VERSION=\"${CTR_WEB_VERSION}\")
@@ -121,10 +121,6 @@ add_custom_command(
             "${CTR_WEB_NODE}" node_modules/vite/bin/vite.js build --logLevel warn
     WORKING_DIRECTORY "${CTR_WEB_UI_DIR}"
     DEPENDS ${CTR_WEB_UI_SOURCES} "${CTR_WEB_UI_DIR}/vite.config.js" "${CMAKE_SOURCE_DIR}/web/disc.js"
-            # the home page's room code (src/lib/join.js) bundles these
-            "${CMAKE_SOURCE_DIR}/web/net/code.js" "${CMAKE_SOURCE_DIR}/web/net/link.js"
-            "${CMAKE_SOURCE_DIR}/web/net/signaling.js" "${CMAKE_SOURCE_DIR}/web/net/crypto.js"
-            "${CMAKE_SOURCE_DIR}/web/net/events.js" "${CMAKE_SOURCE_DIR}/web/net/relay-default.js"
             "${CTR_WEB_UI_DIR}/node_modules/.package-lock.json"
     COMMENT "web/ui : vite build"
 )

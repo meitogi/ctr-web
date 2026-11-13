@@ -2,9 +2,9 @@
   // The Settings sidebar (design B) : four tabs (user, 2026-10-22 : eight were too many) —
   //   Players      the player name, « Who plays » on this page, P1–P4 (couch mode)
   //   Controls     keyboard and gamepad remapping
-  //   Multiplayer  the panels other modules hand over, one segment each (Share : web/share/panel.js,
-  //                Online : web/online/page.js) — shown when there is one
-  //   System       volume, skip intro, the game data, about
+  //   Multiplayer  the panels other modules hand over, one segment each (Share : web/share/panel.js)
+  //                — shown when there is one
+  //   System       volume, the game data, about
 //   Dev          debug builds only (src/dev/Dev.svelte) : the page log, the game state
 // Debug builds also put the « Bot » switch in Players (src/dev/bot.js).
   // Share's guest page (profile 'guest') : Players (name, who plays, who is in the game), Controls,
@@ -38,7 +38,6 @@
     system: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
     players: '<circle cx="8.5" cy="8" r="3.2"/><circle cx="16.5" cy="9" r="2.6"/><path d="M2.5 20a6 6 0 0 1 12 0M14 14.6a5 5 0 0 1 7.5 4.4"/>',
     dev: '<path d="M8 8 4 12l4 4M16 8l4 4-4 4M14 5l-4 14"/>',
-    help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h0"/>',
     controls: '<path d="M7 6h10c3 0 4.5 2 5 5l.5 4c.3 2.5-2 4-4 2l-2.5-2.5h-8L5.5 17c-2 2-4.3.5-4-2L2 11c.5-3 2-5 5-5z"/>',
   }
   const tabs = $derived([
@@ -46,7 +45,6 @@
     { id: 'controls', title: T.tabs.controls },
     ...(!guest && ui.adopted.length ? [{ id: 'multi', title: T.tabs.multi }] : []),
     { id: 'system', title: T.tabs.system },
-    ...(!guest ? [{ id: 'help', title: T.tabs.help }] : []),
     ...(Dev ? [{ id: 'dev', title: 'Dev' }] : []),
   ])
   const current = $derived(tabs.find((t) => t.id === ui.tab) ?? tabs[0])
@@ -63,9 +61,7 @@
   // (lib/report.js — nothing private goes in the link) ; set on focus and on any button's press, so
   // a middle click or a keyboard Enter gets it too
   function report(e) {
-    const online = globalThis.__ctrOnline?.state?.()
-    const netplay = online?.room && (online.role === 'host' || online.role === 'guest') ? online.role : null
-    const mode = modeOf({ guest, sharing: !!globalThis.__ctrShare?.state?.().sharing, netplay })
+    const mode = modeOf({ guest, sharing: !!globalThis.__ctrShare?.state?.().sharing })
     e.currentTarget.href = issueUrl({ version: globalThis.__CTR_VERSION ?? 'dev', browser: browserOf(navigator.userAgent), mode, lang: LANG })
   }
   const pickAnother = () => document.getElementById('disc-input')?.click()
@@ -113,13 +109,6 @@
       {/if}
       <!-- keyed : from one panel to another, the old one is parked and the new one moved in -->
       {#key panel.id}<div class="adopted" data-panel={panel.id} use:host={panel.el}></div>{/key}
-    {:else if current.id === 'help'}
-      {#each T.help as part}
-        <div class="label">{part.title}</div>
-        <ul class="helplist" data-help={part.title}>
-          {#each part.lines as line}<li>{line}</li>{/each}
-        </ul>
-      {/each}
     {:else if current.id === 'dev' && Dev}
       <Dev />
     {:else if current.id === 'system'}
@@ -136,11 +125,6 @@
         <span class="count">{s.muted ? 0 : Math.round(s.volume * 100)}</span>
       </div>
       {#if !guest}
-        <div class="label">{T.start}</div>
-        <label class="setrow">
-          <span>{T.skipIntro}<small>{T.skipIntroHelp}</small></span>
-          <input id="ctr-skip-intro" type="checkbox" role="switch" class="switch" checked={s.skipIntro} onchange={(e) => settings.patch({ skipIntro: e.currentTarget.checked })} />
-        </label>
         <div class="label">{T.gameData}</div>
         <div class="setrow">
           <span>{ui.disc ? T.found(ui.disc.serial.replace('_', '-').replace('.', '')) : T.discNone}{#if ui.disc?.size}<small>{T.discSize(mb(ui.disc.size))}</small>{/if}</span>
@@ -185,13 +169,7 @@
   .count { font-size: 12px; color: var(--ink-dim); min-width: 32px; text-align: right; }
   .help { font-size: 12px; color: var(--ink-dim); margin: 6px 2px 0; }
   .setrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); }
-  .helplist { margin: 0 0 18px; padding: 12px 16px 12px 32px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); font-size: 14px; line-height: 1.45; }
-  .helplist li + li { margin-top: 6px; }
   .setrow small { display: block; color: var(--ink-dim); font-size: 12.5px; margin-top: 2px; }
-  .switch { appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.18); position: relative; cursor: pointer; transition: background 150ms; margin: 0; }
-  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 150ms; }
-  .switch:checked { background: var(--accent); }
-  .switch:checked::after { left: 21px; }
   .mute { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.08); display: grid; place-items: center; cursor: pointer; flex: none; }
   input[type=range] { flex: 1; accent-color: #fff; }
   .gap { height: 14px; }
