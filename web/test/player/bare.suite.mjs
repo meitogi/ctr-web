@@ -17,6 +17,9 @@
 //   TOO-MANY     : the host's machine has two gamepads besides its keyboard : the guests take the
 //     seats left, the next guest reads « Too many players » on its own window and gets no seat.
 //
+// Each scenario starts on its own (select.mjs runs any of them alone) : the main menu's snapshot
+// where the card does not matter, a real boot in turbo (bootFast) where it does.
+//
 // RUN
 //   Build : web/build-web.sh debug -DCTR_WEB_PRELOAD_DISC=OFF ; ln -s ../assets/ctr-u.bin build-web-debug/
 //   Serve : python3 web/test/player/serve.py build-web-debug 8091
@@ -27,10 +30,19 @@
 
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAIN_MENU, bootToMenu, drive, menuTo, runDirOf, say, shot, state, until } from './ctr.mjs'
+import { MAIN_MENU, bootFast, menuTo, open, runDirOf, say, shot, startAt, state, turbo, until } from './ctr.mjs'
 import { guestWindow, settled, share, waitIn } from './share.suite.mjs'
 
 export const meta = { url: 'http://localhost:8091/index.html', login: false, player: { gamepad: true, pressFrames: 8 } }
+
+export const tags = {
+	'BARE-PAGE': ['page'],
+	'UNLOCK-ON': ['unlock', 'menu'],
+	'UNLOCK-OFF': ['unlock', 'menu'],
+	'CARD-CLEAN': ['card', 'unlock', 'race'],
+	'SHARE-BUTTON': ['share', 'page'],
+	'TOO-MANY': ['share', 'input'],
+}
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const UNLOCK_KEY = 'ctr-ui.unlock-all'
@@ -61,9 +73,9 @@ async function home(ctx, checked = null) {
 	}
 }
 
-/** The character select of Time Trial, from the main menu. */
+/** The character select of Time Trial, from the main menu of a real boot (the card read). */
 async function toCharacterSelect(ctx) {
-	await bootToMenu(ctx)
+	await bootFast(ctx)
 	await menuTo(ctx, 'TIME TRIAL', dir => ctx.press(dir === 'down' ? 'ArrowDown' : 'ArrowUp'))
 	await ctx.press('c')
 	return until(ctx, 'the character select', s => !!s.charSelect, { timeout: 15_000 })
@@ -142,7 +154,7 @@ export default async ctx => {
 		if (p.room.length) throw new Error(`room UI on the home page : ${p.room}`)
 		if (p.box !== true) throw new Error(`the unlock box is not checked by default : ${p.box}`)
 		await pageShot(ctx, 'bare-home')
-		await bootToMenu(ctx)
+		await startAt(ctx, 'menu')
 		await ctx.press('Escape')
 		const s = await waitIn(ctx.js, 'Settings', "document.getElementById('ctr-settings') && [...document.querySelectorAll('#ctr-settings [data-tab]')].map(t => t.dataset.tab)", 10_000)
 		if (s.includes('help') || s.includes('online')) throw new Error(`Settings tabs : ${s}`)
@@ -188,13 +200,19 @@ export default async ctx => {
 
 	await ctx.scenario('CARD-CLEAN', async () => {
 		await home(ctx, true)
-		await toCharacterSelect(ctx)
+		// a real boot (the card read) then a Time Trial started as the menus start it, in turbo : the
+		// page's Bot drives it to its end
+		await open(ctx, '?race=crash-cove&char=crash&mode=tt&turbo=1')
+		const s0 = await until(ctx, 'the countdown', s => s.screen === 'countdown', { timeout: 90_000, every: 100 })
+		if (!s0.unlocks.open) throw new Error(`the box does not reach the game : ${JSON.stringify(s0.unlocks)}`)
+		baseline = baseline ?? s0.unlocks.save
 		const before = await cardFiles(ctx)
-		// Cross through the character and track selects to the race, then the autopilot drives it
-		for (let i = 0; i < 6 && (await state(ctx)).screen === 'menu'; i++) { await ctx.press('c'); await sleep(1200) }
-		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 90_000, every: 500 })
-		say('the autopilot drives the Time Trial to its end (3 laps)')
-		await drive({ hold: ctx.hold, release: ctx.release, press: ctx.press }, ctx.js, Date.now() + 420_000).catch(e => say(`autopilot : ${e.message}`))
+		say('the Bot drives the Time Trial to its end (3 laps), in turbo')
+		await ctx.js('globalThis.ctrDev.bot(true); return true')
+		await until(ctx, 'the race finished', s => !!s.kart?.finished, { timeout: 180_000, every: 250 })
+		await ctx.js('globalThis.ctrDev.bot(false); return true')
+		await turbo(ctx, false)
+		await sleep(1000)
 		const end = await state(ctx)
 		// the results, then the race's end menu : SAVE GHOST writes the card (the ghost and the
 		// progress) ; every label met is kept for the report
@@ -235,7 +253,7 @@ export default async ctx => {
 		const { relay, rk = '' } = ctx.args
 		if (!relay) ctx.skip('no relay : --set relay=ws://localhost:8788 --set rk=<key>')
 		await home(ctx, true)
-		await bootToMenu(ctx)
+		await startAt(ctx, 'menu')
 		await ctx.js(`for (const [k, v] of [['ctr-share.relay', ${JSON.stringify(relay)}], ['ctr-share.rk', ${JSON.stringify(rk)}]]) localStorage.setItem(k, v)
 			const set = (id, v) => { const e = document.getElementById(id); e.value = v } ; set('share-relay', ${JSON.stringify(relay)}); set('share-rk', ${JSON.stringify(rk)}); return true`)
 		await ctx.js("document.getElementById('ctr-share-btn').click(); return true")
@@ -277,7 +295,7 @@ export default async ctx => {
 
 	await ctx.scenario('TOO-MANY', async () => {
 		if (!ctx.args.relay) ctx.skip('no relay')
-		if (!(await state(ctx))) await bootToMenu(ctx)
+		await startAt(ctx, 'menu')
 		await ctx.pad(0).connect()
 		await ctx.pad(1).connect()
 		// both pads in : beside the keyboard's P1, each is a player (the game reports them one by one)

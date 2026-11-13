@@ -46,12 +46,22 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture } from '/opt/devcontainer/base/skills/visual-loop/scripts/cdp.mjs'
 import { makePlayer, pageScript } from '/opt/devcontainer/base/skills/visual-loop/lib/player.mjs'
-import { PLAYER, bootToMenu, menuTo, state, until } from './ctr.mjs'
+import { PLAYER, menuTo, startAt, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8091/index.html',
 	login: false,
 	player: PLAYER,
+}
+
+export const tags = {
+	'SHARE-RELAY-REFUSED': ['share'],
+	'SHARE-2TAB': ['share', 'input', 'audio'],
+	'SHARE-ONE-MACHINE': ['share', 'input'],
+	'SHARE-GUEST-HUD': ['share', 'page'],
+	'SHARE-NAMES': ['share', 'page'],
+	'SHARE-RELOAD': ['share'],
+	'SHARE-FULL': ['share', 'input'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -75,14 +85,15 @@ const hostLog = ctx => ctx.js("return document.getElementById('log')?.textConten
 let release = null
 
 /**
- * Boots the game : a debug build to the main menu (bootToMenu) ; a release build (no window.__ctr :
+ * Starts the game : a debug build on the main menu, a page of its own for each scenario (its snapshot,
+ * ctr.mjs startAt : Share stopped, no guest left) ; a release build (no window.__ctr :
  * its ctr_native.js carries no debug bridge) until its game clock runs (`vblank=` lines) — Share
  * streams whatever is on screen. The build is read from the page's own script, not guessed from
  * timing : __ctr only appears once the game has its globals, seconds after the clock starts.
  */
 async function boot(ctx) {
 	release = !(await ctx.js("const r = await fetch('ctr_native.js', { cache: 'no-store' }); return (await r.text()).includes('globalThis.__ctr = ')"))
-	if (!release) return bootToMenu(ctx)
+	if (!release) return startAt(ctx, 'menu')
 	const vblank = () => ctx.js("const m = [...(document.getElementById('log')?.textContent ?? '').matchAll(/vblank=(\\d+)/g)].pop(); return m ? Number(m[1]) : 0")
 	// the wasm over the forwarded port sometimes stalls with nothing logged (LOG ## T3) : reload, 3 tries
 	for (let attempt = 1; attempt <= 3; attempt++) {
@@ -265,10 +276,9 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-2TAB', async () => {
+		await boot(ctx)
 		const out = ctx.args.out ? join(ctx.args.out, `share-${new Date().toISOString().replace(/[:.]/g, '-')}`) : null
 		if (out && !release) mkdirSync(out, { recursive: true }) // a release run files its own (releaseTwoTab)
-		// the main menu, or the character select an earlier scenario left Couch on (the Netplay build)
-		if (!release) await until(ctx, 'the main menu, or the select Couch is on', s => s.menu?.input || s.charSelect, { timeout: 10_000 })
 		const link = await share(ctx)
 		const g = await guestWindow(ctx, link)
 		try {
@@ -384,6 +394,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-ONE-MACHINE', async () => {
+		await boot(ctx)
 		// Host and guest in two windows of one machine (the user's try-out, 2026-10-22 : « pour pas
 		// que ça boucle ») : one physical pad reaches both pages, so it drove P1 on the host and P2
 		// through the guest at once. Each page's « Who plays » (Settings › Players) splits them : the
@@ -424,6 +435,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-GUEST-HUD', async () => {
+		await boot(ctx)
 		const link = await share(ctx)
 		const g = await guestWindow(ctx, link)
 		try {
@@ -472,6 +484,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-NAMES', async () => {
+		await boot(ctx)
 		const link = await share(ctx)
 		await ctx.js("globalThis.ctrUI.settings.patch({ name: 'Turbo Roo' }); return true")
 		const toasts = () => ctx.js("return [...document.querySelectorAll('.toast')].map(t => t.innerText.replace(/\\s+/g, ' ')).join(' | ')")
@@ -502,6 +515,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-RELOAD', async () => {
+		await boot(ctx)
 		// A guest reloads its page (a player pressing F5, a phone waking up) : a new link from the same
 		// page. Recorded : the slot it gets back, how long until it streams again, what the host's
 		// slots read in between ; asserted : streaming again, one guest on the host, no slot left over.
@@ -539,6 +553,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('SHARE-FULL', async () => {
+		await boot(ctx)
 		// Three guests are P2, P3, P4 in order of arrival — the game pulls slots 1–3, so the multitap
 		// bus is on — and a fourth is refused `full`, with no slot.
 		const link = await share(ctx)

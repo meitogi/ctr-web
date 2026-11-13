@@ -19,12 +19,24 @@
 
 import { readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAIN_MENU, PLAYER, bootToMenu, brief, menuTo, onMainMenu, state, until } from './ctr.mjs'
+import { MAIN_MENU, PLAYER, bootToMenu, brief, menuTo, onMainMenu, open, startAt, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
 	login: false,
 	player: PLAYER,
+}
+
+export const tags = {
+	'UX-ZIP-BOOT': ['boot', 'page'],
+	'UX-INTRO': ['boot', 'input'],
+	'UX-SETTINGS-HOLDS-KEYS': ['page', 'input'],
+	'UX-REMAP-KEY': ['page', 'input'],
+	'UX-PAD-TOAST-REMAP': ['page', 'input'],
+	'UX-DROP-OVERLAY': ['page'],
+	'UX-SOUND': ['page', 'audio'],
+	'UX-ONLINE-NAME': ['page'],
+	'UX-MENU-STILL-BOOTS': ['boot', 'page'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -73,8 +85,6 @@ const drag = (ctx, type, target = 'body') => ctx.js(`
 
 export default async ctx => {
 	let booted = null
-	// One build since session 14 : the CTR_ONLINE build boots the normal game too.
-	const needsMainMenu = () => {}
 	const onlineBuild = await ctx.js(`return (await fetch('online/page.js', { method: 'HEAD' })).ok`)
 
 	await ctx.scenario('UX-ZIP-BOOT', async () => {
@@ -135,30 +145,23 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-INTRO', async () => {
-		needsMainMenu()
 		// From a fresh page load, mash Enter (Start) through the retail intro — this edition has no
 		// « Skip intro » : Start skips what the game always let it skip) — until the main menu takes input ; Triangle
 		// backs out of a press that opened a row. __ctr only appears once the game renders scenes
 		// (after SCEA / copyright) : the VBlank count at the menu is the game time since boot.
-		// Right after UX-ZIP-BOOT the game has just started ; else (a preloaded build, booted
-		// before the suite) the page is reloaded.
-		// The 605 MB preload over the forwarded port can break on a reload (« network error »,
-		// the data file still pending) : no game after 2 min = reload again, 3 tries (12b).
-		let t0 = Date.now()
+		// Right after UX-ZIP-BOOT the game has just started ; else the page is loaded afresh
+		// (ctr.mjs open : a stalled load is loaded again).
+		if (!booted) await open(ctx)
+		const t0 = Date.now()
 		const seen = []
 		let s = null
-		for (let attempt = 1; attempt <= 3 && !(s && onMainMenu(s)); attempt++) {
-			if (!booted || attempt > 1) await ctx.reload()
-			t0 = Date.now()
-			s = null
-			say(`mashing Enter through the intro (SCEA, copyright, crate, title) until the main menu${attempt > 1 ? ` (attempt ${attempt})` : ''}`)
-			while (!(s && onMainMenu(s)) && Date.now() - t0 < (s ? 180_000 : 120_000)) {
-				if (s && !seen.includes(s.screen)) { seen.push(s.screen); say(`game screen : ${s.screen}${s.menu ? ` (menu ${s.menu.label || '…'})` : ''}`) }
-				if (s?.menu?.input) await ctx.press('z')
-				else await ctx.press('Enter').catch(() => {})
-				await sleep(150)
-				s = await state(ctx).catch(() => null)
-			}
+		say('mashing Enter through the intro (SCEA, copyright, crate, title) until the main menu')
+		while (!(s && onMainMenu(s)) && Date.now() - t0 < 180_000) {
+			if (s && !seen.includes(s.screen)) { seen.push(s.screen); say(`game screen : ${s.screen}${s.menu ? ` (menu ${s.menu.label || '…'})` : ''}`) }
+			if (s?.menu?.input) await ctx.press('z')
+			else await ctx.press('Enter').catch(() => {})
+			await sleep(150)
+			s = await state(ctx).catch(() => null)
 		}
 		s = await until(ctx, 'the main menu', onMainMenu, { timeout: 5000 })
 		await shot(ctx, 'menu-after-skip')
@@ -172,8 +175,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-SETTINGS-HOLDS-KEYS', async () => {
-		needsMainMenu()
-		await until(ctx, 'the main menu', onMainMenu, { timeout: 60_000 })
+		await startAt(ctx, 'menu')
 		// the CTR_ONLINE build opens Settings on its Online tab at boot (the panel's saved state)
 		if ((await page(ctx)).settings) await click(ctx, '#ctr-settings header button')
 		await ctx.frames(4)
@@ -181,8 +183,8 @@ export default async ctx => {
 		say('Esc : Settings opens, then ↓ ↓ must not reach the game')
 		await ctx.press('Escape')
 		await ctx.frames(10)
-		const open = await page(ctx)
-		if (!open.settings || !open.focusInPanel || !open.blocked) throw new Error(`Esc : ${JSON.stringify(open)}`)
+		const opened = await page(ctx)
+		if (!opened.settings || !opened.focusInPanel || !opened.blocked) throw new Error(`Esc : ${JSON.stringify(opened)}`)
 		await shot(ctx, 'settings-open')
 		await ctx.press('ArrowDown')
 		await ctx.press('ArrowDown')
@@ -201,8 +203,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-REMAP-KEY', async () => {
-		needsMainMenu()
-		await until(ctx, 'the main menu', onMainMenu, { timeout: 30_000 })
+		await startAt(ctx, 'menu')
 		await menuTo(ctx, 'ADVENTURE', dir => ctx.press(dir === 'down' ? 'ArrowDown' : 'ArrowUp'))
 		await ctx.press('Escape')
 		await click(ctx, '[data-tab=controls]')
@@ -242,8 +243,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-PAD-TOAST-REMAP', async () => {
-		needsMainMenu()
-		await until(ctx, 'the main menu', onMainMenu, { timeout: 30_000 })
+		await startAt(ctx, 'menu')
 		say('plugging the virtual pad, waiting for its toast')
 		await ctx.pad(0).connect()
 		let toast = null
@@ -286,8 +286,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-DROP-OVERLAY', async () => {
-		if (!(await state(ctx))) say('waiting for the game to run (the debug build streams its data first)')
-		await until(ctx, 'the game to run', s => s.vblank > 0, { timeout: 240_000, every: 500 })
+		await startAt(ctx, 'menu')
 		say('dragging a file across the page, then dropping a file that is not a disc')
 		// enter on one element, then move across children : each child fires enter then the
 		// parent leave — the overlay must stay up the whole time
@@ -320,6 +319,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-SOUND', async () => {
+		await startAt(ctx, 'menu')
 		// The test browser plays on the host's speakers : every level here is inaudible (0.001).
 		const level = () => ctx.js('return window.ctrAudio?.level ?? null')
 		const before = await level()
@@ -374,8 +374,8 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-MENU-STILL-BOOTS', async () => {
-		needsMainMenu()
-		// the regular boot helper on top of the new page (what every other suite does)
+		// the regular boot helper on a freshly loaded page
+		await open(ctx)
 		const s = await bootToMenu(ctx)
 		if (!MAIN_MENU.includes(s.menu.label)) throw new Error(brief(s))
 		return brief(s)

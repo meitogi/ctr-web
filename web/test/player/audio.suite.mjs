@@ -37,6 +37,9 @@ import { PLAYER, bootToMenu, brief, menuTo, runDirOf, say, shot, state, until } 
 
 export const meta = { url: 'http://localhost:8093/index.html', login: false, player: PLAYER }
 
+// one area, so a change runs the whole suite : its scenarios follow one another (the menu, then the race)
+export const tags = Object.fromEntries(['AUDIO-NO-GESTURE', 'AUDIO-OUTPUT', 'AUDIO-MENU', 'AUDIO-RACE', 'AUDIO-STALL', 'AUDIO-SAVESTATE', 'AUDIO-REPORT'].map(id => [id, ['audio']]))
+
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 // ctr.mjs's until() reads __ctr and tests it synchronously : this one awaits `fn`
 async function waitFor(label, fn, timeout) {

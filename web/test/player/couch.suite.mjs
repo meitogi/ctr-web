@@ -9,18 +9,27 @@
 //   COUCH-VS        two virtual pads : VS. › 2 players, both pick a driver, the race in split
 //                   screen with both karts driven (Cross held, P2 steering with its stick)
 // Asserts on window.__ctr (players, karts, sub) and ctrUI.players, the video shows the split screen.
+// INTRO-PAD boots for real ; the others start from the main menu's snapshot (ctr.mjs startAt), each
+// on its own.
 //
 // RUN : as menu.suite.mjs — bash plans/ctr-native-web/tools/play.sh couch <session> <port>
 // (debug build with the preloaded disc). Not a node --test file.
 
 import { readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAIN_MENU, PLAYER, brief, menuTo, onMainMenu, recordWithSound, say, state, until } from './ctr.mjs'
+import { PLAYER, brief, menuTo, onMainMenu, open, recordWithSound, say, startAt, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
 	login: false,
 	player: PLAYER,
+}
+
+export const tags = {
+	'INTRO-PAD': ['boot', 'input'],
+	'COUCH-PLAYERS': ['input', 'page'],
+	'COUCH-PLAYERS-UI': ['input', 'page'],
+	'COUCH-VS': ['input', 'menu', 'race', 'render'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -55,32 +64,24 @@ async function untilSlots(ctx, want, label) {
 }
 
 export default async ctx => {
-	let onMenu = false
-
 	await ctx.scenario('INTRO-PAD', async () => {
-		// a fresh load ; the 605 MB preload over the forwarded
-		// port sometimes stalls (ctr.mjs bootToMenu) : no game after 2 min = reload, 3 tries
+		// a fresh load (ctr.mjs open : a stalled load is loaded again)
 		await ctx.js(`localStorage.removeItem('ctr-ui.skip-intro'); localStorage.removeItem('ctr-ui.duo'); return true`)
 		const seen = []
+		await open(ctx)
+		await ctx.pad(0).connect()
+		const t0 = Date.now()
 		let s = null
-		let t0 = 0
-		for (let attempt = 1; attempt <= 3 && !(s && onMainMenu(s)); attempt++) {
-			await ctx.reload()
-			await ctx.pad(0).connect()
-			t0 = Date.now()
-			s = null
-			say(`mashing the pad's A / Cross through the intro until the main menu${attempt > 1 ? ` (attempt ${attempt})` : ''}`)
-			while (!(s && onMainMenu(s)) && Date.now() - t0 < (s ? 180_000 : 120_000)) {
-				if (s && !seen.includes(s.screen)) { seen.push(s.screen); say(`game screen : ${s.screen}`) }
-				// on the menu, a Cross that lands as it wakes opens a row : Triangle backs out
-				await ctx.pad(0).press(s?.menu?.input ? 'triangle' : 'cross').catch(() => {})
-				await sleep(150)
-				s = await state(ctx).catch(() => null)
-			}
+		say("mashing the pad's A / Cross through the intro until the main menu")
+		while (!(s && onMainMenu(s)) && Date.now() - t0 < 180_000) {
+			if (s && !seen.includes(s.screen)) { seen.push(s.screen); say(`game screen : ${s.screen}`) }
+			// on the menu, a Cross that lands as it wakes opens a row : Triangle backs out
+			await ctx.pad(0).press(s?.menu?.input ? 'triangle' : 'cross').catch(() => {})
+			await sleep(150)
+			s = await state(ctx).catch(() => null)
 		}
 		s = await until(ctx, 'the main menu', onMainMenu, { timeout: 5000 })
 		await ctx.pad(0).disconnect()
-		onMenu = true
 		const seconds = s.vblank / 59.82
 		// the retail intro, the presses skipping what the game lets them skip
 		if (seconds > 90) throw new Error(`${seconds.toFixed(1)} s of game time to the menu`)
@@ -88,11 +89,11 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('COUCH-PLAYERS', async () => {
-		if (!onMenu) throw new Error('no main menu (INTRO-PAD failed)')
-		await ctx.js("document.getElementById('canvas')?.focus(); return true")
+		await ctx.js(`localStorage.removeItem('ctr-ui.duo'); return true`)
+		await startAt(ctx, 'menu')
 		const steps = []
-		// the pad of INTRO-PAD opened on P1 and pushed the keyboard to P2 ; it stays there once
-		// the pad is gone (native_input.c's rule) — the Players part brings it back
+		// a pad gone leaves the keyboard where it was pushed (native_input.c's rule) — the Players
+		// part brings it back
 		let after = await slots(ctx)
 		for (let i = 0; i < 20 && after.some(x => x.startsWith('pad')); i++) { await sleep(150); after = await slots(ctx) }
 		const k = after.indexOf('kb')
@@ -128,6 +129,10 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('COUCH-PLAYERS-UI', async () => {
+		await startAt(ctx, 'menu')
+		// two pads on P1 and P2, the keyboard's two halves after them
+		await ctx.pad(0).connect()
+		await ctx.pad(1).connect()
 		await ctx.js(`document.getElementById('ctr-gear').click(); return true`)
 		await sleep(300)
 		await ctx.js(`document.querySelector('#ctr-settings [data-tab=players]').click(); return true`)
@@ -144,15 +149,19 @@ export default async ctx => {
 		await ctx.js(`document.getElementById('ctr-gear').click(); return true`)
 		await sleep(300)
 		await ctx.js("document.getElementById('canvas')?.focus(); return true")
+		await ctx.pad(1).disconnect()
+		await ctx.pad(0).disconnect()
 		if (rows.length !== 4 || !rows[1].startsWith('*')) throw new Error(`rows ${JSON.stringify(rows)} — expected 4 with P2 lit`)
 		return rows.join(' | ')
 	})
 
 	await ctx.scenario('COUCH-VS', async () => {
-		if (!onMenu) throw new Error('no main menu')
+		await startAt(ctx, 'menu')
 		const p1 = ctx.pad(0)
 		const p2 = ctx.pad(1)
-		// COUCH-PLAYERS's G (the left half's Cross) opened the row under the cursor : back out
+		await p1.connect()
+		await p2.connect()
+		// a row opened under the cursor : back out
 		for (let i = 0; i < 6 && (await state(ctx)).sub != null; i++) {
 			await p1.press('triangle')
 			await sleep(600)

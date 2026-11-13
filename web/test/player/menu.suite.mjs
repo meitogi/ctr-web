@@ -12,7 +12,7 @@
 //   Browser : the agent browser (`agent-browser up`), else ctr-browser.sh on the Mac.
 // Not a node --test file : `node --test web/test/*.test.js` never loads it.
 
-import { PLAYER, bootToMenu, brief, menuTo, recordWithSound, state, until, vblankAdvances } from './ctr.mjs'
+import { PLAYER, bootToMenu, brief, menuTo, open, recordWithSound, startAt, state, vblankAdvances } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
@@ -20,8 +20,16 @@ export const meta = {
 	player: PLAYER,
 }
 
+export const tags = {
+	'BOOT-MENU': ['boot', 'menu'],
+	'MENU-KEYBOARD': ['menu', 'input'],
+	'MENU-PAD': ['menu', 'input'],
+}
+
 export default async ctx => {
+	// BOOT-MENU boots for real ; the others start from the main menu's snapshot (ctr.mjs startAt)
 	await ctx.scenario('BOOT-MENU', async () => {
+		await open(ctx)
 		const s = await bootToMenu(ctx)
 		await ctx.shot('main-menu')
 		const vblanks = await vblankAdvances(ctx)
@@ -31,7 +39,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('MENU-KEYBOARD', async () => {
-		await until(ctx, 'the main menu', s => s.menu != null, { timeout: 5000 })
+		await startAt(ctx, 'menu')
 		let path = []
 		await recordWithSound(ctx, 'keyboard', async () => {
 			path = path.concat(await menuTo(ctx, 'TIME TRIAL', dir => ctx.press(dir === 'down' ? 'ArrowDown' : 'ArrowUp')))
@@ -44,6 +52,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('MENU-PAD', async () => {
+		await startAt(ctx, 'menu')
 		await ctx.pad(0).connect()
 		let path = []
 		await recordWithSound(ctx, 'pad', async () => {
