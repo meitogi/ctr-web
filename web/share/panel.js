@@ -164,7 +164,7 @@ async function startOn(room) {
   return host;
 }
 
-/** Opens a room on the relay of Settings › Multiplayer › Share and shares on it : {ok} or {ok: false, code, message}. */
+/** Opens a room on the relay of Settings › Multiplayer › Share and shares on it, the link copied : {ok, copied} or {ok: false, code, message}. */
 function start() {
   if (host) return Promise.resolve({ ok: true });
   starting ??= begin().finally(() => { starting = null; render(); });
@@ -184,7 +184,7 @@ async function begin() {
     // the guest page, without this page's query : a relay key there only travels after #
     linkText = formatRoomLink(new URL('share/guest.html', location.href).href, link);
     await startOn(room);
-    copyLink(ui?.text.shareOnCopied);
+    result.copied = await copyLink(ui?.text.shareOnCopied);
   } catch (e) {
     const message = String(e.message ?? e);
     error = RELAY_SAYS[e.code] ?? `${e.code ? `${e.code}: ` : ''}${message}`;

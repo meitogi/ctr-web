@@ -18,7 +18,7 @@
     ui.shareCard = true
     copied = false
     const r = await api()?.start()
-    if (r?.ok) copied = !!(await api()?.copy())
+    copied = !!r?.copied
   }
   async function copy() {
     field?.select()

@@ -33,7 +33,7 @@
   }
 </script>
 
-<div class="hud" class:awake={awake || ui.volumeOpen || ui.settingsOpen}>
+<div class="hud" class:awake={awake || ui.volumeOpen || ui.settingsOpen || ui.shareCard}>
   {@render extra?.()}
   <div class="speaker" role="group" onpointerenter={openVolume} onpointerleave={closeVolume}>
     <button type="button" id="ctr-sound" class="hbtn" aria-pressed={level === 0} title={level === 0 ? T.unmute : T.mute}
