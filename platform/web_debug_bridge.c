@@ -69,11 +69,15 @@
 //   net          ON builds, in an online race : the remote karts as this screen draws them
 //                (per-present position, SG_RACEDATA applied, corrections) — the block above
 //                WebDebugBridge_Publish, `__ctr.net.summary()` / `.reset()`
+//   unlocks      { save : GAME_PROGRESS.unlocks[0..1], what the memory card stores, as u32 ;
+//                open : the page's « Unlock everything » applies now (WEB_UNLOCK_ALL_OPEN,
+//                include/platform/native_web_ui.h) } — the box must never reach `save`
 //   track        level1->LevNavTable[0], the racing line the AI drives
 //                (BOTS.c ; magic 0xECFD, NAVHEADER_GETFRAME) : { levelID,
 //                path: [{x, y, z}] } in world units, published once per level
 
 #include <emscripten.h>
+#include <platform/native_web_ui.h>
 
 EM_JS(void, WebDebugBridge_PushJS,
       (int vblank, int gameMode1, int gameMode2, int levelID, int numLaps, int lights, int raceTime,
@@ -144,6 +148,11 @@ EM_JS(void, WebDebugBridge_PushPathJS, (int levelID, const s16 *frames, int coun
 	globalThis.__ctrTrack = { levelID, path };
 });
 
+
+EM_JS(void, WebDebugBridge_UnlocksJS, (u32 w0, u32 w1, int open), {
+	const c = globalThis.__ctr;
+	if (c) c.unlocks = { save: [w0 >>> 0, w1 >>> 0], open: !!open };
+});
 
 // Runs right after WebDebugBridge_PushJS, on the object it just wrote.
 EM_JS(void, WebDebugBridge_PushMoreJS,
@@ -692,6 +701,7 @@ internal void WebDebugBridge_Publish(void)
 		WebDebugBridge_PushMoreJS(sub != NULL, subTitle, sub ? sub->rowSelected : -1, subLabel, sub ? (int)sub->state : 0, players, karts,
 		                          charSelect,
 		                          WebDebugBridge_PoolFree(&gGT->JitPools.thread), WebDebugBridge_PoolFree(&gGT->JitPools.smallStack));
+		WebDebugBridge_UnlocksJS(GAME_PROGRESS.unlocks[0], GAME_PROGRESS.unlocks[1], WEB_UNLOCK_ALL_OPEN);
 	}
 
 

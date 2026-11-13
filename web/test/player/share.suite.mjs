@@ -58,7 +58,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const RIGHT = 0xffdf // the PSX pad word with Right held (active low)
 
 /** Polls `expr` in a tab until it returns something truthy. */
-async function waitIn(js, label, expr, timeout = 30_000, every = 250) {
+export async function waitIn(js, label, expr, timeout = 30_000, every = 250) {
 	const deadline = Date.now() + timeout
 	let last
 	while (Date.now() < deadline) {
@@ -106,7 +106,7 @@ function guestLink(ctx, link) {
 }
 
 /** Waits for a guest window's link : connected with both tracks, or refused / closed. */
-const settled = js => waitIn(js, 'the guest connected or refused', "(() => { const s = window.__ctrShareGuest.state(); return s.state === 'refused' || s.state === 'closed' || (s.state === 'connected' && s.tracks.length === 2) ? s : null })()", 40_000)
+export const settled = js => waitIn(js, 'the guest connected or refused', "(() => { const s = window.__ctrShareGuest.state(); return s.state === 'refused' || s.state === 'closed' || (s.state === 'connected' && s.tracks.length === 2) ? s : null })()", 40_000)
 
 /**
  * Starts Couch as a player does ; returns the guest link. In the Netplay build that is the game's
@@ -164,7 +164,7 @@ export async function share(ctx) {
 
 /** A guest window (a background tab stops painting), with the player harness for its own pad. */
 /** `before` : a script run on the guest's origin before the guest page loads (its storage). */
-async function guestWindow(ctx, url, { before } = {}) {
+export async function guestWindow(ctx, url, { before } = {}) {
 	url = guestLink(ctx, url)
 	const origin = new URL(url).origin
 	// a small same-origin file first : the agent browser's proxy refuses about:blank
@@ -252,7 +252,7 @@ export default async ctx => {
 		const g = await guestWindow(ctx, link.replace('guest.html#', 'guest.html?mode=ws#'))
 		try {
 			const s = await waitIn(g.js, 'the refusal', "(() => { const s = window.__ctrShareGuest.state(); return s.state === 'refused' || s.state === 'closed' ? s : null })()", 30_000)
-			if (s.state !== 'refused' || s.code !== 'online-mode' || !/Netplay/.test(s.message)) throw new Error(`guest : ${JSON.stringify(s)}`)
+			if (s.state !== 'refused' || s.code !== 'online-mode' || !/peer to peer/.test(s.message)) throw new Error(`guest : ${JSON.stringify(s)}`)
 			await sleep(1000)
 			const h = await ctx.js('return window.__ctrShare.state()')
 			if (!h.refusals.some(r => r.code === 'online-mode' && r.path === 'relay')) throw new Error(`host refusals ${JSON.stringify(h.refusals)}`)
