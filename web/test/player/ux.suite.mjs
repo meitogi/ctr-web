@@ -1,5 +1,5 @@
 // Player suite : the page's interface (session 12, web/ui) — a zipped disc dropped on the boot
-// screen booting to the menu, « Skip intro » by mashing a key, the whole-window drop overlay, the
+// screen booting to the menu, the retail intro mashed through with Start, the whole-window drop overlay, the
 // Settings panel holding the keys while it has the focus, a remapped key and a remapped pad
 // button moving the menu cursor, the « gamepad connected » toast, the speaker, and in the
 // CTR_ONLINE build the one player name shared with the Online tab. Asserts on window.__ctr and
@@ -119,7 +119,7 @@ export default async ctx => {
 		}
 		await shot(ctx, 'zip-progress')
 		// done once the page has stored the disc and injected the game (the boot screen goes) ;
-		// UX-SKIP-INTRO mashes from there, through SCEA and the copyright page
+		// UX-INTRO mashes from there, through SCEA and the copyright page
 		const t1 = Date.now()
 		let last = 0
 		while (Date.now() - t1 < 300_000 && (await page(ctx)).boot) {
@@ -134,10 +134,10 @@ export default async ctx => {
 		return `fixture ${head} B · overlay on dragenter ${lit} · progress seen ${Math.round(progress)} % · unzipped, stored and the game started after ${booted.gameInjectedAfter} s · OPFS ${stored} B`
 	})
 
-	await ctx.scenario('UX-SKIP-INTRO', async () => {
+	await ctx.scenario('UX-INTRO', async () => {
 		needsMainMenu()
-		// From a fresh page load, mash Enter (Start) — not a face button, so only « Skip intro »
-		// ends SCEA, the copyright page and the crate — until the main menu takes input ; Triangle
+		// From a fresh page load, mash Enter (Start) through the retail intro — this edition has no
+		// « Skip intro » : Start skips what the game always let it skip) — until the main menu takes input ; Triangle
 		// backs out of a press that opened a row. __ctr only appears once the game renders scenes
 		// (after SCEA / copyright) : the VBlank count at the menu is the game time since boot.
 		// Right after UX-ZIP-BOOT the game has just started ; else (a preloaded build, booted
@@ -166,8 +166,8 @@ export default async ctx => {
 		const prevented = await ctx.js(`const e = new KeyboardEvent('keydown', { code: 'Enter', key: 'Enter', bubbles: true, cancelable: true }); document.body.dispatchEvent(e); return e.defaultPrevented`)
 		if (!prevented) throw new Error('Enter on the game keeps its default action (macOS « toc » on every press)')
 		const seconds = s.vblank / 59.82
-		// the original intro plays ~45 s of VBlanks before the menu (LOG ## 2) ; the disc loads stay
-		if (seconds > 25) throw new Error(`${seconds.toFixed(1)} s of game time to the menu — the intro was not skipped`)
+		// the original intro plays ~45 s of VBlanks before the menu (LOG ## 2), less what Start skips
+		if (seconds > 90) throw new Error(`${seconds.toFixed(1)} s of game time to the menu`)
 		return `main menu after ${seconds.toFixed(1)} s of game time from boot (${s.vblank} VBlanks ; ${Math.round((Date.now() - t0) / 1000)} s wall clock with the page load), screens ${seen.join(' → ')}`
 	})
 
