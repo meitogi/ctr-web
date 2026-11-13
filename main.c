@@ -45,7 +45,9 @@
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
+#if !defined(__EMSCRIPTEN__)
 #include "platform/native_glad.c"
+#endif
 #include "platform/native_input.c"
 #include "platform/native_inline_c.c"
 #include "platform/native_libapi.c"
@@ -58,6 +60,9 @@
 #include "platform/native_memcard.c"
 #include "platform/native_memcard_adapter.c"
 #include "platform/native_perf.c"
+#if defined(__EMSCRIPTEN__) && !defined(NDEBUG)
+#include "platform/web_debug_bridge.c"
+#endif
 #include "platform/native_platform.c"
 #include "platform/native_replay_scheduler.c"
 #include "platform/native_renderer.c"
@@ -148,6 +153,10 @@ int main(int argc, char *argv[])
 
 	printf("[CTR Native] Starting...\n");
 	fflush(stdout);
+
+#ifdef __EMSCRIPTEN__
+	NativeMemcard_WebInit();
+#endif
 
 	const char *sdlBasePath = SDL_GetBasePath();
 	printf("[CTR Native] SDL base path: %s\n", sdlBasePath ? sdlBasePath : "(null)");

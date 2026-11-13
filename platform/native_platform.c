@@ -3,7 +3,11 @@
 #include <macros.h>
 
 #include "platform/native_audio.h"
+#if defined(__EMSCRIPTEN__)
+#include "platform/native_gl_emscripten.h"
+#else
 #include "platform/native_glad.h"
+#endif
 #include "platform/native_gpu.h"
 #include "platform/native_input.h"
 #include "platform/native_log.h"
@@ -17,6 +21,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 SDL_Window *g_window = NULL;
 int g_dbg_polygonSelected = 0;
@@ -156,9 +163,16 @@ internal void Platform_TakeScreenshot(void)
 {
 	u8 *pixels = (u8 *)malloc(g_windowWidth * g_windowHeight * 4);
 
+#if defined(__EMSCRIPTEN__)
+	// NOTE: WebGL2 reads back RGBA only.
+	glReadPixels(0, 0, g_windowWidth, g_windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+	SDL_Surface *surface = SDL_CreateSurfaceFrom(g_windowWidth, g_windowHeight, SDL_PIXELFORMAT_RGBA32, pixels, g_windowWidth * 4);
+#else
 	glReadPixels(0, 0, g_windowWidth, g_windowHeight, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
 
 	SDL_Surface *surface = SDL_CreateSurfaceFrom(g_windowWidth, g_windowHeight, SDL_PIXELFORMAT_BGRA8888, pixels, g_windowWidth * 4);
+#endif
 
 	SDL_SaveBMP(surface, "SCREENSHOT.BMP");
 	SDL_DestroySurface(surface);
@@ -184,8 +198,13 @@ internal void Platform_HandleKey(int key, char down)
 		switch (key)
 		{
 		case SDL_SCANCODE_F1:
+#if defined(__EMSCRIPTEN__)
+			// NOTE: WebGL2 has no glPolygonMode to draw the wireframe with.
+			Platform_LogWarn("[CTR Native] wireframe mode is not available in WebGL2\n");
+#else
 			g_dbg_wireframeMode ^= 1;
 			Platform_LogWarn("[CTR Native] wireframe mode: %d\n", g_dbg_wireframeMode);
+#endif
 			break;
 
 		case SDL_SCANCODE_F2:
@@ -346,6 +365,7 @@ void Platform_EndScene(void)
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
 	s_platformBeginScene = 0;
 
+
 	NativeRenderer_EndScene();
 
 	if (s_pinnedVramDisplayFrames > 0)
@@ -375,6 +395,9 @@ void Platform_EndScene(void)
 	NativeRenderer_PresentVRAMRect(activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
 	NativeRenderer_EndGpuFrame();
 	NativeRenderer_SwapWindow();
+#if defined(__EMSCRIPTEN__) && !defined(NDEBUG)
+	WebDebugBridge_Publish();
+#endif
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
 }
 
@@ -539,6 +562,19 @@ int NikoGetEnterKey(void)
 #define NATIVE_VBLANK_GPU_CYCLES 897619ull // 3413 * 263
 #define NATIVE_GPU_CLOCK_HZ      53693175ull
 #define NATIVE_VSYNC_CATCHUP_MAX 8
+#if defined(__EMSCRIPTEN__)
+// NOTE: on the web a late wake-up replayed up to 8 VBlanks in one host frame :
+// after a short stall (a disc read, a menu load) the game visibly lurched
+// forward. A visible page replays at most one 30 fps frame's worth and rebases
+// beyond. A hidden page keeps 8 : the browser wakes it only every 100 ms or
+// more, and the catch-up is what keeps the game, and its music sequencer
+// (driven by VBlanks), near real time there (measured : ~50 VBlanks/s in the
+// first seconds hidden, of ~60).
+#define NATIVE_VSYNC_CATCHUP_MAX_VISIBLE 2
+EM_JS(int, NativeWeb_PageHidden, (void), {
+	return document.hidden ? 1 : 0;
+});
+#endif
 // NOTE(aalhendi): SDL_DelayPrecise handles most of the wait; the final window
 // spins against SDL's performance counter so pacing follows the VBlank target.
 #define NATIVE_VSYNC_SPIN_US     200
@@ -580,9 +616,55 @@ internal void Native_EnsureVBlankTarget(void)
 	}
 }
 
+#if defined(__EMSCRIPTEN__)
+// Resolves on the next display refresh (requestAnimationFrame). A hidden or
+// covered window gets no refreshes and its timers are throttled (1 s in
+// Chrome and Firefox) : woken every 100 ms – 1 s, the VBlanks came in
+// bursts and the music, sequenced on VBlanks, lurched. The audio clock keeps
+// running there (the SPU worklet's tick, every 4 render quanta : ~11.6 ms,
+// web/audio/audio.js) : a hidden page resolves on the next tick, a visible
+// one on the fourth tick without a refresh (a covered window still
+// "visible").
+// The 100 ms timer is the last resort : no audio yet, or a suspended context.
+EM_ASYNC_JS(void, NativeWeb_WaitAnimationFrame, (void), {
+	await new Promise((resolve) => {
+		const ticks = globalThis.ctrAudio && globalThis.ctrAudio.ticks;
+		let count = 0;
+		const done = () => {
+			clearTimeout(timer);
+			cancelAnimationFrame(frame);
+			if (ticks) ticks.removeEventListener('tick', onTick);
+			resolve();
+		};
+		const onTick = () => { if (document.hidden || ++count >= 4) done(); };
+		const timer = setTimeout(done, 100);
+		const frame = requestAnimationFrame(done);
+		if (ticks) ticks.addEventListener('tick', onTick);
+	});
+});
+#endif
+
 internal void Native_WaitUntilVBlankTarget(void)
 {
 	const u64 freq = SDL_GetPerformanceFrequency();
+#if defined(__EMSCRIPTEN__)
+	// NOTE: the browser renders, delivers input and runs audio only while the
+	// page has given control back. Wait through ASYNCIFY, which returns to the
+	// event loop, and never spin : a spin would hold the page until the target.
+	// Waking on display refreshes, not on a timer, puts every present at the
+	// start of a refresh : timer wake-ups jitter by +-4 ms, which left 28 % of
+	// the 30 fps menu frames on screen for 3 or 5 refreshes instead of 4 at
+	// 120 Hz. The VBlank clock still paces the game ; only the wake-up moves.
+	(void)freq;
+	// the SPU commands of this frame's game logic leave now, not at the next VBlank
+	NativeAudio_WebFlush();
+	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+	while (SDL_GetPerformanceCounter() < s_nextVBlankCounter)
+	{
+		NativeWeb_WaitAnimationFrame();
+	}
+	NativePerf_EndScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+#else
 	const u64 spinWindow = Native_CounterFromMicroseconds(freq, NATIVE_VSYNC_SPIN_US);
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
@@ -622,6 +704,7 @@ internal void Native_WaitUntilVBlankTarget(void)
 			SDL_DelayPrecise(sleepUs * 1000ull);
 		}
 	}
+#endif
 }
 
 internal void Native_EmitVBlank(void)
@@ -635,11 +718,23 @@ internal void Native_EmitVBlank(void)
 
 	NativeAudio_StepVBlank();
 	s_nativeVBlankCount++;
+
+#if defined(__EMSCRIPTEN__)
+	if ((s_nativeVBlankCount % 60) == 0)
+	{
+		printf("[CTR Web] vblank=%d\n", s_nativeVBlankCount);
+	}
+#endif
 }
 
 internal int Native_CatchUpDueVBlanks(void)
 {
 	int emittedVBlanks = 0;
+#if defined(__EMSCRIPTEN__)
+	const u64 catchUpMax = NativeWeb_PageHidden() ? NATIVE_VSYNC_CATCHUP_MAX : NATIVE_VSYNC_CATCHUP_MAX_VISIBLE;
+#else
+	const u64 catchUpMax = NATIVE_VSYNC_CATCHUP_MAX;
+#endif
 
 	Native_EnsureVBlankTarget();
 
@@ -656,7 +751,7 @@ internal int Native_CatchUpDueVBlanks(void)
 			const u64 step = (freq * NATIVE_VBLANK_GPU_CYCLES) / NATIVE_GPU_CLOCK_HZ;
 			const u64 dueApprox = ((now - s_nextVBlankCounter) / step) + 1;
 
-			if (dueApprox > NATIVE_VSYNC_CATCHUP_MAX)
+			if (dueApprox > catchUpMax)
 			{
 				s_nextVBlankCounter = now;
 				s_vblankRemainder = 0;
@@ -673,7 +768,7 @@ internal int Native_CatchUpDueVBlanks(void)
 		Native_EmitVBlank();
 		emittedVBlanks++;
 
-		if (emittedVBlanks >= NATIVE_VSYNC_CATCHUP_MAX)
+		if ((u64)emittedVBlanks >= catchUpMax)
 		{
 			// NOTE(aalhendi): Keep normal late frames faithful, but rebase if the
 			// due count grew past the cap while we were replaying.

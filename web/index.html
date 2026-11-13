@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTR in your browser</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="ui/ui.css">
+<style>
+  /* before ui.css arrives : a black page, no flash */
+  html, body { margin: 0; background: #0b0d14; }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="800" height="600" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<pre id="log"></pre>
+<div id="ctr-ui"></div>
+<script>
+  // stdout / stderr go to the console and to #log (shown with ?log ; suites read it).
+  const logEl = document.getElementById('log');
+  function append(line) {
+    logEl.textContent += line + '\n';
+    if (logEl.textContent.length > 20000) logEl.textContent = logEl.textContent.slice(-10000);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  window.addEventListener('error', (e) => append('[page] ' + e.message));
+  window.addEventListener('unhandledrejection', (e) => append('[page] ' + e.reason));
+
+  // Sound : every source reaching the speakers goes through one gain node per AudioContext
+  // (`ctrMute`, the name the player suites lift for their videos). Its level is the Settings
+  // volume (web/ui, localStorage `ctr-ui.volume` / `ctr-ui.muted`), read here first so the
+  // first sample is already at the right level. Pages driven by the player harness
+  // (window.__player, injected before this script) and `?mute` start muted and never store it ;
+  // `?sound` forces the sound on.
+  (() => {
+    const query = new URLSearchParams(location.search);
+    const read = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+    const stored = parseFloat(read('ctr-ui.volume'));
+    const volume = Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.8;
+    const forcedMute = !query.has('sound') && (query.has('mute') || !!window.__player);
+    const audio = window.ctrAudio = {
+      forcedMute,
+      level: forcedMute || (read('ctr-ui.muted') === '1' && !query.has('sound')) ? 0 : volume,
+      nodes: [],
+      set(level) {
+        this.level = level;
+        for (const n of this.nodes) n.gain.value = level;
+      },
+    };
+    const connect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dest, ...rest) {
+      if (dest instanceof AudioDestinationNode) {
+        const ctx = dest.context;
+        if (!ctx.ctrMute) {
+          ctx.ctrMute = ctx.createGain();
+          ctx.ctrMute.gain.value = audio.level;
+          audio.nodes.push(ctx.ctrMute);
+          connect.call(ctx.ctrMute, dest);
+        }
+        return connect.call(this, ctx.ctrMute, ...rest);
+      }
+      return connect.call(this, dest, ...rest);
+    };
+  })();
+  // Autoplay : browsers start an AudioContext suspended until the page gets a user gesture.
+  // Chrome lets a page that was already activated start one ; Safari and Firefox want the
+  // resume inside the gesture.
+  for (const type of ['pointerdown', 'keydown', 'touchend']) {
+    window.addEventListener(type, () => {
+      const ctx = window.ctrAudio.context;
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    }, { capture: true });
+  }
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    print(text) { console.log(text); append(text); },
+    printErr(text) { console.error(text); append(text); },
+    setStatus(text) { if (text) console.log('[status] ' + text); },
+  };
+</script>
+<!-- the game's sound : the SPU in an AudioWorklet (web/audio) -->
+<script src="audio/audio.js"></script>
+<script src="preload-flag.js"></script>
+<!-- the interface (web/ui, Svelte) : boot screen, disc drop, Settings ; it injects ctr_native.js -->
+<script type="module" src="ui/ui.js"></script>
+<script type="module" src="share/panel.js"></script>
+</body>
+</html>
