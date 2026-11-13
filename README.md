@@ -1,203 +1,186 @@
-# CTR Native
+# CTR Native Web
 
-A native PC port of Crash Team Racing (PS1, 1999), built on top of the [CTR-ModSDK](https://github.com/CTR-tools/CTR-ModSDK) decompilation project.
+**ctr. in your browser. no cap.** bring your own disc, grab a pad, ruin a few
+friendships. gg.
 
-## Philosophy
+a [Meitogi](https://github.com/meitogi) thing. **beta** : it works, it has bugs, tell us
+([report a problem](#report-a-problem)).
 
-- **No byte budget.** Game source lives in `game/` as our own copies. Edit freely.
-- **No PSX toolchain.** Targets Windows and Linux with SDL3. No MIPS compiler needed.
-- **Clean platform layer.** `main.c` owns process startup; host details stay in `platform/native_*`.
-- **No build system nonsense.** Just `build.bat` / `build.sh`.
-- **Fully static build.** Single executable, zero dependencies. SDL3 is compiled from vendored source and linked statically.
+> **[Play at ctr.suuuper.app](https://ctr.suuuper.app/)**
 
-## Directory Layout
+no install. no emulator. no plugin. no sketchy .exe from a forum post in 2009. it's the
+decompiled PS1 game rebuilt for the web, forked from
+[CTR Native](https://github.com/CTR-tools/ctr-native), the native PC port.
 
-```
-ctr_native/
-  main.c              Entrypoint and native platform boundary
-  platform/           Native-owned audio, input, memcard, CD, and PSX facade glue
-  build-msvc.bat      Windows build (MSVC x86)
-  build.bat           Windows build (MinGW i686)
-  build.sh            Linux build
-  CMakePresets.json   Shared CLion/command-line CMake configurations
-  README.md           This file
-  game/               Our copies of all decompiled game source (943 files)
-    game_unity.h      Ordered unity include chain for all game source files
-  include/            Project headers (structs, globals, declarations, platform facade)
-  externals/
-    SDL/              SDL3 source (static build)
-```
+## bring your own disc
 
-## Prerequisites
+we don't host the game. don't ask. you know why (lawyers).
 
-### Windows
+you need your own **NTSC-U** copy as a raw disc image : `ctr-u.bin`, `MODE2/2352`, what a
+CD ripper spits out. a cooked 2048-byte `.iso` won't do — no voices, no videos, sad Aku
+Aku. loose or in a `.zip`, drop it anywhere on the page **once**. it lives in your
+browser now. nothing gets uploaded. next time you just press the button and send it.
 
-The recommended native Windows toolchain is MSVC x86:
+## what works
 
-1. Install Visual Studio 2022 or Visual Studio Build Tools 2022.
-2. Select the **Desktop development with C++** workload and a current Windows SDK.
-3. Ensure CMake 3.20 or newer is on `PATH` (standalone or the Visual Studio C++ CMake tools component).
-4. Run `build-msvc.bat`, or select the `windows-msvc-x86` CMake preset in CLion.
+- **the whole game, in a tab** — menus, races, music, voices, saves kept in your
+  browser. clear your site data and that's on you.
+- **controls** — keyboard or any gamepad, remap every button in Settings (Triangle to
+  accelerate ? bold. respect.), the right button icons for your pad, « Skip intro »
+  because we've all seen it. pads start in analog (ANA), Select + Start flips to digital
+  (DIG), just like the PlayStation's Analog button.
+- **couch party** — 2 to 4 players, 1 screen, 0 friendships left. one pad each, or two
+  on one keyboard (left half WASD, right half arrows, elbows included). whoever drives
+  the menus is P1 ; everyone else presses Start on the character select to hop in, and
+  holds Select to hop out. hold L1 + R1 in the menus to see who's who.
+- **Couch** — the couch, minus the couch. Select on the character select opens a room :
+  say its code out loud, your friends type it under « or join a room » on the home page
+  and play as P2–P4 **with no disc**. they get your game as live video + sound — so a bit
+  of delay — you get their pads, peer to peer. they lose, it's lag. they win, it's
+  skill. classic. Select again to stop.
+- **Netplay** — everyone on their own screen, with their own disc, same house or across
+  the internet. pick VS, Battle or Arcade in NETPLAY and you're hosting ; INVITE shows the
+  room's code — a few of the game's characters, « Crash, Coco, Tiny » — or copies the link.
+  your friends pick JOIN and dial the code, or click the link. someone who came by code
+  knocks, you let them in (or not). Arcade fills the grid to 8 karts with your game's
+  bots. wifi dies, you come back, the race remembers you.
+- **private by default** — rooms are end-to-end encrypted : what goes through the relay
+  is sealed with the room's secret, which never leaves the link or the code.
 
-The existing MinGW i686 build remains supported:
+## the limits (read this before you report them)
 
-1. Install [MSYS2](https://www.msys2.org/).
-2. In an MSYS2 terminal:
-   ```
-   pacman -Syu
-   pacman -S --needed git mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-make
-   ```
-   If the update asks you to close the terminal, reopen MSYS2 and run the install command.
-3. Add `C:\msys64\mingw32\bin` to your system PATH
-4. Open a new Command Prompt or PowerShell and run `build.bat`.
+- **your own NTSC-U disc.** PAL and Japanese discs are refused, for now.
+- **Netplay : one player per browser**, four in a room, each with their own disc.
+- **Couch : several players on the host's machine, one per guest browser, four in all.**
+  the guests watch a video of the host's game : expect a little delay.
+- **Couch needs a direct connection** between the host and each guest. some networks
+  (offices, schools, some mobile data) don't allow one : the guest is told so. Netplay
+  still works there, through the relay.
+- **the default relay is public, and capped.** no key to ask for : rooms meet on our relay
+  out of the box. it holds a limited number of players and rooms, closes a room nobody
+  joined after ten minutes, and any room after six hours. « RELAY FULL » ? try later, or
+  [run your own relay](#run-your-own-relay) and set it in Settings › Multiplayer › Netplay.
+- **a room's code is short on purpose** (you say it out loud). the host's door keeps
+  strangers out ; for a room nobody else could ever read, share the link, not the code.
+- **browsers** : played in Chrome (and the other Chromium browsers) every session ; Safari
+  by hand, with one open crash in Netplay Arcade ; Firefox not checked yet. no touch
+  controls : phones aren't a target today.
+- **not there yet** : the list right below.
 
-That's it. SDL3 is compiled from vendored source -- no separate install needed.
+## soon™
 
-### Linux (Debian/Ubuntu)
+no dates. no versions. trust the process.
 
-```
-sudo apt install gcc-multilib
-sudo apt install libx11-dev libxext-dev libgl1-mesa-dev libasound2-dev libudev-dev libdbus-1-dev
-```
+| | what | why you care |
+|---|---|---|
+| next | **every setting with the pad** | never touch the keyboard again (the Home button where the browser lets us) |
+| in the oven | **couch + netplay** | sofa vs. sofa. 2v2. bring snacks. several players per guest, and per Netplay browser |
+| in the oven | **your screen, your shape** | full window resolution + widescreen. 240p was a vibe in 1999, it's 2026 |
+| in the oven | **race the DuckStation crowd** | public OnlineCTR servers, players on the original game. they've been grinding since 1999. gl hf |
+| in the oven | **disc from your own server** | load it from a box on your home network. drop it once per house, not once per device |
+| in the oven | **the original** | a bare page at `/original/` : the game, local multiplayer, nothing else |
+| trust me bro | **PAL discs** | French version first. 50 Hz and all |
 
-## Building
+## how it's built
 
-```
-build-msvc.bat       # Windows, MSVC x86 (recommended)
-build.bat            # Windows, MinGW i686
-chmod +x build.sh
-./build.sh           # Linux
-```
+- **the game** — [CTR-ModSDK](https://github.com/CTR-tools/CTR-ModSDK) decompiled it to C,
+  [CTR Native](https://github.com/CTR-tools/ctr-native) made it a PC game, this fork builds
+  it to **WebAssembly** with Emscripten (SDL3 underneath).
+- **the picture** — **WebGL2** (CTR Native's renderer, ported to GLSL ES 3.0).
+- **the sound** — the PS1's sound chip emulated in an **AudioWorklet** (Web Audio), off the
+  main thread, so the music keeps time when the page is busy.
+- **the disc** — your image, checked (NTSC-U, raw sectors), streamed into the browser's
+  private storage (**OPFS**) once ; saves in IndexedDB.
+- **Netplay** — [OnlineCTR](https://github.com/CTR-tools/CTR-ModSDK)'s netcode, ported : the
+  host's page runs the room's server inside its own game. players talk over **WebRTC**
+  (direct, public STUN only), or through the relay when no direct path exists.
+- **Couch** — the host's canvas and sound sent as a WebRTC video + audio stream ; the
+  guests' pads sent back.
+- **the relay** ([relay/](relay/)) — one small Node file, WebSocket. it introduces players
+  and carries their messages when there's no direct path. **it sees** : connection IP
+  addresses, a room id (random, or derived from the code), random peer ids, who hosts,
+  message sizes and timing. **it does not see** : player names, the game's messages, the
+  WebRTC offers — all sealed with the room's secret (AES-GCM) — nor the secret itself.
+- **the page** — Svelte 5 + Vite, published on GitHub Pages by
+  [a workflow](.github/workflows/pages.yml) that refuses to ship any game data
+  ([web/pages/guard.sh](web/pages/guard.sh)).
 
-The shared CMake presets can also be used directly or selected as CLion CMake profiles:
+## report a problem
 
-```
-cmake --preset windows-msvc-x86
-cmake --build --preset windows-msvc-x86-debug
-ctest --preset windows-msvc-x86-debug
-```
+[open an issue](https://github.com/meitogi/ctr-native-web/issues/new/choose) — a bug or an
+idea, the form asks the right questions. faster : on the page, **Settings › System ›
+Report a problem** opens it with the version, the browser and the mode already filled in.
 
-First build compiles SDL3 from source. This is cached as a static library in the selected build directory.
+**never attach the disc, or any piece of it** — not the `.bin`, not a `.zip`, not a file
+from inside it. screenshots and short videos are great.
 
-Output:
+## run your own relay
 
-- MSVC: `build-msvc-x86/Release/ctr_native.exe`
-- MinGW: `build/ctr_native.exe`
-- Linux: `build/ctr_native`
-
-### Clean build
-
-```
-rmdir /s /q build    # Windows: delete cached libraries
-build.bat            # Windows: rebuild everything
-
-rmdir /s /q build-msvc-x86
-build-msvc.bat       # Windows MSVC: rebuild everything
-
-rm -rf build/        # Linux: delete cached libraries
-./build.sh           # Linux: rebuild everything
-```
-
-## Running
-
-### Normal Setup
-
-If you downloaded a release build, you only need two things for normal play:
-
-1. The game executable:
-   - `ctr_native.exe` on Windows
-   - `ctr_native` on Linux
-2. Your own NTSC-U retail CTR disc image, named (put in directory called `assets`):
-   - `assets/ctr-u.bin`
-
-Example:
-
-```
-CTR-Native/
-  ctr_native.exe
-  assets/
-    ctr-u.bin
-```
-
-Then run `ctr_native.exe`.
-
-The disc image must be the common single-track raw PSX BIN layout: MODE2/2352 sectors, with the data track starting at byte 0. A cooked 2048-byte `.iso` does not preserve the XA/STR sector data needed for audio and video playback.
-
-For development builds run from `build/`, put the same `assets/ctr-u.bin` next to the source tree:
+our relay down or full, or you'd rather have one of your own ? one line on any box with
+Docker (the key printed first, keep it) :
 
 ```
-ctr-native/
-  build/
-    ctr_native.exe
-  assets/
-    ctr-u.bin
+key=$(openssl rand -base64 24); echo "relay key : $key"
+docker run -d -p 8787:8787 -e RELAY_KEY="$key" ghcr.io/meitogi/ctr-relay
 ```
 
-### Extracted Asset Override
+then put it behind HTTPS — or skip the box : a hosted service in a few clicks, a
+throwaway cloud VM with auto HTTPS, or behind your Traefik / HAProxy / Caddy.
+everything's in [relay/README.md](relay/README.md). players type its `wss://` address and
+key in Settings › Multiplayer › Netplay, or get them in your invite links.
 
-You do not need extracted assets for normal play.
+**your fork, your page, your relay.** fork it, set the repository variable
+`CTR_RELAY_URL` (Settings › Secrets and variables › Actions › Variables), turn on Pages,
+push : your page points at your relay. [relay/README.md](relay/README.md#your-own-page-on-your-own-relay)
+says what an optional built-in key protects, and what it doesn't.
 
-Extracted files are still supported for development, modding, and debugging. If present, they override files from `ctr-u.bin`.
+## run it yourself (devs)
 
-Extracted-asset override structure:
-
-```
-CTR-Native/
-  ctr_native.exe
-  assets/
-    BIGFILE.BIG
-    SOUNDS/KART.HWL
-    TEST.STR
-    XA/
-      ENG.XNF
-      ENG/EXTRA/S00.XA ... S05.XA
-      ENG/GAME/S00.XA ... S20.XA
-      MUSIC/S00.XA ... S01.XA
-```
-
-The full extracted asset list is:
-
-- `BIGFILE.BIG`
-- `SOUNDS/KART.HWL`
-- `TEST.STR`
-- `XA/ENG.XNF`
-- `XA/ENG/EXTRA/S00.XA` through `S05.XA`
-- `XA/ENG/GAME/S00.XA` through `S20.XA`
-- `XA/MUSIC/S00.XA` through `S01.XA`
-
-`BIGFILE.BIG` and `SOUNDS/KART.HWL` are required. Missing XA/XNF files or
-`TEST.STR` produce a startup warning: the game can continue without the affected streamed audio or Scrapbook video. Files available in `ctr-u.bin` still provide the fallback for missing extracted files. A present but invalid XA manifest remains a startup error.
-
-## Bug Replays
-
-Internal builds can record a small bug report folder. See `docs/REPLAYS.md`.
-
-## Architecture
+one game build, the page on one port. from the repo, with emsdk and cmake around :
 
 ```
-main.c (entrypoint)
-  |
-  +-- platform/native_* (platform shell, audio, input, memcard, CD, renderer, PSX facade glue)
-  |
-  +-- game/game_unity.h
-        |
-        +-- game/ (all decompiled game source)
-              |
-              +-- include/ (headers: structs, globals, declarations)
+web/dev.sh dev
 ```
 
-- `CTR_NATIVE` is defined for native host/platform-specific code
-- First-party native code targets portable C17 with compiler extensions disabled
-- The default build uses 32-bit mode while remaining PSX address-shaped data and host-pointer contracts are audited. GPU primitive links are bridged through 24-bit native tokens; see `docs/MEMORY_MODEL.md`.
+opens the dev page on http://localhost:8090 — the page's sources with hot reload, the debug game
+built the first time. rebuild the game with `web/dev.sh build`, then reload the page.
+`web/dev.sh prod` serves the site exactly as GitHub Pages gets it (`web/dev.sh prod release`
+checks it with the guard too). in the devcontainer : `wtf ctr dev`, `wtf ctr build`, `wtf ctr prod`.
 
-## Roadmap
+testing alone ? on the debug page, from the main menu, Settings › Dev has a **second window** :
+Netplay VS, Netplay Battle, Netplay Arcade or Couch. one click, a window opens beside the first, joins the room by
+itself and plays as Bot ; the first window walks its menus to the race. Settings › Players has the
+Bot switch, Settings › Dev the log and the game state too. none of it ships on the site.
 
-- Clean up `game/` copies strip byte budget hacks and route platform-specific code through `CTR_NATIVE`
-- Keep reducing 32-bit host-pointer assumptions in PSX-shaped data, and keep pruning inherited compatibility code now owned in `include/` and `platform/`.
+the ports (one list : [web/dev-ports.tsv](web/dev-ports.tsv), checked by `web/dev.sh ports --check`) :
 
-## Credits
+<!-- ports -->
+| Port | Use | Forward in VS Code |
+|---|---|---|
+| 8090 | the dev page : wtf ctr dev (hot reload) or wtf ctr prod (the site as published) | yes |
+| 8091 | player suites' page server (one per parallel session) | yes |
+| 8092 | player suites' page server (one per parallel session) | yes |
+| 8093 | player suites' page server (one per parallel session) | yes |
+| 8787 | local relay, started by wtf ctr dev and prod | yes |
+| 8788 | player suites' relay | yes |
+| 8790 | the web/net and web/share demo pages | yes |
+| 9001 | MQTT stand-in (signaling suite) | yes |
+| 8099 | the LAN disc server (wtf disc), on the LAN host, not in the container | no |
+<!-- /ports -->
 
-- [CTR-ModSDK](https://github.com/CTR-tools/CTR-ModSDK) — the decompilation project this is built on
-- [PsyCross](https://github.com/OpenDriver2/PsyCross) — original PS1 compatibility code from which parts of CTR Native's owned platform layer and PsyQ facade headers are derived
-- [SDL3](https://github.com/libsdl-org/SDL) — cross-platform multimedia
-- Crash Team Racing is a trademark of Sony Computer Entertainment / Naughty Dog
+## credits (the real MVPs)
+
+- [CTR-ModSDK](https://github.com/CTR-tools/CTR-ModSDK) — decompiled the whole game.
+  absolute legends
+- [CTR Native](https://github.com/CTR-tools/ctr-native) — the native PC port this is a
+  fork of
+- [OnlineCTR](https://github.com/CTR-tools/CTR-ModSDK) (in CTR-ModSDK) — the netcode
+  Netplay is ported from
+- [PsyCross](https://github.com/OpenDriver2/PsyCross) — the original PS1 compatibility
+  code that parts of CTR Native's platform layer and PsyQ facade headers come from
+- [SDL3](https://github.com/libsdl-org/SDL) — audio, input, windows : the boring
+  essentials nobody thanks
+- the browser port — WebAssembly, Couch, LAN / Netplay, the whole web thing :
+  [Meitogi](https://github.com/meitogi)
+- Crash Team Racing is a trademark of Sony Computer Entertainment / Naughty Dog. we're
+  just fans with a compiler.

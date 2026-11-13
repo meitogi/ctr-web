@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-page="share-guest">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTR Native Web — Couch guest</title>
+<!-- the site's interface (web/ui : src/guest.js, built into ui/ beside share/) -->
+<link rel="stylesheet" href="../ui/ui.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  /* the host's game, beside Settings when it is open (--sidebar, ui.css) */
+  #video { position: fixed; top: 0; left: 0; width: calc(100% - var(--sidebar, 0px)); height: 100%; object-fit: contain; background: #000; transition: width 220ms ease; }
+  /* without the interface (ui/ not built) : one line of text */
+  #fallback { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 6px 10px; font: 12px/1.4 monospace; color: #ccc; background: #111; }
+</style>
+</head>
+<body>
+<video id="video" autoplay playsinline muted></video>
+<div id="ctr-ui"></div>
+<!-- the build's version (Settings › System, « Report a problem ») : the game page's own small file -->
+<script src="../preload-flag.js"></script>
+<script type="module" src="../ui/guest.js"></script>
+<script type="module" src="guest-page.js"></script>
+</body>
+</html>
