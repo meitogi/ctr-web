@@ -626,6 +626,9 @@ internal void Native_EnsureVBlankTarget(void)
 // one on the fourth tick without a refresh (a covered window still
 // "visible").
 // The 100 ms timer is the last resort : no audio yet, or a suspended context.
+#if !defined(NDEBUG)
+EM_JS(int, NativeWeb_TurboJS, (void), { return globalThis.__ctrTurbo ? 1 : 0; });
+#endif
 EM_ASYNC_JS(void, NativeWeb_WaitAnimationFrame, (void), {
 	await new Promise((resolve) => {
 		const ticks = globalThis.ctrAudio && globalThis.ctrAudio.ticks;
@@ -659,6 +662,26 @@ internal void Native_WaitUntilVBlankTarget(void)
 	// the SPU commands of this frame's game logic leave now, not at the next VBlank
 	NativeAudio_WebFlush();
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+#if !defined(NDEBUG)
+	// Debug : the tests' turbo (globalThis.__ctrTurbo, web/ui/src/dev/fast.js). VBlanks are
+	// emitted back to back, the clock rebased to now so no catch-up adds any : game time still
+	// moves by the VBlanks emitted, frame by frame as in real time, only sooner. The browser gets
+	// control back once per 16 ms of wall time (rendering, input, the tests' reads).
+	if (NativeWeb_TurboJS())
+	{
+		local_persist double s_lastYield;
+
+		if (emscripten_get_now() - s_lastYield >= 16.0)
+		{
+			NativeWeb_WaitAnimationFrame();
+			s_lastYield = emscripten_get_now();
+		}
+		s_nextVBlankCounter = SDL_GetPerformanceCounter();
+		s_vblankRemainder = 0;
+		NativePerf_EndScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
+		return;
+	}
+#endif
 	while (SDL_GetPerformanceCounter() < s_nextVBlankCounter)
 	{
 		NativeWeb_WaitAnimationFrame();

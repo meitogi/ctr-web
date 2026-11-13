@@ -1,17 +1,20 @@
 // The debug builds' tools (__CTR_DEV__ : vite.config.js), loaded by main.js and guest.js — never
 // in a release bundle : the « Bot » switch (bot.js : on by itself in the second window),
-// Settings › Dev (Dev.svelte) with its second window (second.js), globalThis.ctrDev for scripts.
+// Settings › Dev (Dev.svelte) with its second window (second.js), the tests' fast start (fast.js :
+// snapshots, the direct start, turbo), globalThis.ctrDev for scripts.
 import { ui } from '../state.svelte.js'
 import { guestPage, role } from '../store.js'
 import { startBot } from './bot.js'
 import { D } from './strings.js'
 import { SECOND } from '../lib/second-window.js'
 import { openSecond, walkToRace } from './second.js'
+import { installFast } from './fast.js'
 
 export function install({ toast = () => {} } = {}) {
   const log = (line) => { console.log(line); globalThis.Module?.print?.(line) }
   ui.bot = !!role.second || ui.bot
   startBot(ui, { log })
+  const fast = installFast({ log })
   globalThis.ctrDev = {
     // web/pages/guard.sh refuses a release site that carries this name
     tools: 'ctr-dev-tools',
@@ -32,5 +35,7 @@ export function install({ toast = () => {} } = {}) {
     // the second window's progress ({ mode, text, error }) : Settings closes on the click
     status: () => (ui.second ? { ...ui.second } : null),
     toast,
+    // the tests' fast start (fast.js) : snapshots, the direct start, turbo
+    ...fast,
   }
 }

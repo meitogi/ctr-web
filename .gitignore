@@ -42,3 +42,5 @@ __pycache__/
 .idea/
 *.swp
 *~
+# The tests' snapshots (web/test/player/serve.py, /__states) : the game's memory, never committed.
+/web/test/player/.states/

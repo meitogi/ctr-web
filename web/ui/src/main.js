@@ -219,5 +219,6 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   ui.phase = 'ready'
   ui.status = ''
   // the second window of Settings › Dev (debug) : in the room already, nobody to press
-  if (__CTR_DEV__ && role.second) startGame()
+  // or a test's fast start (dev/fast.js : ?race=, ?state=, ?turbo=)
+  if (__CTR_DEV__ && (role.second || /[?&](race|state|turbo)=/.test(location.search))) startGame()
 })()

@@ -72,9 +72,20 @@
 //   unlocks      { save : GAME_PROGRESS.unlocks[0..1], what the memory card stores, as u32 ;
 //                open : the page's « Unlock everything » applies now (WEB_UNLOCK_ALL_OPEN,
 //                include/platform/native_web_ui.h) } — the box must never reach `save`
+//   characters   data.characterIDs[0..7], each driver's character as the game loads it (P1… then
+//                the AI ; namespace_Vehicle.h's enum Characters)
+//   drivers      the drivers in the race now (gGT->drivers[0..7] set), 0 in the menus
 //   track        level1->LevNavTable[0], the racing line the AI drives
 //                (BOTS.c ; magic 0xECFD, NAVHEADER_GETFRAME) : { levelID,
 //                path: [{x, y, z}] } in world units, published once per level
+//
+// Two requests from the page (web/ui/src/dev/, the tests' fast start), pulled here once per frame :
+//   __ctrState   { op: 'save' | 'load' } : a snapshot, upstream's quick state (F5 / F8,
+//                platform/native_savestate.c) ; a load's bytes are written to its MEMFS file
+//                first. Taken at the next frame's NativeSaveState_BeginFrame, then `done` is set
+//                on the object with that frame's __ctr.
+//   __ctrStart   { mode, players, level, laps, difficulty, characters } : a race started from the
+//                main menu as the menus would start it (WebDebugBridge_Start).
 
 #include <emscripten.h>
 #include <platform/native_web_ui.h>
@@ -561,6 +572,138 @@ internal void WebDebugBridge_Stall(void)
 	}
 }
 
+EM_JS(void, WebDebugBridge_DriversJS, (const s16 *ids, int drivers), {
+	if (!globalThis.__ctr) return;
+	globalThis.__ctr.characters = Array.from(HEAP16.subarray(ids >> 1, (ids >> 1) + 8));
+	globalThis.__ctr.drivers = drivers;
+});
+
+EM_JS(int, WebDebugBridge_StateJS, (void), {
+	const S = globalThis.__ctrState;
+	if (!S || S.taken) return 0;
+	S.taken = true;
+	return S.op === 'load' ? 2 : 1;
+});
+
+EM_JS(void, WebDebugBridge_StateDoneJS, (void), {
+	const S = globalThis.__ctrState;
+	if (!S) return;
+	if (S.op === 'save') {
+		try {
+			S.bytes = FS.readFile('debug/states/quick.ctrstates');
+		} catch (e) {
+			S.error = 'no state written';
+		}
+	}
+	S.after = globalThis.__ctr;
+	S.done = true;
+});
+
+// mode 1 Time Trial, 2 Arcade, 3 VS ; out : players, level, laps, difficulty row, characters[4]
+EM_JS(int, WebDebugBridge_StartJS, (int *out), {
+	const S = globalThis.__ctrStart;
+	if (!S || S.taken) return 0;
+	S.taken = true;
+	const mode = { tt: 1, arcade: 2, vs: 3 }[S.mode] || 0;
+	HEAP32[(out >> 2) + 0] = S.players | 0;
+	HEAP32[(out >> 2) + 1] = S.level | 0;
+	HEAP32[(out >> 2) + 2] = S.laps | 0;
+	HEAP32[(out >> 2) + 3] = S.difficulty | 0;
+	for (let i = 0; i < 4; i++) HEAP32[(out >> 2) + 4 + i] = (S.characters && S.characters[i] != null) ? S.characters[i] | 0 : i;
+	return mode;
+});
+
+global_variable s32 s_webStateFrame = -1;
+
+internal void WebDebugBridge_State(void)
+{
+	if (s_webStateFrame >= 0)
+	{
+		// sdata->frameCounter++ runs just before NativeSaveState_BeginFrame (MainMain.c) : a save
+		// moves it on, a load brings back the snapshot's
+		if ((s32)sdata->frameCounter != s_webStateFrame)
+		{
+			s_webStateFrame = -1;
+			WebDebugBridge_StateDoneJS();
+		}
+		return;
+	}
+
+	switch (WebDebugBridge_StateJS())
+	{
+	case 1:
+		NativeSaveState_RequestSave();
+		s_webStateFrame = (s32)sdata->frameCounter;
+		break;
+	case 2:
+		NativeSaveState_RequestLoad();
+		s_webStateFrame = (s32)sdata->frameCounter;
+		break;
+	}
+}
+
+// A race from the main menu, through the game's own load : the values the menus set
+// (game/230/MM_MenuFlow.c's main menu and player boxes, MM_TrackSelect.c's track, laps and Time
+// Trial's empty ghost tape), the title left as Demo mode leaves it (MM_Title.c), then the queue
+// menu's own procedure (QueueLoadTrack.c : Time Trial's N. Tropy and Oxide, the event time, the
+// load request, the menu hidden). Fires once the main menu is up and no load runs, during the
+// title intro too.
+internal void WebDebugBridge_Start(struct GameTracker *gGT)
+{
+	s32 v[8];
+	int mode;
+
+	if ((sdata->Loading.stage != LOAD_IDLE) || (gGT->levelID != MAIN_MENU_LEVEL) || ((gGT->gameMode1 & MAIN_MENU) == 0) ||
+	    (sdata->ptrActiveMenu != &D230.menuMainMenu))
+	{
+		return;
+	}
+	mode = WebDebugBridge_StartJS(v);
+	if (mode == 0)
+	{
+		return;
+	}
+
+	MM_Title_CameraReset();
+	MM_Title_KillThread();
+
+	gGT->gameMode1 &= ~(BATTLE_MODE | ADVENTURE_MODE | TIME_TRIAL | ADVENTURE_ARENA | ARCADE_MODE | ADVENTURE_CUP);
+	gGT->gameMode2 &= ~(CUP_ANY_KIND);
+	gGT->numLaps = MM_DEFAULT_LAP_COUNT;
+
+	if (mode == 1)
+	{
+		gGT->numPlyrNextGame = 1;
+		gGT->gameMode1 |= TIME_TRIAL;
+		gGT->gameMode2 &= ~(CHEAT_WUMPA | CHEAT_TURBO | CHEAT_MASK | CHEAT_ENGINE | CHEAT_BOMBS);
+		sdata_static.ptrGhostTapePlaying = MEMPACK_AllocHighMem(0x3e00, R230.s_loaded_ghost_data);
+		memset(sdata_static.ptrGhostTapePlaying, 0, 0x28);
+		sdata_static.boolReplayHumanGhost = 0;
+	}
+	else
+	{
+		if (mode == 2)
+		{
+			gGT->gameMode1 |= ARCADE_MODE;
+			gGT->arcadeDifficulty = D230.cupDifficulty.speed[(v[3] >= 0) && (v[3] < 3) ? v[3] : 0];
+		}
+		gGT->numPlyrNextGame = (u8)v[0];
+		if ((v[2] == 1) || (v[2] == 3) || (v[2] == 5) || (v[2] == 7))
+		{
+			gGT->numLaps = (u8)v[2];
+		}
+	}
+
+	for (int i = 0; i < 4; i++)
+	{
+		data.characterIDs[i] = (s16)v[4 + i];
+	}
+	MM_Characters_BackupIDs();
+
+	gGT->currLEV = v[1];
+	QueueLoadTrack_MenuProc(&D230.menuMainMenu);
+}
+
 internal void WebDebugBridge_Publish(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
@@ -702,6 +845,16 @@ internal void WebDebugBridge_Publish(void)
 		                          charSelect,
 		                          WebDebugBridge_PoolFree(&gGT->JitPools.thread), WebDebugBridge_PoolFree(&gGT->JitPools.smallStack));
 		WebDebugBridge_UnlocksJS(GAME_PROGRESS.unlocks[0], GAME_PROGRESS.unlocks[1], WEB_UNLOCK_ALL_OPEN);
+		{
+			int drivers = 0;
+			const int racing = (sdata->Loading.stage == LOAD_IDLE) && ((gGT->gameMode1 & (MAIN_MENU | LOADING)) == 0);
+
+			for (int i = 0; racing && (i < 8); i++)
+			{
+				drivers += gGT->drivers[i] != NULL;
+			}
+			WebDebugBridge_DriversJS(data.characterIDs, drivers);
+		}
 	}
 
 
@@ -715,4 +868,6 @@ internal void WebDebugBridge_Publish(void)
 	}
 	WebDebugBridge_AudioJS();
 	WebDebugBridge_Stall();
+	WebDebugBridge_State();
+	WebDebugBridge_Start(gGT);
 }

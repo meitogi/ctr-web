@@ -4,8 +4,9 @@
 // Game state comes from window.__ctr (platform/web_debug_bridge.c, debug web
 // builds only), never from pixels.
 
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import * as autopilot from '../../ui/src/lib/autopilot.js'
 import { MAIN_MENU, onMainMenu, menuTo as autoMenuTo } from '../../ui/src/lib/autopilot.js'
 
@@ -187,4 +188,135 @@ export async function shot(ctx, label) {
 	const r = await ctx.conn.send('Page.captureScreenshot', { format: 'png', fromSurface: true }, ctx.sid)
 	if (dir && r?.data) writeFileSync(join(dir, proof.file), Buffer.from(r.data, 'base64'))
 	return proof
+}
+
+// ---- the fast start (web/ui/src/dev/fast.js, debug builds) ----
+
+/**
+ * Opens the game page with `query` (dev/fast.js's ?race= / ?state= / ?turbo=) and waits for the
+ * game's first frame (~6 s). A load can still stall (a request lost on the way, see serve.py) : no
+ * frame in `stall` ms, the page is loaded again, up to `tries` times.
+ */
+export async function open(ctx, query = '', { stall = 15_000, tries = 3 } = {}) {
+	const base = await ctx.js('return location.origin + location.pathname')
+	const url = base + query
+	const t0 = Date.now()
+	for (let attempt = 1; ; attempt++) {
+		await ctx.conn.send('Page.navigate', { url }, ctx.sid)
+		await sleep(300)
+		const end = Date.now() + stall
+		while (Date.now() < end) {
+			if (await ctx.js('return !!window.__ctr').catch(() => false)) {
+				// a fast start skips the boot screen's press, the user gesture the sound waits for
+				// (index.html resumes the AudioContext inside one) : a click on the game gives it
+				const at = await ctx.js("const r = document.getElementById('canvas').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }")
+				for (const type of ['mousePressed', 'mouseReleased']) await ctx.conn.send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, button: 'left', clickCount: 1 }, ctx.sid)
+				return { url, ms: Date.now() - t0, attempt }
+			}
+			// no ?race / ?state / ?turbo : the boot screen waits for a press
+			if (await ctx.js("return !!document.getElementById('press-start')").catch(() => false)) await ctx.press('Enter')
+			await sleep(200)
+		}
+		const where = await ctx
+			.js("const log = (document.getElementById('log')?.textContent ?? '').trim().split('\\n').slice(-2).join(' / '); return (document.getElementById('ctr-ui')?.innerText?.replace(/\\s+/g, ' ').slice(0, 80) ?? '') + ' · log : ' + log")
+			.catch(() => '?')
+		if (attempt >= tries) throw new Error(`no game frame after ${tries} loads of ${url} (the page : « ${where} »)`)
+		say(`no game frame ${stall / 1000} s after loading ${query || 'the page'} (« ${where} ») : loading it again`)
+	}
+}
+
+/**
+ * A real boot (the card read from the browser as on any start) in turbo, to the main menu : ~12 s
+ * instead of ~45. For the scenarios about the card or the unlocks, which a snapshot would answer
+ * with the card it was made with.
+ */
+export async function bootFast(ctx) {
+	await open(ctx, '?turbo=1')
+	const s = await bootToMenu(ctx)
+	await turbo(ctx, false)
+	return s
+}
+
+/** Turbo on or off (dev/fast.js) : frames back to back. Never for the sound or Share. */
+export const turbo = (ctx, on) => ctx.js(`return globalThis.ctrDev.turbo(${on ? 'true' : 'false'})`)
+
+/** Where the snapshots are kept : web/test/player/.states/<build>/ (gitignored, read by serve.py). */
+export const STATES_DIR = join(dirname(fileURLToPath(import.meta.url)), '.states')
+
+/**
+ * Saves the game's state as snapshot `name` (dev/fast.js), its bytes pulled over the devtools
+ * connection in pieces (one 4 MB answer dropped the agent browser's connection) and written beside
+ * this file. Returns { name, bytes, at, build }.
+ */
+export async function saveState(ctx, name) {
+	const r = await ctx.js('return globalThis.ctrDev.state.save()')
+	const PIECE = 384 << 10
+	const parts = []
+	for (let at = 0; at < r.bytes; at += PIECE) {
+		const b64 = await ctx.js(`const a = globalThis.__ctrSaved.bytes.subarray(${at}, ${at + PIECE}); let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s)`)
+		parts.push(Buffer.from(b64, 'base64'))
+	}
+	const bytes = Buffer.concat(parts)
+	if (bytes.length !== r.bytes) throw new Error(`snapshot ${name} : ${bytes.length} bytes read of ${r.bytes}`)
+	const dir = join(STATES_DIR, r.build)
+	mkdirSync(dir, { recursive: true })
+	writeFileSync(join(dir, `${name}.ctrstate`), bytes)
+	writeFileSync(join(dir, `${name}.json`), `${JSON.stringify({ name, at: r.at, saved: new Date().toISOString() })}\n`)
+	await ctx.js('globalThis.__ctrSaved = null; return true')
+	return { name, ...r }
+}
+
+/** Waits for ?state='s load (dev/fast.js) : { name, ok, missing, expected, got }. */
+export async function stateLoaded(ctx, timeout = 60_000) {
+	const end = Date.now() + timeout
+	for (;;) {
+		const r = await ctx.js('return globalThis.__ctrStateLoaded ?? null')
+		if (r) return r
+		if (Date.now() > end) throw new Error('the snapshot was not loaded (no __ctrStateLoaded)')
+		await sleep(100)
+	}
+}
+
+/** The query of a direct start : { race, char, mode, players, laps, diff }. */
+export const raceQuery = r =>
+	'?' + new URLSearchParams(Object.entries({ race: r.race, char: [].concat(r.char ?? []).join(','), mode: r.mode ?? 'tt', players: r.players, laps: r.laps, diff: r.diff }).filter(([, v]) => v != null && v !== '')).toString()
+
+/** The snapshot's name for a start point. */
+export const pointName = point =>
+	typeof point === 'string' ? point : ['race', point.mode ?? 'tt', point.race, [].concat(point.char ?? []).join('+'), `${point.players ?? 1}p`, point.laps && `${point.laps}laps`, point.diff && `diff${point.diff}`].filter(Boolean).join('-').replace(/[^A-Za-z0-9.+-]+/g, '-')
+
+/**
+ * Puts the game at a start point, from its snapshot when this build has one, else by the fastest
+ * real way there, then saves the snapshot for the next time :
+ *   'menu'          the main menu, idle, the cursor on its first row (made : a boot in turbo and
+ *                   bootToMenu)
+ *   { race, char, mode, players, laps, diff }  a race's countdown (made : the direct start, turbo)
+ * Turbo is off on return unless `{ turbo: true }`. A snapshot holds the memory card as it was read
+ * when it was made : a scenario about the card or the unlocks starts from a real boot instead.
+ * Returns { from: 'snapshot' | 'made', ms, state }.
+ */
+export async function startAt(ctx, point, { turbo: keep = false } = {}) {
+	const name = pointName(point)
+	const t0 = Date.now()
+	const ready = s => (point === 'menu' ? onMainMenu(s) && s.menu?.input && !s.mode?.includes('ADVENTURE_MODE') : s.screen === 'countdown')
+	await open(ctx, `?turbo=1&state=${encodeURIComponent(name)}`)
+	const r = await stateLoaded(ctx)
+	let from = 'snapshot'
+	if (!r.ok) {
+		say(`${name} : ${r.missing ? 'no snapshot for this build' : `the snapshot did not restore (${r.error ?? `${r.got} vs ${r.expected}`})`} — making it`)
+		from = 'made'
+		if (point === 'menu') {
+			await bootToMenu(ctx)
+		} else {
+			await open(ctx, `${raceQuery(point)}&turbo=1`)
+			await until(ctx, 'the race countdown', ready, { timeout: 90_000, every: 100 })
+		}
+		await turbo(ctx, false)
+		const saved = await saveState(ctx, name)
+		say(`${name} : saved (${Math.round(saved.bytes / 1024)} KB)`)
+	}
+	await turbo(ctx, keep)
+	const s = await until(ctx, name, ready, { timeout: 30_000, every: 100 })
+	await ctx.js("document.getElementById('canvas')?.focus(); return true")
+	return { from, ms: Date.now() - t0, state: s }
 }

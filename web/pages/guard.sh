@@ -11,6 +11,8 @@
 #   - any *.data file (a preloaded disc)
 #   - any file >= 50 MB
 #   - any *.bin / *.iso / *.cue / *.img file (case-insensitive)
+#   - a snapshot of the game (*.ctrstate, upstream's *.ctrstates, anything under a .states/ or
+#     __states/ folder : web/test/player/serve.py's) — the game's memory, pieces of the disc
 #   - preload-flag.js saying window.__CTR_WEB_PRELOAD = true
 #   - any .js/.html file literally setting window.__CTR_WEB_PRELOAD = true
 #   - any .js file carrying the debug tools (« ctr-dev-tools », web/ui/src/dev/ : the
@@ -41,6 +43,10 @@ while IFS= read -r -d '' f; do
   case "$lower" in
     *.data) fail "a .data file (preloaded disc)" "$f" ;;
     *.bin | *.iso | *.cue | *.img) fail "a disc image extension" "$f" ;;
+    *.ctrstate | *.ctrstates) fail "a snapshot of the game (its memory)" "$f" ;;
+  esac
+  case "/${f#"$site"}" in
+    */.states/* | */__states/*) fail "a snapshot folder (the tests' game states)" "$f" ;;
   esac
 
   size=$(stat -c%s "$f")

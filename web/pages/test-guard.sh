@@ -66,5 +66,21 @@ printf 'fake' >"$outside"
 ln -s "$outside" "$bad/linked.bin"
 check "a symlink to a file outside the site dir" "$bad" fail
 
+bad="$tmp/snapshot"
+cp -r "$clean/." "$bad/"
+printf 'fake' >"$bad/menu.ctrstate"
+check "a snapshot of the game (.ctrstate)" "$bad" fail
+
+bad="$tmp/quick-state"
+cp -r "$clean/." "$bad/"
+printf 'fake' >"$bad/QUICK.CTRSTATES"
+check "upstream's quick state (.ctrstates, uppercase)" "$bad" fail
+
+bad="$tmp/states-folder"
+cp -r "$clean/." "$bad/"
+mkdir -p "$bad/.states/0123456789abcdef"
+printf '{}' >"$bad/.states/0123456789abcdef/menu.json"
+check "a snapshot folder (.states/, its metadata)" "$bad" fail
+
 echo "test-guard.sh: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
