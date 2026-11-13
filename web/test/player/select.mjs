@@ -209,6 +209,7 @@ async function main(argv) {
 	return failed ? 1 : 0
 }
 
-if (process.argv[1] && relative(process.argv[1], fileURLToPath(import.meta.url)) === '') {
+// run as a command, not when `node --test` loads every .mjs under web/test/ (NODE_TEST_CONTEXT)
+if (!process.env.NODE_TEST_CONTEXT && process.argv[1] && relative(process.argv[1], fileURLToPath(import.meta.url)) === '') {
 	main(process.argv).then(code => process.exit(code), e => { console.error(e?.stack ?? e); process.exit(2) })
 }

@@ -143,6 +143,32 @@ one click, a window opens beside the first, joins Share by itself and plays as B
 window walks its menus to the race. Settings › Players has the
 Bot switch, Settings › Dev the log and the game state too. none of it ships on the site.
 
+the tests : `node --test` in `web/` for the page ; the player suites
+([web/test/player/](web/test/player/)) drive a real browser over CDP against the debug game served
+by `python3 web/test/player/serve.py build-web-debug 8091` (and a relay on 8788 for Share's). three
+levels, picked by [select.mjs](web/test/player/select.mjs) :
+
+- `node web/test/player/select.mjs` — **each change** : `node --test`, then only the scenarios the
+  files changed since the last tag touch ([coverage.mjs](web/test/player/coverage.mjs) says which
+  areas a path touches, every suite tags its scenarios) ; a suite's own file runs the scenarios it
+  changed ; words only (README, docs) run nothing. a change to Share : 9 scenarios, ~2 min.
+- `node web/test/player/select.mjs tag` — **each tag** : the smoke, one scenario per area (the boot,
+  a race, the page, the unlock, Share), ~2.5 min.
+- `node web/test/player/select.mjs full` — **a release or an upstream merge** : every scenario,
+  ~14 min.
+
+it prints what it picked ; `--run` runs it, one suite after the other, timed — `CTR_PLAY` is the
+command that runs one suite (`{suite}` its name, `--only A,B` appended), e.g.
+`CTR_PLAY='node <the player harness>/e2e.mjs --suite web/test/player/{suite}.suite.mjs --url http://localhost:8091/index.html'`.
+
+the scenarios start where they need to be, not from the boot and the menus : a **snapshot** of the
+game (the main menu, a race's countdown — upstream's savestates) made once per build
+(`select.mjs setup`, or on first use), a race **started straight from the URL**
+(`?race=crash-cove&char=pinstripe&mode=tt`, `mode=arcade`, `mode=vs&players=2`, the characters by
+name or id, the unlocked ones too) and **turbo** (`?turbo=1` : frames back to back, ×5 on a race)
+for the races the Bot drives. debug builds only. a snapshot holds the game's memory, pieces of the
+disc : they stay in `web/test/player/.states/`, never committed, and the site's guard refuses them.
+
 the ports (one list : [web/dev-ports.tsv](web/dev-ports.tsv), checked by `web/dev.sh ports --check`) :
 
 <!-- ports -->

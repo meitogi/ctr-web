@@ -55,6 +55,28 @@ box, Share by one button and the local pads. What the project is and how to run 
   on 8788. `bare.suite.mjs` holds what makes this edition (no room UI, unlock, the card clean,
   Share's button, the fifth player). A bug gets a scenario that reproduces it, run before and
   after the fix.
+- **Three levels**, picked by `node web/test/player/select.mjs [change|tag|full] [--run]`
+  (`CTR_PLAY` : the command that runs one suite, `{suite}` its name) :
+  - **each change** (the default) : `node --test` and the scenarios the diff since the last tag
+    touches — [coverage.mjs](web/test/player/coverage.mjs) maps paths to areas, each suite's
+    `export const tags` maps its scenarios to areas ; a suite's own file runs the scenarios it
+    changed ; a path no rule claims runs the smoke ; words only run nothing ;
+  - **each tag** : the smoke (`coverage.mjs` SMOKE, one scenario per area) ;
+  - **a release or an upstream merge** : `full`, every scenario of `coverage.mjs` SUITES.
+- **Every scenario starts on its own** (any can run alone, `--only`) : `ctr.mjs startAt(ctx,
+  'menu' | { race, char, mode, players })` loads that start point's snapshot or makes it (a boot in
+  turbo, the direct start) and saves it ; `bootFast` is a real boot in turbo, for the card and the
+  unlocks (a snapshot carries the card it was made with) ; `open(ctx, query)` loads the page. A new
+  scenario gets its tags (`web/test/select.test.js` fails without them).
+- The fast start (debug builds only, `web/ui/src/dev/fast.js`, `platform/web_debug_bridge.c`,
+  `platform/native_platform.c`) : snapshots are upstream's quick state (F5 / F8) taken and loaded
+  through `__ctrState`, kept per build in `web/test/player/.states/<build>/` (gitignored, served by
+  serve.py, refused by `web/pages/guard.sh`) ; `?race=<track>&char=<name>[,…]&mode=tt|arcade|vs
+  &players=<n>` starts a race from the main menu as the menus would ; `?turbo=1` /
+  `ctrDev.turbo(on)` runs frames back to back — never for the sound or Share (off by itself while
+  sharing) ; the page's Bot (`ctrDev.bot(true)`) drives in step with it.
+- The release build stays identical in code : check with `main.c` preprocessed (native) and the
+  web release preprocess against the previous tag.
 
 ## Code map and gotchas
 
