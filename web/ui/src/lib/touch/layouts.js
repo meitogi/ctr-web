@@ -18,10 +18,12 @@
 // Kinds : 'minimal' (the pad 1:1), 'a' (floating stick), 'b' (glide), 'c' (left / right buttons),
 // 'd' (one thumb a side : the stick left ; GO and R large side by side, held both, ITEM above,
 // BRAKE below — the user, 2026-11-16 : « le plus pratique à 1 doigt à gauche et 1 doigt à droite »),
+// 'e' (one gesture on the right : the stick left ; the right half one zone — hold = GO, a tap =
+// a hop, turning a slide, in a slide a boost, swipes = item / brake ; pad.js `gesture`),
 // 'menu' (the reduced pad of the game's menus : D-pad, OK, BACK, pause).
 import { PSX_BIT as B } from '../guest-input.js'
 
-export const KINDS = ['minimal', 'a', 'b', 'c', 'd', 'menu']
+export const KINDS = ['minimal', 'a', 'b', 'c', 'd', 'e', 'menu']
 export const SIZES = { s: 0.88, m: 1, l: 1.14 }
 
 /**
@@ -95,6 +97,16 @@ export function layout(kind, view, { size = 'm' } = {}) {
       { id: 'boost', type: 'button', cx: ax - 128 * u, cy: ay - 138 * u, r: 32 * u, bits: B.cross | B.r1 | B.l1, label: '+ BOOST', go: true, group: 'glide' },
       { id: 'item', type: 'button', cx: ax + 4 * u, cy: ay - 122 * u, r: 28 * u, bits: B.circle, label: 'ITEM' },
       { id: 'brake', type: 'button', cx: ax - 132 * u, cy: ay + 6 * u, r: 24 * u, bits: B.square, label: 'BRAKE' },
+      look,
+      pause,
+    ]
+  }
+  if (kind === 'e') {
+    const x = W / 2 + 10
+    const y = top + 100 * u
+    return [
+      zone,
+      { id: 'right', type: 'rect', x, y, w: W - R - x, h: H - bottom - y, bits: 0, label: '', gesture: true, go: true, boosts: true },
       look,
       pause,
     ]

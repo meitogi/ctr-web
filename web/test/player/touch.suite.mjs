@@ -22,6 +22,9 @@
 //   TOUCH-STICK-SLIDE  layout A : turning, the left thumb lifted and put down again at once starts a
 //                      slide the game reports (KS_DRIFTING, read through the touch pull), the stick
 //                      on the same side ; lifting it ends the slide
+//   TOUCH-E            layout E : the right half held = GO, held by itself ; a tap there turning =
+//                      hop + slide the game reports, kept by the page with no finger on it, the
+//                      auto boost giving reserves ; the stick centred ends it ; swipe down = brake
 //   TOUCH-SLIDE-HOLD   layout D : a slide (R with the stick turned, at speed) held 0.5 s holds
 //                      itself — the game's « sliding » reaches the page —, R lights up at the boost's
 //                      moment (the game's red meter), stays held with the thumb
@@ -47,6 +50,7 @@ export const tags = {
 	'TOUCH-SLIDE-HOLD': ['input', 'race'],
 	'TOUCH-BOOT-INTRO': ['input', 'boot'],
 	'TOUCH-STICK-SLIDE': ['input', 'race'],
+	'TOUCH-E': ['input', 'race'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -386,6 +390,46 @@ export default async ctx => {
 		if (during.slide < 10) throw new Error(`no slide from the stick : ${JSON.stringify(during)}`)
 		if (after.last || after.slide > atLift + 2) throw new Error(`the left thumb lifted, the slide went on : ${atLift} → ${JSON.stringify(after)}`)
 		return `lift + touch while turning : the game slides (${during.slide} pulls) · lifted : the slide ends`
+	})
+
+	await ctx.scenario('TOUCH-E', async () => {
+		await onPhone(ctx, TT, { touchLayout: 'e' }, { kind: 'e' })
+		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 30_000 })
+		await ctx.js("const t = Module.ctrInput.touch; window.__sl = { slide: 0, last: 0 }; Module.ctrInput.touch = (h, d, r, s, red, rev) => { if (s) __sl.slide++; __sl.last = s ? 1 : 0; return t(h, d, r, s, red, rev) }; return true")
+		const f = fingers(ctx)
+		const right = await f.rect('right')
+		const [rx, ry] = [right.cx, right.cy]
+		await f.down(2, rx, ry)
+		await sleep(1300)
+		await f.up(2)
+		await sleep(300)
+		const held = await touchState(ctx)
+		if (held.hold !== 'held' || !(await kart(ctx)).cross) throw new Error(`the right half held : ${held.hold}`)
+		await sleep(1200)
+		const z = await f.rect('steer')
+		const [x, y] = [z.x + 70, z.y + z.h - 90]
+		await f.down(1, x, y)
+		await f.move(1, x + 60, y)
+		await sleep(150)
+		await f.down(2, rx, ry)
+		await sleep(80)
+		await f.up(2)
+		let best = 0
+		for (const end = Date.now() + 1500; Date.now() < end; await sleep(60)) best = Math.max(best, (await kart(ctx))?.reserves ?? 0)
+		const during = await ctx.js('return { ...window.__sl }')
+		await f.move(1, x, y)
+		await sleep(700)
+		const after = await ctx.js('return { ...window.__sl }')
+		await f.up(1)
+		await f.down(2, rx, ry)
+		await f.move(2, rx, ry + 45)
+		await sleep(400)
+		const braking = await kart(ctx)
+		await f.all()
+		if (during.slide < 5) throw new Error(`a tap turning : no slide (${JSON.stringify(during)})`)
+		if (after.last) throw new Error('the stick centred, the slide went on')
+		if (braking.cross) throw new Error('swipe down : Cross still held')
+		return `GO held by itself · a tap turning : the game slid ${during.slide} pulls, reserves up to ${best} (the auto boost) · the stick centred : ended · swipe down : the brake`
 	})
 
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {

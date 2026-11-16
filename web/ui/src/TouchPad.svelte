@@ -91,7 +91,8 @@
     pad.slideHoldMs = mode === 'enhanced' ? s.touchSlideHoldMs : 0
     pad.steer = mode === 'enhanced' ? TOUCH_STEER[s.touchSteer] : { reach: 1, curve: 1 }
     // the slide from the stick : a stick to re-touch (A, B, D)
-    pad.retapMs = mode === 'enhanced' && s.touchLayout !== 'c' ? s.touchRetapMs : 0
+    pad.retapMs = mode === 'enhanced' && s.touchLayout !== 'c' && s.touchLayout !== 'e' ? s.touchRetapMs : 0
+    pad.autoBoost = mode === 'enhanced' && s.touchLayout === 'e' && s.touchAutoBoost
   })
   $effect(() => {
     pad.show(shown)
@@ -191,6 +192,9 @@
     background: rgba(255, 255, 255, 0.16); border: 2px solid rgba(255, 255, 255, 0.7); box-sizing: border-box; }
   .ctl.button { border-radius: 50%; }
   .ctl.rect { border-radius: 10px; }
+  /* E's right half : a faint frame, no label ; GO held, it turns gold at its edge only */
+  .ctl.rect.go { background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(255, 255, 255, 0.35); }
+  .ctl.rect .ring { display: none; }
   .ctl :global(.label) { pointer-events: none; }
   .ctl.back { border-color: #ff6b6b; }
   .ctl.go { border-color: #f59f00; border-width: 3px; font-size: 18px; }

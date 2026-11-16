@@ -53,7 +53,14 @@
       </div>
     {/if}
 
-    {#if s.touchLayout !== 'c'}
+    {#if s.touchLayout === 'e'}
+      <label class="setrow">
+        <span>{T.touchAutoBoost}<small>{T.touchAutoBoostHelp}</small></span>
+        <input id="ctr-touch-auto-boost" type="checkbox" role="switch" class="switch" checked={s.touchAutoBoost} onchange={(e) => settings.patch({ touchAutoBoost: e.currentTarget.checked })} />
+      </label>
+    {/if}
+
+    {#if s.touchLayout !== 'c' && s.touchLayout !== 'e'}
       <div class="label">{T.touchRetap}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchRetap}>
         {#each TOUCH_RETAP_MS as ms}
@@ -68,7 +75,7 @@
       <input id="ctr-touch-cue" type="checkbox" role="switch" class="switch" checked={s.touchCue} onchange={(e) => settings.patch({ touchCue: e.currentTarget.checked })} />
     </label>
 
-    {#if s.touchLayout !== 'b'}
+    {#if s.touchLayout !== 'b' && s.touchLayout !== 'e'}
       <div class="label">{T.touchSlideHold}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchSlideHold}>
         {#each TOUCH_SLIDE_HOLD_MS as ms}
@@ -78,6 +85,7 @@
       <p class="help">{T.touchSlideHoldHelp}</p>
     {/if}
 
+    {#if s.touchLayout !== 'e'}
     <div class="label">{T.touchSlide}</div>
     <div class="seg" role="radiogroup" aria-label={T.touchSlide}>
       {#each TOUCH_SLIDE_MS as ms}
@@ -86,7 +94,9 @@
     </div>
     <p class="help">{T.touchSlideHelp}</p>
 
-    {#if s.touchLayout !== 'b'}
+    {/if}
+
+    {#if s.touchLayout !== 'b' && s.touchLayout !== 'e'}
       <div class="label">{T.touchRock}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchRock}>
         {#each TOUCH_ROCK_PX as px}

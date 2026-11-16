@@ -70,6 +70,23 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     for (const id in fingers) if (fingers[id].drift) return true
     return false
   }
+  // E's right half (`gesture`, the user, 2026-11-16 : « le plus simple de jouer avec les 2 pouces
+  // en étant concentré sur l'écran ») : a touch while GO is not held is GO (the hold) ; GO held,
+  // a touch is a gesture — moved up = the item, down = the brake (held), a tap or 200 ms still =
+  // a hop (the stick centred) or a hop and a slide (turning), the slide kept by the page while the
+  // game says it slides, ended by the stick 0.3 s at the centre ; in a slide a touch = the boost.
+  // `autoBoost` : the page taps the boost itself as the meter turns red.
+  let eSlide = null // { since, seen, centreSince }
+  let r1Until = 0
+  let circleUntil = 0
+  let wasRed = false
+  let lastStick = null
+  const goLatched = () => hold.state === 'held' || hold.state === 'retouched'
+  const hopOrSlide = (t) => {
+    const v = lastStick ? Math.hypot(lastStick[0], lastStick[1]) : 0
+    if (v >= 0.35) eSlide = { since: t, seen: false, centreSince: 0 }
+    else r1Until = -1 // a hop : R1 for 100 ms from the next pull
+  }
   const rocked = (f, y, w) => (y - f.restY > self.rockPx) || (w > 0 && f.restW > 0 && w > f.restW * 1.5)
   const self = {
     get controls() { return controls },
@@ -95,7 +112,13 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     down(id, x, y, t = 0, w = 0) {
       const start = hit(controls, x, y)
       if (!start) return false
-      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false, noR1: false, drift: false, raw: null }
+      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false, noR1: false, drift: false, raw: null, t0: t, mode: null }
+      if (start.gesture) {
+        if (!goLatched() || !racing) fingers[id].mode = 'go'
+        else if (sliding || eSlide) { fingers[id].mode = 'done'; boostPending = true }
+        else fingers[id].mode = 'pending'
+        return true
+      }
       if (start.type === 'stick' && stickMemo && t <= stickMemo.until) {
         const reach = start.reach * self.steer.reach
         fingers[id].ox = x - stickMemo.raw[0] * reach
@@ -139,6 +162,10 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       if (!f) return false
       f.x = x
       f.y = y
+      if (f.start.gesture && f.mode === 'pending') {
+        if (y - f.oy < -30) { f.mode = 'done'; circleUntil = -1 }
+        else if (y - f.oy > 30) f.mode = 'brake'
+      }
       if (f.start.anchor && self.rockPx > 0) {
         if (!f.rock && rocked(f, y, w)) {
           f.rock = true
@@ -155,6 +182,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       const f = fingers[id]
       if (!f) return false
       const r = self.read(id)
+      if (f.start.gesture && f.mode === 'pending') hopOrSlide(t)
       // a steering thumb lifted while turning : the stick kept for a re-touch (not after a slide)
       if (f.start.type === 'stick' && !f.drift && self.retapMs > 0 && racing && f.raw && Math.hypot(f.raw[0], f.raw[1]) >= 0.4) {
         stickMemo = { raw: f.raw, out: r.stick, until: t + self.retapMs }
@@ -172,6 +200,9 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       boostUntil = 0
       slideLock = 'idle'
       stickMemo = null
+      eSlide = null
+      r1Until = 0
+      circleUntil = 0
       hold.reset()
       cross = false
     },
@@ -214,6 +245,11 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         }
         let b = 0
         let fromGo = false
+        if (s.gesture) {
+          if (f.mode === 'go') { go = true; ids.push(s.id) }
+          else if (f.mode === 'brake') { bits |= B.square; ids.push(s.id) }
+          continue
+        }
         if (s.group) {
           if (under && under.group === s.group) f.last = under
           b = f.last.bits
@@ -258,6 +294,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       let bits = r.bits | landed
       const go = r.go || landedGo
       let stick = r.stick
+      lastStick = stick
+      // E : a finger still 200 ms on the right half, neither moved nor lifted : the hop / the slide
+      for (const id in fingers) {
+        const f = fingers[id]
+        if (f.start.gesture && f.mode === 'pending' && now - f.t0 >= 200) { f.mode = 'done'; hopOrSlide(now) }
+      }
       // between a steering thumb's lift and its re-touch, the stick stays where it was
       if (stickMemo && now > stickMemo.until) stickMemo = null
       if (!stick && stickMemo) stick = stickMemo.out
@@ -280,6 +322,24 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       if (slideUntil && now > slideUntil) slideUntil = 0
       if (slideUntil) bits |= B.r1
+      // E's slide : R1 while the game slides ; ended by the game, the stick 0.3 s centred, the brake
+      if (eSlide) {
+        const v = stick ? Math.hypot(stick[0], stick[1]) : 0
+        if (sliding) eSlide.seen = true
+        if (v < 0.2) eSlide.centreSince ||= now
+        else eSlide.centreSince = 0
+        if ((bits & B.square) || !racing || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 400) || (eSlide.centreSince && now - eSlide.centreSince >= 300)) eSlide = null
+        else bits |= B.r1
+      }
+      if (r1Until === -1) r1Until = now + 100
+      if (r1Until && now < r1Until) bits |= B.r1
+      else r1Until = 0
+      if (circleUntil === -1) circleUntil = now + 100
+      if (circleUntil && now < circleUntil) bits |= B.circle
+      else circleUntil = 0
+      // the auto boost : the page taps the boost as the meter turns red
+      if (self.autoBoost && red && !wasRed && sliding) boostPending = true
+      wasRed = !!red
       if (boostPending) {
         boostPending = false
         boostUntil = now + 100
@@ -294,7 +354,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         self.onHold?.(held)
       }
       const buttons = ~(bits | (cross ? B.cross : 0)) & 0xffff
-      const analog = self.analog || kind === 'a' || kind === 'b' || kind === 'd'
+      const analog = self.analog || kind === 'a' || kind === 'b' || kind === 'd' || kind === 'e'
       dst[at] = 0
       dst[at + 1] = analog ? PAD_ANALOG : PAD_DIGITAL
       dst[at + 2] = buttons & 0xff
@@ -313,6 +373,10 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     rockPx: 0,
     /** how long R is kept down in a slide before the slide holds itself ; 0 = off */
     slideHoldMs: 0,
+    /** the page taps the slide's boost itself at the meter's red (E's « turbo auto ») */
+    autoBoost: false,
+    /** E's slide kept by the page right now */
+    get eSliding() { return !!eSlide },
     /** how long a steering thumb's lift waits for a re-touch that starts the slide ; 0 = off */
     retapMs: 0,
     /** the stick's sensitivity : full lock at `reach` × the zone's reach, |v| ** `curve` */

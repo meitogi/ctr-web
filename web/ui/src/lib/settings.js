@@ -41,6 +41,7 @@ export const KEYS = {
   touchSteer: 'ctr-ui.touch-steer',
   touchCue: 'ctr-ui.touch-cue',
   touchRetapMs: 'ctr-ui.touch-retap-ms',
+  touchAutoBoost: 'ctr-ui.touch-auto-boost',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -54,7 +55,7 @@ export const DEFAULT_VOLUME = 0.8
  * its held accelerator (lib/touch/hold.js) and the controls' size.
  */
 export const TOUCH_MODES = ['auto', 'pad', 'minimal', 'enhanced']
-export const TOUCH_LAYOUTS = ['a', 'b', 'c', 'd']
+export const TOUCH_LAYOUTS = ['a', 'b', 'c', 'd', 'e']
 export const TOUCH_SIZES = ['s', 'm', 'l']
 export const TOUCH_HOLD_MS = Object.freeze({ min: 400, max: 1500, default: 800 })
 /** how long the slide (R1) outlives a lift of the thumb, for a re-touch to boost ; 0 = off */
@@ -133,6 +134,8 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     // the boost controls light up at the boost's moment (the game's red exhaust)
     touchCue: read(storage, KEYS.touchCue) !== '0',
     touchRetapMs: retapMs(read(storage, KEYS.touchRetapMs) ?? 250),
+    // layout E : the page taps the slide's boost at the meter's red (as Mario Kart Tour's automatic drift)
+    touchAutoBoost: read(storage, KEYS.touchAutoBoost) !== '0',
   }
 }
 
@@ -159,6 +162,7 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchSteer, s.touchSteer === 'medium' ? null : s.touchSteer)
   write(storage, KEYS.touchCue, s.touchCue ? null : '0')
   write(storage, KEYS.touchRetapMs, s.touchRetapMs === 250 ? null : s.touchRetapMs)
+  write(storage, KEYS.touchAutoBoost, s.touchAutoBoost ? null : '0')
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */

@@ -508,3 +508,94 @@ test('the held accelerator lets go while the kart is put back (or about to start
   pad.up(1, 2550)
   assert.equal(pk(2600, true), 0, 'never locked while revving')
 })
+
+// ---- E : one gesture on the right ----
+function eRace() {
+  const pad = make('e')
+  const right = at(pad, 'right')
+  const z = at(pad, 'steer')
+  const R = [right.x + right.w / 2, right.y + right.h / 2]
+  const pk = (t, { slide = false, red = false } = {}) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide, red); return { bits: ~(p[2] | (p[3] << 8)) & 0xffff, lx: p[6] } }
+  // GO held by the right thumb until it holds itself, then lifted
+  pad.down(9, ...R, 0)
+  pk(0)
+  pk(900)
+  pad.up(9, 950)
+  pk(1000)
+  return { pad, R, z, pk }
+}
+
+test('E : a touch while GO is not held is GO ; held, it holds itself', () => {
+  const { pad, pk } = eRace()
+  assert.equal(pad.hold.state, 'held')
+  assert.equal(pk(1100).bits, B.cross)
+})
+
+test('E : a tap with the stick centred = a hop (R1, brief) ; GO stays held', () => {
+  const { pad, R, pk } = eRace()
+  pad.down(1, ...R, 2000)
+  pk(2050)
+  pad.up(1, 2100)
+  assert.equal(pk(2110).bits, B.cross | B.r1, 'the hop')
+  assert.equal(pk(2300).bits, B.cross, 'brief')
+  assert.equal(pad.hold.state, 'held')
+})
+
+test('E : a tap turning = hop + slide kept while the game slides ; a tap in it = the boost ; the stick centred 0.3 s ends it', () => {
+  const { pad, R, z, pk } = eRace()
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(2, ox, oy, 2000)
+  pad.move(2, ox + z.reach, oy)
+  pk(2010)
+  pad.down(1, ...R, 2050)
+  pad.up(1, 2120)
+  assert.equal(pk(2130).bits, B.cross | B.r1, 'the hop and the slide')
+  assert.equal(pk(2300, { slide: true }).bits, B.cross | B.r1, 'kept while the game slides')
+  pad.down(1, ...R, 2400)
+  assert.equal(pk(2410, { slide: true }).bits, B.cross | B.r1 | B.l1, 'a tap in the slide : the boost')
+  pad.up(1, 2450)
+  assert.equal(pk(2600, { slide: true }).bits, B.cross | B.r1)
+  pad.move(2, ox, oy)
+  pk(2700, { slide: true })
+  assert.equal(pk(2850, { slide: true }).bits & B.r1, B.r1, 'centred less than 0.3 s : still sliding (a wide slide crosses the centre)')
+  assert.equal(pk(3010, { slide: true }).bits & B.r1, 0, 'centred 0.3 s : the slide ends')
+})
+
+test('E : the slide ends with the game\'s ; a hold turning starts it after 200 ms', () => {
+  const { pad, R, z, pk } = eRace()
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(2, ox, oy, 2000)
+  pad.move(2, ox - z.reach, oy)
+  pk(2010)
+  pad.down(1, ...R, 2050)
+  assert.equal(pk(2100).bits & B.r1, 0, 'not yet : a tap or a swipe ?')
+  assert.equal(pk(2260).bits & B.r1, B.r1, 'still 200 ms : the slide')
+  pk(2400, { slide: true })
+  assert.equal(pk(2500, { slide: false }).bits & B.r1, 0, 'the game ended it')
+})
+
+test('E : swipe up = the item, swipe down = the brake (held, GO let go)', () => {
+  const { pad, R, pk } = eRace()
+  pad.down(1, ...R, 2000)
+  pad.move(1, R[0], R[1] - 40)
+  assert.equal(pk(2050).bits, B.cross | B.circle, 'the item')
+  pad.up(1, 2100)
+  assert.equal(pk(2300).bits, B.cross, 'no hop after a swipe')
+  pad.down(1, ...R, 3000)
+  pad.move(1, R[0], R[1] + 40)
+  assert.equal(pk(3050).bits, B.square, 'the brake, Cross let go')
+  pad.up(1, 3500)
+  pk(3510)
+  pad.down(1, ...R, 3600)
+  assert.equal(pk(3610).bits, B.cross, 'after the brake, a touch is GO again')
+})
+
+test('E : the auto boost taps L1 as the meter turns red, once per red', () => {
+  const { pad, pk } = eRace()
+  pad.autoBoost = true
+  pk(2000, { slide: true })
+  assert.equal(pk(2010, { slide: true, red: true }).bits & B.l1, B.l1)
+  assert.equal(pk(2200, { slide: true, red: true }).bits & B.l1, 0)
+  pk(2300, { slide: true })
+  assert.equal(pk(2400, { slide: true, red: true }).bits & B.l1, B.l1, 'the next red')
+})
