@@ -47,7 +47,10 @@ export function startBot(ui, { g = globalThis, log = () => {} } = {}) {
       const v = look(g)
       if (!v) return
       if (v.race) {
-        const r = await drive({ out, read: async () => ({ ...v.race.read(), stop: !ui.bot }), track: async () => v.race.track(), deadline: Date.now() + RACE_MS })
+        // its manoeuvres, the last 200, for the suites and the measuring panel (bot.suite.mjs, measure.js)
+        const traced = (g.__ctrBotTrace ??= [])
+        const trace = (e) => { traced.push({ t: Math.round(performance.now()), ...e }); if (traced.length > 200) traced.shift() }
+        const r = await drive({ out, read: async () => ({ ...v.race.read(), stop: !ui.bot }), track: async () => v.race.track(), deadline: Date.now() + RACE_MS, trace })
         log(`Bot : race ${r.finished ? `finished, rank ${r.rank + 1}` : 'stopped'}, ${r.fired} item(s)`)
         return
       }

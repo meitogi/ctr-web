@@ -8,6 +8,9 @@
 
 export const ACCEL = 'c'
 export const REVERSE = 'x'
+// Square alone only brakes : the game reverses on Square with the stick (or D-pad) held down
+// (game/Vehicle/VehPhysProc.c, gasBrakeReverse) — session 41's Bot braked against walls for good
+export const DOWN = 'ArrowDown'
 export const FIRE = 'v'
 export const CROSS = 'c'
 export const DIRS = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp']
@@ -27,10 +30,20 @@ export const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 
 /**
  * Drives one kart along the level's racing line until its race ends (pure pursuit), firing
- * whatever item it holds every 1.5 s, reversing out when stuck. `read()` : the state without its
- * track ({ screen, kart, gone? }), `track()` : { path: [{x, y, z}] }. Returns { finished, rank, fired }.
+ * whatever item it holds every 1.5 s. Knocked off (a bomb, a wall, turned round) it gets back as a
+ * player would (session 41 : on a phone, hit by a bomb, it drove on the wrong way and stayed against
+ * a wall) :
+ *   facing away from the line (more than ~90°)  brakes, then backs up turning its nose towards the
+ *                     line until it faces it — a three-point turn ; if backing up turned it nowhere
+ *                     (a wall behind), a full-lock turn forwards instead, the other way next time
+ *   stuck             not moving for 1 s, or no new point of the line for 4 s : backs out, the wheel
+ *                     towards the line first, then the other way, each time a little longer
+ * Its clocks are the game's (VBlanks) when the state carries them : a hidden page, whose game stops,
+ * does not look stuck. `read()` : the state without its track ({ screen, kart, vblank?, gone? }),
+ * `track()` : { path: [{x, y, z}] }. `trace(what)` hears each manoeuvre. Returns { finished, rank, fired,
+ * turns, recoveries }.
  */
-export async function drive({ out, read, track, deadline, now = Date.now, sleep = realSleep }) {
+export async function drive({ out, read, track, deadline, now = Date.now, sleep = realSleep, trace = () => {} }) {
   const line = await track()
   const path = line?.path ?? []
   const n = path.length
@@ -58,6 +71,17 @@ export async function drive({ out, read, track, deadline, now = Date.now, sleep 
     if (want) await out.hold(want)
     held = want
   }
+  // where the line wants the kart : the heading error to a point ahead of its nearest, by its speed
+  const aim = (k) => {
+    let i = nearest(k)
+    for (let d = 0; d < spacing * 2 + Math.max(0, k.speed) / 25; i = (i + 1) % n) d += seg[i]
+    const t = path[i]
+    return wrap(Math.atan2(t.x - k.pos.x, t.z - k.pos.z) - (k.angle * 2 * Math.PI) / 4096)
+  }
+  // the game's clock (59.82 VBlanks a second) when the state has it, else the wall's
+  const clock = (st) => (st?.vblank != null ? (st.vblank * 1000) / 59.82 : now())
+  const AWAY = 1.6 // rad : facing away from the line
+  const FACING = 0.7 // rad : facing it again
   let fired = 0
   let lastFire = now()
   let slowSince = 0
@@ -66,8 +90,11 @@ export async function drive({ out, read, track, deadline, now = Date.now, sleep 
   let end = null
   // Progress along the line : a kart grinding along a wall moves, yet gets nowhere. No new
   // line point for 4 s is stuck too ; each recovery in a row reverses longer, wheel alternating.
-  let best = { at: -1, since: now() }
+  let best = { at: -1, since: 0 }
   let recoveries = 0
+  let turns = 0
+  let turnWay = 0 // after a three-point turn that turned nothing : 1, a forward turn
+  const after = (st) => { slowSince = 0; lastPos = null; best.since = clock(st) }
   await out.hold(ACCEL)
   try {
     while (now() < deadline) {
@@ -77,33 +104,78 @@ export async function drive({ out, read, track, deadline, now = Date.now, sleep 
       if (s?.stop) break // the page's switch turned off
       if (!k) { await sleep(100); continue }
       if (s.screen === 'finished' || k.finished) { end = s; break }
+      const t = clock(s)
+      if (best.at < 0) best.since = t
       maxSpeed = Math.max(maxSpeed, k.speed)
-      let i = nearest(k)
-      for (let d = 0; d < spacing * 2 + Math.max(0, k.speed) / 25; i = (i + 1) % n) d += seg[i]
-      const t = path[i]
-      const err = wrap(Math.atan2(t.x - k.pos.x, t.z - k.pos.z) - (k.angle * 2 * Math.PI) / 4096)
+      const err = aim(k)
+      // facing away from the line : turned round by a hit, or driving the wrong way
+      if (Math.abs(err) > AWAY) {
+        turns++
+        trace({ do: turnWay ? 'turn-forward' : 'turn-back', at: near, err: +err.toFixed(2), speed: k.speed })
+        await out.release(ACCEL)
+        if (turnWay === 0) {
+          // brake, then back up : reversing, the wheel the other way swings the nose towards the line
+          await out.hold(REVERSE)
+          await out.hold(DOWN)
+          let e = err
+          const from = Math.abs(err)
+          for (const stop = now() + 3500; now() < stop; await sleep(50)) {
+            const s2 = await read()
+            if (!s2?.kart || s2.stop || s2.gone || s2.kart.finished) break
+            e = aim(s2.kart)
+            if (Math.abs(e) < FACING) break
+            await steer(e > 0 ? 'ArrowRight' : 'ArrowLeft')
+          }
+          await out.release(DOWN)
+          await out.release(REVERSE)
+          trace({ done: 'turn-back', err: +e.toFixed(2) })
+          // backing up turned it nowhere (a wall behind it) : forwards next time
+          if (Math.abs(e) > from - 0.2) turnWay = 1
+        } else {
+          // a full-lock turn forwards, towards the line
+          await out.hold(ACCEL)
+          let e = err
+          for (const stop = now() + 2500; now() < stop; await sleep(50)) {
+            const s2 = await read()
+            if (!s2?.kart || s2.stop || s2.gone || s2.kart.finished) break
+            e = aim(s2.kart)
+            if (Math.abs(e) < FACING) break
+            await steer(e > 0 ? 'ArrowLeft' : 'ArrowRight')
+          }
+          await out.release(ACCEL)
+          trace({ done: 'turn-forward', err: +e.toFixed(2) })
+          turnWay = 0
+        }
+        await steer(null)
+        await out.hold(ACCEL)
+        after(await read())
+        continue
+      }
       const moved = lastPos ? Math.hypot(k.pos.x - lastPos.x, k.pos.z - lastPos.z) : Infinity
       lastPos = k.pos
-      if ((maxSpeed > 0 && k.speed < maxSpeed / 5) || moved < 5) slowSince ||= now()
+      if ((maxSpeed > 0 && k.speed < maxSpeed / 5) || moved < 5) slowSince ||= t
       else slowSince = 0
       if (near !== best.at && (near - best.at + n) % n < n / 2) {
-        if ((near - best.at + n) % n > 5) recoveries = 0
-        best = { at: near, since: now() }
+        if ((near - best.at + n) % n > 5) { recoveries = 0; turnWay = 0 }
+        best = { at: near, since: t }
       }
-      if ((slowSince && now() - slowSince > 1000) || now() - best.since > 4000) {
-        const away = err > 0 ? 'ArrowRight' : 'ArrowLeft'
+      if ((slowSince && t - slowSince > 1000) || t - best.since > 4000) {
+        // back out : reversing, the wheel the other way swings the nose towards the line — then the
+        // other way on the next try in a row
+        const toLine = err > 0 ? 'ArrowRight' : 'ArrowLeft'
+        trace({ do: 'back-out', at: near, err: +err.toFixed(2), speed: k.speed, try: recoveries, slow: !!slowSince })
         await out.release(ACCEL)
-        await steer(recoveries % 2 ? (away === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight') : away)
+        await steer(recoveries % 2 ? (toLine === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight') : toLine)
         await out.hold(REVERSE)
+        await out.hold(DOWN)
         await sleep(Math.min(1100 + 600 * recoveries, 3000))
         recoveries++
-        best.since = now()
+        await out.release(DOWN)
         await out.release(REVERSE)
         await steer(null)
         await out.hold(ACCEL)
-        slowSince = 0
         near = -1
-        lastPos = null
+        after(await read())
         continue
       }
       await steer(Math.abs(err) > 0.05 ? (err > 0 ? 'ArrowLeft' : 'ArrowRight') : null)
@@ -116,9 +188,11 @@ export async function drive({ out, read, track, deadline, now = Date.now, sleep 
     }
   } finally {
     await steer(null)
+    await out.release(DOWN)
+    await out.release(REVERSE)
     await out.release(ACCEL)
   }
-  return { finished: !!end, rank: end?.kart?.rank ?? null, fired }
+  return { finished: !!end, rank: end?.kart?.rank ?? null, fired, turns, recoveries }
 }
 
 /**

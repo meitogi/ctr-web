@@ -48,6 +48,28 @@ test('drive : stuck (not moving for 1 s) → reverse with Square, then on again'
   const i = r.log.indexOf('+x')
   assert.ok(i > 0, `reversed : ${r.log.join(' ')}`)
   assert.ok(r.log.indexOf('-c') < i && r.log.indexOf('-x') > i, 'accelerator off while reversing')
+  // Square alone only brakes : the game reverses with the stick down too (VehPhysProc.c)
+  assert.ok(r.log.indexOf('+ArrowDown') > i && r.log.indexOf('-ArrowDown') < r.log.indexOf('-x'), `Down held while reversing : ${r.log.join(' ')}`)
+})
+
+test('drive : facing away from the line (turned round by a hit) → backs up turning its nose to the line, Square and Down', async () => {
+  const c = clock()
+  const r = recorder()
+  // heading nearly -z (half a turn and a bit), the line runs +z ; backing up, the wheel turns the kart
+  // the other way than going forwards (measured in the game : Left lowers the angle in reverse)
+  let angle = 2348
+  let reads = 0
+  const read = async () => {
+    reads++
+    if (r.held.x && r.held.ArrowDown) angle += r.held.ArrowRight ? 200 : r.held.ArrowLeft ? -200 : 0
+    return c.now() > 8000 ? { screen: 'finished', kart: { finished: true, rank: 0 } } : { screen: 'race', kart: { pos: { x: 0, y: 0, z: 500 + (reads % 2) * 20 }, angle, speed: 500, finished: false } }
+  }
+  const res = await drive({ out: r.out, read, track: async () => line, deadline: 1e9, ...c })
+  assert.ok(res.turns >= 1, `turned : ${res.turns}`)
+  const back = r.log.indexOf('+x')
+  assert.ok(back >= 0 && r.log.indexOf('+ArrowDown') > back, `Square then Down : ${r.log.join(' ')}`)
+  assert.ok(Math.abs(((angle % 4096) + 4096) % 4096 - 0) < 600 || Math.abs(((angle % 4096) + 4096) % 4096 - 4096) < 600, `faces the line again (angle ${angle})`)
+  assert.deepEqual(r.held, {}, 'nothing left held')
 })
 
 test('drive : the switch off stops the race at once', async () => {

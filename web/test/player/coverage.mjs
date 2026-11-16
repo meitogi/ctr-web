@@ -18,7 +18,7 @@
 //   harness the tests' own tools (the fast and precise starts, the snapshots, saves, replays, ctr.mjs)
 
 /** The suites a level can run, in the order they run. */
-export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio']
+export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio', 'bot']
 
 /** The tag level : one scenario per area, ~5 min. */
 export const SMOKE = [

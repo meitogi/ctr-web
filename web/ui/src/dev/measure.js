@@ -235,7 +235,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     render()
   }
 
-  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() }, install: ui.install ? { ...ui.install } : null }, null, 1)
+  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() }, install: ui.install ? { ...ui.install } : null, bot: (g.__ctrBotTrace ?? []).slice(-60) }, null, 1)
   async function send() {
     state.sent = 'sending…'
     render()
@@ -283,7 +283,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
       report.race = { loadS: Math.round((now() - state.startTap) / 100) / 10 }
     }
     if (state.step === 'racing') {
-      if (document.visibilityState === 'visible') report.samples.push({ t: now(), fps: c?.fps ?? 0, vblank: c?.vblank ?? 0, frame: c?.frame ?? 0, lap: c?.kart?.lap ?? null })
+      if (document.visibilityState === 'visible') report.samples.push({ t: now(), fps: c?.fps ?? 0, vblank: c?.vblank ?? 0, frame: c?.frame ?? 0, lap: c?.kart?.lap ?? null, speed: c?.kart?.speed ?? null, cp: c?.kart?.checkpoint ?? null, pos: c?.kart ? [c.kart.pos.x, c.kart.pos.z] : null, screen: c?.screen ?? null })
       const m = memory()
       if (!report.memory.peak || m.wasmHeapMB > report.memory.peak.wasmHeapMB) report.memory.peak = m
       const seconds = Math.round((now() - state.raceFrom) / 1000)
