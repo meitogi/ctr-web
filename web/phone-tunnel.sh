@@ -18,10 +18,10 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
-# the main clone's web/ even when this runs from a worktree (its .git is a file pointing there)
-main=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
-DIR=${CTR_TUNNEL_DIR:-${main:+$(dirname "$main")/web/.phone-tunnel}}
-DIR=${DIR:-$here/.phone-tunnel}
+# the main clone's web/ even when this runs from a worktree (.claude/worktrees/<name>/web) : read off
+# the path — git cannot say it on the Mac, a worktree's .git file names the container's path
+DIR=${CTR_TUNNEL_DIR:-${here%%/.claude/worktrees/*}}
+[ -n "${CTR_TUNNEL_DIR:-}" ] || { [ "$DIR" = "$here" ] && DIR=$here/.phone-tunnel || DIR=$DIR/web/.phone-tunnel; }
 HOST=${CTR_PHONE_HOST:-ctr-dev.suuuper.app}
 FPORT=${CTR_PHONE_FRP_PORT:-8098}
 PAGE=${CTR_PAGE_PORT:-8090}
