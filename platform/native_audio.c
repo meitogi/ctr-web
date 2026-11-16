@@ -677,6 +677,21 @@ internal void NativeAudio_WebVBlank(void)
 	}
 
 	clock = NativeAudio_WebFeedbackJS(feedback);
+#ifndef NDEBUG
+	// Debug : a replay recorded or played (upstream's deterministic mode, native_replay_scheduler.c)
+	// counts the XA track by VBlanks, not by the worklet's position : the game's checks on it (the
+	// voice lines' queue, HOWL_Voiceline.c, which draws sdata->audioRNG) fall on the same frames
+	// both times. The worklet plays on at its own pace. (Session 45b : audioRNG diverged at
+	// frame 1026 of a replayed race.)
+	if (s_audio.output.deterministicRenderMode)
+	{
+		clock = 0;
+		if (s_audio.xa.active)
+		{
+			NativeAudio_WebXaWallClock(periodMs);
+		}
+	}
+#endif
 	if ((clock > 0) && ((u32)feedback[0] == s_audioWeb.xaSerial))
 	{
 		s_audio.xa.active = feedback[1] != 0;

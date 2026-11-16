@@ -355,6 +355,10 @@ int Platform_BeginScene(void)
 	return 1;
 }
 
+#if defined(__EMSCRIPTEN__) && !defined(NDEBUG)
+internal void NativeWeb_FramePause(void);
+#endif
+
 void Platform_EndScene(void)
 {
 	if (!s_platformBeginScene)
@@ -397,6 +401,7 @@ void Platform_EndScene(void)
 	NativeRenderer_SwapWindow();
 #if defined(__EMSCRIPTEN__) && !defined(NDEBUG)
 	WebDebugBridge_Publish();
+	NativeWeb_FramePause();
 #endif
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_PLATFORM_END_SCENE);
 }
@@ -645,6 +650,44 @@ EM_ASYNC_JS(void, NativeWeb_WaitAnimationFrame, (void), {
 		if (ticks) ticks.addEventListener('tick', onTick);
 	});
 });
+
+#if !defined(NDEBUG)
+// Debug : the tests' frame control (globalThis.__ctrPause = { paused, steps, at }, web/ui/src/dev/
+// precise.js ; `at` : held once __ctr.raceFrame reaches it). A frame presented and published, a paused game waits here on the browser's frames
+// until a step lets one more game frame run, or the pause ends ; then the clock is rebased, as turbo
+// does, so that no catch-up runs the VBlanks the pause held. `held` tells the page it waits.
+EM_JS(int, NativeWeb_PauseJS, (void), {
+	const P = globalThis.__ctrPause;
+	if (!P) return 0;
+	if (P.at != null && globalThis.__ctr && globalThis.__ctr.raceFrame >= P.at) {
+		P.at = null;
+		P.paused = true;
+		P.steps = 0;
+	}
+	if (!P.paused) return 0;
+	if (P.steps > 0) { P.steps--; return 0; }
+	return 1;
+});
+EM_JS(void, NativeWeb_PauseHeldJS, (int held), {
+	if (globalThis.__ctrPause) globalThis.__ctrPause.held = !!held;
+});
+
+internal void NativeWeb_FramePause(void)
+{
+	if (!NativeWeb_PauseJS())
+	{
+		return;
+	}
+	NativeWeb_PauseHeldJS(1);
+	do
+	{
+		NativeWeb_WaitAnimationFrame();
+	} while (NativeWeb_PauseJS());
+	NativeWeb_PauseHeldJS(0);
+	s_nextVBlankCounter = SDL_GetPerformanceCounter();
+	s_vblankRemainder = 0;
+}
+#endif
 #endif
 
 internal void Native_WaitUntilVBlankTarget(void)
@@ -757,6 +800,16 @@ internal int Native_CatchUpDueVBlanks(void)
 	const u64 catchUpMax = NativeWeb_PageHidden() ? NATIVE_VSYNC_CATCHUP_MAX : NATIVE_VSYNC_CATCHUP_MAX_VISIBLE;
 #else
 	const u64 catchUpMax = NATIVE_VSYNC_CATCHUP_MAX;
+#endif
+
+#if defined(__EMSCRIPTEN__) && !defined(NDEBUG)
+	// Debug : turbo emits the VBlanks a frame asks for, never late ones — a frame slower than one
+	// VBlank of wall time (a cold page, a collection) added one, and game time moved by wall time :
+	// the same seeded race in turbo ended a light timer 16 ms apart (session 45b)
+	if (NativeWeb_TurboJS())
+	{
+		return 0;
+	}
 #endif
 
 	Native_EnsureVBlankTarget();

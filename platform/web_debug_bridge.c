@@ -86,6 +86,33 @@
 //                on the object with that frame's __ctr.
 //   __ctrStart   { mode, players, level, laps, difficulty, characters } : a race started from the
 //                main menu as the menus would start it (WebDebugBridge_Start).
+//
+// The precise start (web/ui/src/dev/precise.js), pulled here once per frame too :
+//   __ctrSeed    a number : on the first frame of each race (the level loaded, its drivers in),
+//                the game's random generators set from it (WebDebugBridge_Seed) — the same race
+//                twice. Nothing in the game seeds from a clock : what varies is the menus' time.
+//   __ctrReplay  upstream's input replay (platform/native_replay_scheduler.c, F9 / F10 natively),
+//                started with the arguments its command line takes :
+//                { op: 'record' } starts on the next race's first frame, after the seed ;
+//                { op: 'stop' } ends it after the frame ; { op: 'play', path, frames, bypass } plays
+//                the files the page wrote in MEMFS, from their first checkpoint, and ends it at its
+//                last frame (upstream's end stops the game). Every 300 replay frames (upstream's
+//                checkpoint interval) the karts and the generators go in `samples`.
+//   __ctrCard    { op: 'write', unlocks, tt, adv, version } : the game's progress set, then saved
+//                by the game's own profile save (SelectProfile_SaveAdvProfile's steps) from the main
+//                menu ; { op: 'ghost' } : the race just run saved as a ghost by the game's own ghost
+//                save (SelectProfile_StartGhostSave's steps) at the end of a Time Trial.
+//   __ctr.card   { screen: sdata->mcScreenText (enum MC_SCREEN), start: sdata->mcStart, stage:
+//                sdata->memcard_stage, version: the card buffer's profile version (header[0], -18),
+//                outdated: sdata->boolMemcardDataOutdated, ghosts: the ghosts on the card,
+//                tropyBeaten: GAME_PROGRESS's tracks with N. Tropy beaten, profiles: the card buffer's
+//                four Adventure profiles ({ character, hub, rewards }, null when empty), adv: the
+//                Adventure profile being played (GAME_ADV_PROGRESS) } : the card as the game holds it ;
+//                __ctr.frameCounter : sdata->frameCounter, + 1 per game frame (MainMain.c) ;
+//                __ctr.raceFrame : the frames since this race's first (the seed's frame : 0), -1
+//                outside a race ;
+//                __ctr.positions : gGT->drivers[0..7]'s posCurr >> 8 in a race (the AI's too), null
+//                for no driver.
 
 #include <emscripten.h>
 #include <platform/native_web_ui.h>
@@ -704,6 +731,404 @@ internal void WebDebugBridge_Start(struct GameTracker *gGT)
 	QueueLoadTrack_MenuProc(&D230.menuMainMenu);
 }
 
+// ---- The precise start ----
+
+EM_JS(int, WebDebugBridge_SeedJS, (u32 *out), {
+	const s = globalThis.__ctrSeed;
+	if (s == null || String(s).length === 0) return 0;
+	HEAPU32[out >> 2] = Number(s) >>> 0;
+	return 1;
+});
+
+// Every generator the game draws from (MixRNG.c, RngDeadCoed.c, PSX_BIOS_Rand.c, the audio's), each
+// from the seed and its own constant so that none is zero (RngDeadCoed's state must not be) ; and
+// the free-running frame counters, which the AI reads too (BOTS.c : gGT->timer) and which differ by
+// how long the boot and the menus took : the same race, however it was reached (a replay's start
+// made again on another build, session 45b).
+internal void WebDebugBridge_Seed(struct GameTracker *gGT, u32 seed)
+{
+	const u32 mix = seed * 0x9e3779b9u;
+
+	gGT->timer = 0x100;
+	gGT->frameTimer_VsyncCallback = 0x200;
+	sdata->frameCounter = 0x100;
+
+	sdata->randomNumber = (int)MixRNG_GetValue((s32)seed);
+	sdata->advRng.state0 = 0x30215400u ^ mix;
+	sdata->advRng.state1 = 0x493583feu ^ (mix >> 7) ^ 1u;
+	gGT->deadcoed_struct.state0 = 0x30215400u ^ (mix << 3);
+	gGT->deadcoed_struct.state1 = 0x493583feu ^ seed ^ 2u;
+	sdata->audioRNG = 0x15a37e63u ^ mix;
+	PSX_BIOS_SetRandSeed(seed);
+}
+
+// 1 record, 2 stop, 3 play (path written into `path`, the record count into *frames, *bypass)
+EM_JS(int, WebDebugBridge_ReplayJS, (char *path, int size, int *frames, int *bypass), {
+	const R = globalThis.__ctrReplay;
+	if (!R || R.taken) return 0;
+	R.taken = true;
+	R.samples = [];
+	if (R.op === 'record') return 1;
+	if (R.op === 'stop') return 2;
+	if (R.op !== 'play') return 0;
+	stringToUTF8(R.path, path, size);
+	HEAP32[frames >> 2] = R.frames | 0;
+	HEAP32[bypass >> 2] = R.bypass ? 1 : 0;
+	return 3;
+});
+
+EM_JS(void, WebDebugBridge_ReplayStateJS, (const char *what, int frame), {
+	const R = globalThis.__ctrReplay;
+	if (!R) return;
+	R.state = UTF8ToString(what);
+	R.frame = frame;
+	if (R.state === 'ended' || R.state === 'failed') R.done = true;
+});
+
+// one sample : the replay frame, the generators, then 8 per kart (present, lap, rank, x, y, z, speed, angle)
+EM_JS(void, WebDebugBridge_ReplaySampleJS, (const s32 *v, int karts), {
+	const R = globalThis.__ctrReplay;
+	if (!R) return;
+	const a = Array.from(HEAP32.subarray(v >> 2, (v >> 2) + 8 + karts * 8));
+	const s = { frame: a[0], level: a[1], raceTime: a[2], rng: a.slice(3, 8).map((n) => n >>> 0), karts: [] };
+	for (let i = 0; i < karts; i++) {
+		const k = a.slice(8 + i * 8, 16 + i * 8);
+		s.karts.push(k[0] ? { lap: k[1], rank: k[2], pos: [k[3], k[4], k[5]], speed: k[6], angle: k[7] } : null);
+	}
+	R.samples.push(s);
+});
+
+enum WebReplayState
+{
+	WEB_REPLAY_IDLE = 0,
+	WEB_REPLAY_ARMED,
+	WEB_REPLAY_RECORDING,
+	WEB_REPLAY_PLAYING
+};
+
+global_variable enum WebReplayState s_webReplay;
+global_variable s32 s_webReplayFrame;
+global_variable s32 s_webReplayFrames;
+global_variable s32 s_webRaceLive;
+global_variable s32 s_webRaceFrame = -1;
+
+internal void WebDebugBridge_ReplaySample(struct GameTracker *gGT)
+{
+	s32 v[8 + 8 * 8];
+
+	memset(v, 0, sizeof(v));
+	v[0] = s_webReplayFrame;
+	v[1] = gGT->levelID;
+	v[2] = gGT->elapsedEventTime;
+	v[3] = (s32)sdata->randomNumber;
+	v[4] = (s32)sdata->advRng.state0;
+	v[5] = (s32)sdata->advRng.state1;
+	v[6] = (s32)gGT->deadcoed_struct.state0;
+	v[7] = (s32)gGT->deadcoed_struct.state1;
+	for (int i = 0; i < 8; i++)
+	{
+		struct Driver *k = s_webRaceLive ? gGT->drivers[i] : NULL;
+		s32 *o = &v[8 + i * 8];
+
+		if (k == NULL)
+		{
+			continue;
+		}
+		o[0] = 1;
+		o[1] = k->lapIndex;
+		o[2] = k->driverRank;
+		o[3] = k->posCurr.x;
+		o[4] = k->posCurr.y;
+		o[5] = k->posCurr.z;
+		o[6] = k->speedApprox;
+		o[7] = k->angle & 0xfff;
+	}
+	WebDebugBridge_ReplaySampleJS(v, 8);
+}
+
+// Upstream's replay started as its command line would start it (main.c), from the page. A
+// recording prepares its report folder, whose log path upstream sets before the log opens (main.c,
+// before Platform_Init) — Platform_LogSetPath refuses once it is open : held aside for that call,
+// the log keeps its stream (native_log.c, the same unity build).
+internal s32 WebDebugBridge_ReplayArgs(int argc, char **argv)
+{
+	FILE *log = s_logStream;
+	s32 ok;
+
+	s_logStream = NULL;
+	ok = NativeReplayScheduler_ConfigureFromArgs(argc, argv) == 0;
+	s_logStream = log;
+	return ok;
+}
+
+internal void WebDebugBridge_Replay(struct GameTracker *gGT, s32 raceBegins)
+{
+	char path[256];
+	int frames = 0;
+	int bypass = 0;
+
+	switch (WebDebugBridge_ReplayJS(path, sizeof(path), &frames, &bypass))
+	{
+	case 1:
+		s_webReplay = WEB_REPLAY_ARMED;
+		WebDebugBridge_ReplayStateJS("armed", 0);
+		break;
+	case 2:
+		if (s_webReplay == WEB_REPLAY_RECORDING)
+		{
+			NativeReplayScheduler_RequestStop();
+			s_webReplay = WEB_REPLAY_IDLE;
+			// RequestStop finalizes after the frame now running : the files are whole at the next
+			WebDebugBridge_ReplayStateJS("stopping", s_webReplayFrame);
+		}
+		break;
+	case 3:
+	{
+		char *argv[] = { "ctr", "--replay", path, "--replay-bypass-header" };
+
+		s_webReplayFrame = 0;
+		s_webReplayFrames = frames;
+		if (WebDebugBridge_ReplayArgs(bypass ? 4 : 3, argv))
+		{
+			s_webReplay = WEB_REPLAY_PLAYING;
+			WebDebugBridge_ReplayStateJS("playing", 0);
+		}
+		else
+		{
+			WebDebugBridge_ReplayStateJS("failed", 0);
+		}
+		return;
+	}
+	}
+
+	if ((s_webReplay == WEB_REPLAY_ARMED) && raceBegins)
+	{
+		char *argv[] = { "ctr", "--record" };
+
+		s_webReplayFrame = 0;
+		if (WebDebugBridge_ReplayArgs(2, argv))
+		{
+			s_webReplay = WEB_REPLAY_RECORDING;
+			WebDebugBridge_ReplayStateJS("recording", 0);
+		}
+		else
+		{
+			s_webReplay = WEB_REPLAY_IDLE;
+			WebDebugBridge_ReplayStateJS("failed", 0);
+		}
+		return;
+	}
+
+	if ((s_webReplay == WEB_REPLAY_RECORDING) || (s_webReplay == WEB_REPLAY_PLAYING))
+	{
+		// this frame was replay frame s_webReplayFrame (the first is the frame after the start)
+		if ((s_webReplayFrame % 300) == 0)
+		{
+			WebDebugBridge_ReplaySample(gGT);
+		}
+		s_webReplayFrame++;
+		WebDebugBridge_ReplayStateJS(s_webReplay == WEB_REPLAY_PLAYING ? "playing" : "recording", s_webReplayFrame);
+		if ((s_webReplay == WEB_REPLAY_PLAYING) && (s_webReplayFrame >= s_webReplayFrames))
+		{
+			// upstream's playback returns 1 from the next BeginFrame and CTR_Main ends : ended here
+			// instead, after the last recorded frame, the game going on with the live pads
+			NativeReplayScheduler_Shutdown();
+			s_webReplay = WEB_REPLAY_IDLE;
+			WebDebugBridge_ReplayStateJS("ended", s_webReplayFrame);
+		}
+	}
+}
+
+// out : [0..1] unlocks, [2..19] timeTrialFlags, [20] adv slot (-1 none), [21..26] rewards,
+// [27] character, [28] hub, [29] version (0 = the game's) ; name into `name`
+EM_JS(int, WebDebugBridge_CardJS, (u32 *out, char *name, int size), {
+	const C = globalThis.__ctrCard;
+	if (!C || C.taken) return 0;
+	C.taken = true;
+	if (C.op === 'ghost') return 2;
+	if (C.op !== 'write') return 0;
+	const o = out >> 2;
+	for (let i = 0; i < 30; i++) HEAPU32[o + i] = 0;
+	HEAPU32[o] = (C.unlocks?.[0] ?? 0) >>> 0;
+	HEAPU32[o + 1] = (C.unlocks?.[1] ?? 0) >>> 0;
+	for (let i = 0; i < 18; i++) HEAPU32[o + 2 + i] = (C.tt?.[i] ?? 0) >>> 0;
+	HEAP32[o + 20] = C.adv ? C.adv.slot | 0 : -1;
+	for (let i = 0; i < 6; i++) HEAPU32[o + 21 + i] = (C.adv?.rewards?.[i] ?? 0) >>> 0;
+	HEAP32[o + 27] = C.adv?.character ?? 0;
+	HEAP32[o + 28] = C.adv?.hub ?? 0;
+	HEAP32[o + 29] = C.version ?? 0;
+	stringToUTF8(C.adv && C.adv.name ? String(C.adv.name) : String(), name, size);
+	return 1;
+});
+
+EM_JS(void, WebDebugBridge_CardDoneJS, (const char *what), {
+	const C = globalThis.__ctrCard;
+	if (!C) return;
+	C.state = UTF8ToString(what);
+	C.done = true;
+});
+
+EM_JS(void, WebDebugBridge_PreciseJS, (int screen, int start, int stage, int frameCounter, int raceFrame, const s32 *pos, const s32 *card), {
+	if (!globalThis.__ctr) return;
+	const c = HEAP32.subarray(card >> 2, (card >> 2) + 4 + 5 * 8);
+	const profile = (i) => {
+		const p = c.subarray(4 + i * 8, 12 + i * 8);
+		return p[0] < 0 ? null : { character: p[0], hub: p[1], rewards: Array.from(p.subarray(2, 8), (n) => n >>> 0) };
+	};
+	globalThis.__ctr.card = { screen, start, stage, version: c[0], outdated: c[1], ghosts: c[2], tropyBeaten: c[3], profiles: [0, 1, 2, 3].map(profile), adv: profile(4) };
+	globalThis.__ctr.frameCounter = frameCounter;
+	globalThis.__ctr.raceFrame = raceFrame;
+	const p = HEAP32.subarray(pos >> 2, (pos >> 2) + 32);
+	globalThis.__ctr.positions = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (p[i * 4] ? [p[i * 4 + 1], p[i * 4 + 2], p[i * 4 + 3]] : null));
+});
+
+// A card written by the game : the progress set as the spec says, a new card's profile around it
+// (GAMEPROG_InitFullMemcard), then SelectProfile_SaveAdvProfile's own steps — the game's options,
+// the cups, the progress synced into the card's buffer, MEMCARD_SetIcon, the save request that
+// RefreshCard runs on the next frames (the main menu runs it, MainFrame_RenderFrame.c).
+internal void WebDebugBridge_CardWrite(struct GameTracker *gGT, const u32 *v, const char *name)
+{
+	struct MemcardProfile *card = (struct MemcardProfile *)sdata->ptrToMemcardBuffer2;
+
+	if ((gGT->gameMode1 & MAIN_MENU) == 0)
+	{
+		WebDebugBridge_CardDoneJS("refused : not in the main menu");
+		return;
+	}
+
+	GAMEPROG_InitFullMemcard(card);
+	GAMEPROG_NewProfile_OutsideAdv(&GAME_SAVE);
+	GAME_PROGRESS.unlocks[0] = v[0];
+	GAME_PROGRESS.unlocks[1] = v[1];
+	for (int i = 0; i < MEMCARD_HIGH_SCORE_TRACK_COUNT; i++)
+	{
+		GAME_PROGRESS.highScoreTracks[i].timeTrialFlags = v[2 + i];
+	}
+
+	RaceConfig_SaveGameOptions();
+	GAMEPROG_SaveCupProgress();
+	GAMEPROG_SyncGameAndCard(&card->gameSave.progress, &GAME_SAVE.progress);
+	if ((s32)v[20] >= 0 && (s32)v[20] < MEMCARD_ADV_PROFILE_COUNT)
+	{
+		GAMEPROG_NewProfile_InsideAdv(&GAME_ADV_PROGRESS);
+		for (int i = 0; i < 6; i++)
+		{
+			GAME_ADV_PROGRESS.rewards[i] = v[21 + i];
+		}
+		memcpy(GAME_ADV_PROGRESS.name, name, sizeof(GAME_ADV_PROGRESS.name));
+		GAME_ADV_PROGRESS.characterID = (s16)v[27];
+		GAME_ADV_PROGRESS.HubLevYouSavedOn = (s16)v[28];
+		memcpy(&card->advProgress[v[20]], &GAME_ADV_PROGRESS, sizeof(GAME_ADV_PROGRESS));
+	}
+	memcpy(&card->gameSave, &GAME_SAVE, sizeof(GAME_SAVE));
+	if (v[29] != 0)
+	{
+		// an older profile version, written by the game as any card (its CRC valid)
+		card->header[0] = (s16)v[29];
+	}
+	MEMCARD_SetIcon(0);
+	RefreshCard_StartMemcardAction(3);
+	WebDebugBridge_CardDoneJS("requested");
+}
+
+// The Time Trial just run saved as a ghost, by SelectProfile_StartGhostSave's steps (the end of
+// race runs RefreshCard), in the card's first ghost row
+internal void WebDebugBridge_CardGhost(struct GameTracker *gGT)
+{
+	struct Driver *driver = gGT->drivers[0];
+
+	if (((gGT->gameMode1 & TIME_TRIAL) == 0) || ((gGT->gameMode1 & END_OF_RACE) == 0) || (driver == NULL))
+	{
+		WebDebugBridge_CardDoneJS("refused : not at the end of a Time Trial");
+		return;
+	}
+	RefreshCard_GhostEncodeProfile(0, GAME_CHARACTER_IDS[0], gGT->levelID, driver->timeElapsedInRace, gGT->prevNameEntered);
+	GAME_MEMCARD_STATE.ghostProfile_indexSave = 0;
+	GAME_MEMCARD_STATE.ghostProfile_rowSelect = (GAME_MEMCARD_STATE.numGhostProfilesSaved > 0) ? 0 : -1;
+	MEMCARD_SetIcon(1);
+	RefreshCard_StartMemcardAction(6);
+	WebDebugBridge_CardDoneJS("requested");
+}
+
+internal void WebDebugBridge_Precise(struct GameTracker *gGT)
+{
+	// a race or a battle (not the boot's intro levels, the hubs, the menus), loaded, its drivers in
+	const s32 live = (sdata->Loading.stage == LOAD_IDLE) && ((gGT->gameMode1 & (MAIN_MENU | LOADING)) == 0) && (gGT->levelID < GEM_STONE_VALLEY) &&
+	                 (gGT->drivers[0] != NULL);
+	const s32 raceBegins = live && !s_webRaceLive;
+	u32 seed;
+
+	s_webRaceLive = live;
+	s_webRaceFrame = !live ? -1 : raceBegins ? 0 : s_webRaceFrame + 1;
+	// a replay brings its own generators back with its first checkpoint
+	if (raceBegins && (s_webReplay != WEB_REPLAY_PLAYING) && WebDebugBridge_SeedJS(&seed))
+	{
+		WebDebugBridge_Seed(gGT, seed);
+	}
+	WebDebugBridge_Replay(gGT, raceBegins);
+
+	{
+		u32 v[30];
+		char name[sizeof(GAME_ADV_PROGRESS.name)];
+
+		switch (WebDebugBridge_CardJS(v, name, sizeof(name)))
+		{
+		case 1:
+			WebDebugBridge_CardWrite(gGT, v, name);
+			break;
+		case 2:
+			WebDebugBridge_CardGhost(gGT);
+			break;
+		}
+	}
+	{
+		s32 pos[8 * 4];
+
+		memset(pos, 0, sizeof(pos));
+		for (int i = 0; live && (i < 8); i++)
+		{
+			struct Driver *k = gGT->drivers[i];
+
+			if (k != NULL)
+			{
+				pos[i * 4] = 1;
+				pos[i * 4 + 1] = k->posCurr.x >> 8;
+				pos[i * 4 + 2] = k->posCurr.y >> 8;
+				pos[i * 4 + 3] = k->posCurr.z >> 8;
+			}
+		}
+		struct MemcardProfile *buffer = (struct MemcardProfile *)sdata->ptrToMemcardBuffer2;
+		s32 card[4 + 5 * 8];
+
+		memset(card, 0, sizeof(card));
+		card[0] = buffer ? buffer->header[0] : 0;
+		card[1] = sdata->boolMemcardDataOutdated;
+		card[2] = GAME_MEMCARD_STATE.numGhostProfilesSaved;
+		for (int i = 0; i < MEMCARD_HIGH_SCORE_TRACK_COUNT; i++)
+		{
+			card[3] += (GAME_PROGRESS.highScoreTracks[i].timeTrialFlags & TT_NTROPY_BEATEN) != 0;
+		}
+		for (int i = 0; i < MEMCARD_ADV_PROFILE_COUNT; i++)
+		{
+			s32 *o = &card[4 + i * 8];
+
+			o[0] = buffer ? buffer->advProgress[i].characterID : -1;
+			o[1] = buffer ? buffer->advProgress[i].HubLevYouSavedOn : 0;
+			for (int w = 0; w < 6; w++)
+			{
+				o[2 + w] = buffer ? (s32)buffer->advProgress[i].rewards[w] : 0;
+			}
+		}
+		card[4 + 4 * 8] = GAME_ADV_PROGRESS.characterID;
+		card[4 + 4 * 8 + 1] = GAME_ADV_PROGRESS.HubLevYouSavedOn;
+		for (int w = 0; w < 6; w++)
+		{
+			card[4 + 4 * 8 + 2 + w] = (s32)GAME_ADV_PROGRESS.rewards[w];
+		}
+		WebDebugBridge_PreciseJS(sdata->mcScreenText, sdata->mcStart, sdata->memcard_stage, (int)sdata->frameCounter, s_webRaceFrame, pos, card);
+	}
+}
+
 internal void WebDebugBridge_Publish(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
@@ -870,4 +1295,5 @@ internal void WebDebugBridge_Publish(void)
 	WebDebugBridge_Stall();
 	WebDebugBridge_State();
 	WebDebugBridge_Start(gGT);
+	WebDebugBridge_Precise(gGT);
 }
