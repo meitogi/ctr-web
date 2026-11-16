@@ -41,6 +41,20 @@
 // only their C semantics.
 #if defined(CTR_NATIVE)
 #define CTR_PSX_MATCH_SECTION(sectionName)
+// NOTE(aalhendi): These opt-in contracts describe custom MIPS call frames.
+// Native keeps the host ABI; the caller still owns the scratch save protocol.
+#define CTR_PSX_UNSAFE_MANUAL_AT_FRAME
+#define CTR_PSX_UNSAFE_MANUAL_AT_FULL_FRAME
+#define CTR_PSX_UNSAFE_MANUAL_AT44
+#define CTR_PSX_UNSAFE_MANUAL_AT44_RETURN(returnName)
+#define CTR_PSX_PRESERVES_AT44
+#define CTR_PSX_REGCALL_SBANK(readMask)
+#define CTR_PSX_INCOMING_POINTER(parameter) (parameter)
+#define CTR_PSX_UMOD_HI(dividend, divisor) ((u32)(dividend) % (u32)(divisor))
+#define CTR_PSX_READ_HI(value) ((u32)(value))
+#define CTR_PSX_ADJACENT_TAIL(targetName)
+#define CTR_PSX_PRESERVES_AT24
+#define CTR_PSX_REGCALL_S012(readMask)
 #if defined(__GNUC__) || defined(__clang__)
 #define CTR_PSX_REGISTER(registerName) __attribute__((unused))
 #else
@@ -185,6 +199,25 @@
 		(value) = (nativeValue);                                              \
 	} while (0)
 #else
+#define CTR_PSX_UNSAFE_MANUAL_AT_FRAME                                          __attribute__((mips_unsafe_manual_at_frame))
+#define CTR_PSX_UNSAFE_MANUAL_AT_FULL_FRAME                                     __attribute__((mips_unsafe_manual_at_full_frame))
+// NOTE(aalhendi): Source owns the sparse original S0-S7/RA image and restores.
+// Named returns export the actual sealed JR as a bounded CODE identifier.
+#define CTR_PSX_UNSAFE_MANUAL_AT44 __attribute__((mips_unsafe_manual_at44))
+#define CTR_PSX_UNSAFE_MANUAL_AT44_RETURN(returnName) __attribute__((mips_unsafe_manual_at44(#returnName)))
+#define CTR_PSX_PRESERVES_AT44 __attribute__((mips_preserves_at44))
+#define CTR_PSX_REGCALL_SBANK(readMask) __attribute__((mips_regcall_sbank(readMask)))
+// Only an owner's fifth/sixth formal pointer; original-SP read precedes work.
+#define CTR_PSX_INCOMING_POINTER(parameter) __builtin_mips_incoming_ptr(parameter)
+// Unsigned value semantics, not emulated global HI; divisor is a nonzero literal.
+#define CTR_PSX_UMOD_HI(dividend, divisor) __builtin_mips_umod_hi((u32)(dividend), (u32)(divisor))
+#define CTR_PSX_READ_HI(value) __builtin_mips_read_hi((u32)(value))
+#define CTR_PSX_ADJACENT_TAIL(targetName)                                       __attribute__((mips_adjacent_tail(targetName)))
+#define CTR_PSX_PRESERVES_AT24                                                  __attribute__((mips_preserves_at24))
+#define CTR_PSX_REGCALL_S012(readMask)                                          __attribute__((mips_regcall_s012(readMask)))
+
+#define CTR_MipsMulHiS(lhs, rhs) __builtin_smul_high_si((s32)(lhs), (s32)(rhs))
+#define CTR_NegateS32(value) __builtin_mips_neg_si(value)
 #define CTR_PSX_MATCH_SECTION(sectionName)                                      __attribute__((section(sectionName)))
 #define CTR_PSX_REGISTER(registerName)                                          __asm__(registerName)
 #define CTR_PSX_BIND_VALUE_CLOBBER(value, registerName)                         __asm__("" : "+r"(value) : : registerName)

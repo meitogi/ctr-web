@@ -12,9 +12,17 @@ register aliases and conservative gaps for unrecognized instructions. Reuse
 the existing `$at`/`$gp` expansion policy; explicit noreorder remains literal.
 The focused cases are in `tests/test_cop2.py`.
 
+Local change: preserve ordering controls consumed by MFLO/MFHI hazard
+lookahead; defer load/transfer prefixes without duplicate labels or early
+source-mode changes. Regression cases are in `tests/test_mflo.py`.
+
+Local change: keep GNU as in noreorder mode while assembling maspsx's already
+scheduled output, including streams without `.ent` metadata. A CLI regression
+in `tests/test_cli.py` compares an explicit delay slot with direct GNU assembly.
+
 Pinned executable source:
 
 ```text
-d170463b0c519a825db97d3f30ffbe0228e4cf642de2dc64fb30f90f118c2b0c  maspsx.py
-fb5eccb7d6570a5ffc23de4e289a3f88199f30d46c0677aee4acda37f81d0c4e  maspsx/__init__.py
+830b17420ab310e63f9cfc4414637d884553587cf11a7cebc80f496ace045f1d  maspsx.py
+7b22e9a7dfe3c620f4cfff6c785da774cf927aff57e012ad414baa335be7bbf5  maspsx/__init__.py
 ```

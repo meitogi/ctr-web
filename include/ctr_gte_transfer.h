@@ -15,9 +15,25 @@
 
 #include <ctr_gte.h>
 
+// NOTE(aalhendi): The literal control index is 0-31; hardware normalizes the
+// full input word. The typed retail operation exposes its CPU read to scheduling.
+#ifdef CTR_NATIVE
+#define CTR_GteWriteControl(value, reg) CTC2((value), (reg))
+#else
+#define CTR_GteWriteControl(value, reg) __builtin_mips_ctc2((value), (reg))
+#endif
+
+// NOTE(aalhendi): Literal data index0-31; typed CPU use and GTE alias effects.
+// This is a transfer, not a GTE command, latency barrier or arbitrary opcode.
+#ifdef CTR_NATIVE
+#define CTR_GteWriteData(value, reg) MTC2((value), (reg))
+#else
+#define CTR_GteWriteData(value, reg) __builtin_mips_mtc2((value), (reg))
+#endif
+
 // NOTE(aalhendi): Compose five packed words through the current GTE ROT matrix
-// and leave the product loaded. Retail's kernel consumes and returns t3-t7;
-// native keeps its callable C implementation behind the same pointer API.
+// and leave the product loaded. The shared body uses retail's t3-t7 tuple;
+// native callers use the pointer interface directly.
 #ifdef CTR_NATIVE
 #define CTR_GteComposeRotationWords(r0, r1, r2, r3, r4) Unknown_8006c49c(r0, r1, r2, r3, r4)
 #else

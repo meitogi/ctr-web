@@ -9,7 +9,7 @@
       "directory": "externals/old-gcc/prebuilt/linux-i386/2.8.1",
       "executable": "gcc",
       "sha256": {
-        "cc1": "2258e9e4c4feefd7478ca2f665e9792dd2e4998ba6b3987a8bfe2690644f2529",
+        "cc1": "8c1112f99e9e47a496a1d98bc9efc468c630a4925361e56b7801da5016fa5207",
         "cc1plus": "93e7b36546532deec58cbc221df4d2c2894d444b5685b31a439c46cc597a9572",
         "cpp": "8d7f4e90f995089a6c2d62214b607fc77acf43b61f60a871d130d713d9ac96bb",
         "g++": "a2cf0a5f0a21fcd4836c6f7ac66f346ba5594c1e4d4ab9d88c48c73c77f876fd",
@@ -21,8 +21,8 @@
       "directory": "externals/maspsx",
       "entrypoint": "maspsx.py",
       "sha256": {
-        "maspsx.py": "d170463b0c519a825db97d3f30ffbe0228e4cf642de2dc64fb30f90f118c2b0c",
-        "maspsx/__init__.py": "fb5eccb7d6570a5ffc23de4e289a3f88199f30d46c0677aee4acda37f81d0c4e"
+        "maspsx.py": "830b17420ab310e63f9cfc4414637d884553587cf11a7cebc80f496ace045f1d",
+        "maspsx/__init__.py": "7b22e9a7dfe3c620f4cfff6c785da774cf927aff57e012ad414baa335be7bbf5"
       },
       "aspsx_version": "2.77"
     },
@@ -2148,6 +2148,30 @@
       "linked_block": {}
     },
     {
+      "name": "math-signed-trig",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "symbol_prefix": "TRIG_AngleSinCos_",
+      "sources": [
+        "game/MATH/TRIG_AngleSinCos_r19r17r18.c",
+        "game/MATH/TRIG_AngleSinCos_r15r16r17.c",
+        "game/MATH/TRIG_AngleSinCos_r9r8r10.c",
+        "game/MATH/TRIG_AngleSinCos_r16r17r18.c"
+      ],
+      "code_intervals": [
+        {"start_symbol": "TRIG_AngleSinCos_r19r17r18", "end_symbol": "DrawConfetti"},
+        {"start_symbol": "TRIG_AngleSinCos_r15r16r17", "end_symbol": "RenderBucket_DrawFunc_Normal"},
+        {"start_symbol": "TRIG_AngleSinCos_r9r8r10", "end_symbol": "Unknown_8006ef98"},
+        {"start_symbol": "TRIG_AngleSinCos_r16r17r18", "end_symbol": "RenderLists_Init1P2P"}
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-fno-crossjumping"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
       "name": "math-vector-normalize",
       "kind": "resident",
       "artifact": "exe",
@@ -2208,42 +2232,23 @@
       "kind": "resident",
       "artifact": "exe",
       "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "ConvertRotToMatrix_InverseTranspose_NoRotY",
+      "end_symbol": "RngDeadCoed",
       "symbol_prefix": "",
-      "sources": ["game/MATH/MATH_7_MatrixStubs.c", "game/MATH/MATH_LightMatrix.c"],
+      "sources": [
+        "game/MATH/MATH_7_MatrixStubs.c",
+        "game/MATH/TRIG_AngleSinCos_Unsigned.c",
+        "game/MATH/MATH_RotMatrix.c",
+        "game/MATH/MATH_LightMatrix.c"
+      ],
+      "source_flags": {
+        "game/MATH/MATH_RotMatrix.c": ["-finhibit-size-directive", "-mpsx-ctc2-return-delay=on"]
+      },
       "include_directories": ["include"],
       "compiler_flags": ["-O2", "-G8", "-msoft-float"],
       "small_data_limit": 8,
       "aspsx_version": "2.77",
-      "linked_block": {},
-      "code_intervals": [{"start_symbol": "Unknown_8006c558", "end_symbol": "Unknown_8006c600"}, {"start_symbol": "ApplyMatrixLV_stub", "end_symbol": "Unknown_8006c778"}]
-    },
-    {
-      "name": "matrix-load-light-gte",
-      "kind": "resident",
-      "artifact": "exe",
-      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
-      "start_symbol": "Unknown_8006c600",
-      "end_symbol": "SquareRoot0_stub",
-      "symbol_prefix": "Unknown_8006c600",
-      "source": "game/MATH/MATH_7_MatrixStubs.c",
-      "include_directories": ["include"],
-      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
-      "small_data_limit": 8,
-      "aspsx_version": "2.77"
-    },
-    {
-      "name": "matrix-square-root0",
-      "kind": "resident",
-      "artifact": "exe",
-      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
-      "start_symbol": "SquareRoot0_stub",
-      "end_symbol": "RngDeadCoed",
-      "symbol_prefix": "SquareRoot0_stub",
-      "source": "game/MATH/MATH_7_MatrixStubs.c",
-      "include_directories": ["include"],
-      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
-      "small_data_limit": 8,
-      "aspsx_version": "2.77"
+      "linked_block": {}
     },
     {
       "name": "matrix-lv-pair",
@@ -2666,6 +2671,22 @@
       },
       "linked_block": {},
       "forced_includes": ["tools/matching/namespaces/main-game-start/retail_symbols.h"]
+    },
+    {
+      "name": "main-kill-game",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainKillGame_StopCTR",
+      "end_symbol": "MainLoadVLC_Callback",
+      "symbol_prefix": "MainKillGame_",
+      "source": "game/MAIN/MainKillGame.c",
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {"_gp": "0x8008cf6c"},
+      "linked_block": {}
     },
     {
       "name": "load-file",
@@ -3269,6 +3290,21 @@
       "purpose": "Smoke-test the source extraction, old GCC, maspsx, GNU assembler, object extraction, and retail-byte oracle. This trivial function cannot identify the original compiler."
     },
     {
+      "name": "coll-levmodel-meta",
+      "kind": "probe",
+      "symbol": "COLL_LevModelMeta",
+      "source": "game/COLL.c",
+      "region": "exe",
+      "address": "0x8001d094",
+      "size": 48,
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_versions": ["2.77"],
+      "link": {"text_address": "0x8001d094", "symbols": {"data": "0x800809a0"}}
+    },
+    {
       "name": "UI_ConvertX_2",
       "kind": "probe",
       "symbol": "UI_ConvertX_2",
@@ -3399,6 +3435,23 @@
       "aspsx_version": "2.77",
       "linked_block": {},
       "link_symbols": {"_gp": "0x8008cf6c"}
+    },
+    {
+      "name": "main-game-end",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainGameEnd_SoloRaceGetReward",
+      "end_symbol": "MainGameStart_Initialize",
+      "symbol_prefix": "MainGameEnd_",
+      "source": "game/MAIN/MainGameEnd.c",
+      "include_directories": ["include", "."],
+      "forced_includes": ["tools/matching/namespaces/main-game-end/retail_symbols.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {},
+      "link_symbols": {"_gp": "0x8008cf6c", "ctr_mainGameEndTracker": "0x8008d2ac"}
     },
     {
       "name": "submit-name",
@@ -3568,6 +3621,285 @@
       ]
     },
     {
+      "name": "main-load-vlc",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainLoadVLC_Callback",
+      "end_symbol": "main",
+      "symbol_prefix": "MainLoadVLC",
+      "source": "game/MAIN/MainLoadVLC.c",
+      "include_directories": [
+        "include"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float"
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {},
+      "link_symbols": {
+        "_gp": "0x8008cf6c"
+      },
+      "forced_includes": [
+        "tools/matching/namespaces/main-load-vlc/retail_symbols.h"
+      ]
+    },
+    {
+      "name": "main-init",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainInit_VisMem",
+      "end_symbol": "MainKillGame_StopCTR",
+      "symbol_prefix": "MainInit_",
+      "include_directories": [
+        "include"
+      ],
+      "forced_includes": [
+        "tools/matching/retail_bindings.h"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float",
+        "-DRETAIL_GAME_TRACKER_ASM_NAME=\"ctr_gameTrackerPtr\""
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_gameTrackerPtr": "0x8008d2ac"
+      },
+      "function_rodata_addresses": {
+        "MainInit_PrimMem": "0x8001157c"
+      },
+      "linked_block": {
+        "rodata_address": "0x8001157c",
+        "rodata_size": 20
+      },
+      "sources": [
+        "game/MAIN/MainInit.c",
+        "game/MAIN/MainInit_Memory.c",
+        "game/MAIN/MainInit_Peripheral.c",
+        "game/MAIN/MainVisibility.c",
+        "game/MAIN/MainInit_Pools.c",
+        "game/MAIN/MainInit_Drivers.c"
+      ]
+    },
+    {
+      "name": "main-init-drivers",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainInit_Drivers",
+      "end_symbol": "MainInit_FinalizeInit",
+      "symbol_prefix": "MainInit_",
+      "source": "game/MAIN/MainInit_Drivers.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-DRETAIL_GAME_TRACKER_ASM_NAME=\"ctr_gameTrackerPtr\""],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_gameTrackerPtr": "0x8008d2ac"
+      },
+      "linked_block": {}
+    },
+    {
+      "name": "main-init-pools",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainInit_JitPoolsNew",
+      "end_symbol": "MainInit_Drivers",
+      "symbol_prefix": "MainInit_",
+      "source": "game/MAIN/MainInit_Pools.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-DRETAIL_GAME_TRACKER_ASM_NAME=\"ctr_gameTrackerPtr\""],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {"_gp": "0x8008cf6c", "ctr_gameTrackerPtr": "0x8008d2ac"},
+      "linked_block": {}
+    },
+    {
+      "name": "main-init-memory",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainInit_RainBuffer",
+      "end_symbol": "MainInit_JitPoolsNew",
+      "symbol_prefix": "MainInit_",
+      "source": "game/MAIN/MainInit_Memory.c",
+      "include_directories": [
+        "include"
+      ],
+      "forced_includes": [
+        "tools/matching/retail_bindings.h"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float",
+        "-DRETAIL_GAME_TRACKER_ASM_NAME=\"ctr_gameTrackerPtr\""
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_gameTrackerPtr": "0x8008d2ac"
+      },
+      "function_rodata_addresses": {
+        "MainInit_PrimMem": "0x8001157c"
+      },
+      "linked_block": {
+        "rodata_address": "0x8001157c",
+        "rodata_size": 20
+      }
+    },
+    {
+      "name": "main-init-peripheral",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainInit_StringToLevID",
+      "end_symbol": "MainKillGame_StopCTR",
+      "symbol_prefix": "MainInit_",
+      "source": "game/MAIN/MainInit_Peripheral.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "main-frame",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainFrame_TogglePauseAudio",
+      "end_symbol": "MainFrame_RenderFrame",
+      "symbol_prefix": "MainFrame_",
+      "sources": [
+        "game/MAIN/MainFrame.c",
+        "game/MAIN/MainFrame_Services.c",
+        "game/MAIN/MainVisibility.c",
+        "game/MAIN/MainFrame_ResetDB.c"
+      ],
+      "include_directories": [
+        "include"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float"
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_mainFrameVideoDstX": "0x8008d89c",
+        "ctr_mainFrameVideoDstY": "0x8008d8a0",
+        "D232": "0x800b4ddc",
+        "ctr_mainFrameGameTracker": "0x8008d2ac",
+        "ctr_mainFrameGamepads": "0x8008d2b0",
+        "ctr_mainFrameBigfile1": "0x8008d86c"
+      },
+      "linked_block": {},
+      "forced_includes": [
+        "tools/matching/namespaces/main-frame/retail_symbols.h"
+      ]
+    },
+    {
+      "name": "main-frame-reset-db",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "MainFrame_ResetDB",
+      "end_symbol": "MainFrame_GameLogic",
+      "symbol_prefix": "MainFrame_",
+      "source": "game/MAIN/MainFrame_ResetDB.c",
+      "include_directories": ["include"],
+      "forced_includes": [
+        "tools/matching/retail_bindings.h",
+        "tools/matching/namespaces/main-frame/reset_symbols.h"
+      ],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-DRETAIL_GAME_TRACKER_ASM_NAME=\"ctr_gameTrackerPtr\""],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_gameTrackerPtr": "0x8008d2ac",
+        "ctr_mainFrameBigfile1": "0x8008d86c"
+      },
+      "linked_block": {}
+    },
+    {
+      "name": "main-visibility",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "code_intervals": [
+        {
+          "start_symbol": "MainFrame_VisMemAddDriverPVS",
+          "end_symbol": "MainFrame_InitVideoSTR"
+        },
+        {
+          "start_symbol": "MainInit_VisMem",
+          "end_symbol": "MainInit_RainBuffer"
+        }
+      ],
+      "symbol_prefix": "Main",
+      "source": "game/MAIN/MainVisibility.c",
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "main-frame-services",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "code_intervals": [
+        {
+          "start_symbol": "MainFrame_TogglePauseAudio",
+          "end_symbol": "MainFrame_ResetDB"
+        },
+        {
+          "start_symbol": "MainFrame_InitVideoSTR",
+          "end_symbol": "MainFrame_RenderFrame"
+        }
+      ],
+      "symbol_prefix": "MainFrame_",
+      "source": "game/MAIN/MainFrame_Services.c",
+      "include_directories": [
+        "include"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float"
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_mainFrameVideoDstX": "0x8008d89c",
+        "ctr_mainFrameVideoDstY": "0x8008d8a0"
+      },
+      "linked_block": {},
+      "forced_includes": [
+        "tools/matching/namespaces/main-frame/video_symbols.h"
+      ]
+    },
+    {
       "name": "bots-init-difficulty",
       "kind": "resident",
       "artifact": "exe",
@@ -3654,6 +3986,41 @@
       }
     },
     {
+      "name": "coll-bsp-search",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "code_intervals": [
+        {
+          "start_symbol": "COLL_SearchBSP_CallbackQUADBLK",
+          "end_symbol": "COLL_FIXED_TRIANGL_Barycentrics"
+        }
+      ],
+      "symbol_prefix": "COLL_SearchBSP_Callback",
+      "sources": [
+        "game/COLL/COLL_CallbackQuadBlock.c",
+        "game/COLL/COLL_BspSearch.c"
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-ffunction-sections"],
+      "source_flags": {
+        "game/COLL/COLL_CallbackQuadBlock.c": [
+          "-fno-schedule-insns",
+          "-fno-schedule-insns2"
+        ],
+        "game/COLL/COLL_BspSearch.c": [
+          "-fomit-frame-pointer",
+          "-ffixed-30",
+          "-fno-schedule-insns",
+          "-mpsx-prebranch-lw-delay=extended",
+          "-mpsx-local-bgez=on"
+        ]
+      },
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
       "name": "coll-barycentrics",
       "kind": "resident",
       "artifact": "exe",
@@ -3678,6 +4045,64 @@
       "end_symbol": "COLL_FIXED_QUADBLK_TestTriangles",
       "symbol_prefix": "COLL_FIXED_TRIANGL_GetNormVec",
       "source": "game/COLL/COLL_GetNormVec.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-ffunction-sections"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-load-scratchpad-verts",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "COLL_FIXED_QUADBLK_LoadScratchpadVerts",
+      "end_symbol": "COLL_MOVED_TRIANGL_ReorderNormals",
+      "symbol_prefix": "COLL_FIXED_QUADBLK_LoadScratchpadVerts",
+      "source": "game/COLL/COLL_LoadScratchpadVerts.c",
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-quad-normals",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD",
+      "end_symbol": "COLL_MOVED_TRIANGL_ReorderNormals",
+      "symbol_prefix": "COLL_FIXED_QUADBLK_",
+      "sources": [
+        "game/COLL/COLL_QuadBlockNormals.c",
+        "game/COLL/COLL_LoadScratchpadVerts.c"
+      ],
+      "source_flags": {
+        "game/COLL/COLL_QuadBlockNormals.c": [
+          "-mstack-align=4",
+          "-ffixed-25",
+          "-mprologue-arg-alias=on",
+          "-mframed-return-boundary=on"
+        ]
+      },
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-find-scrub",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "COLL_MOVED_FindScrub",
+      "end_symbol": "COLL_MOVED_PlayerSearch",
+      "symbol_prefix": "COLL_MOVED_FindScrub",
+      "source": "game/COLL/COLL_FindScrub.c",
       "include_directories": ["include"],
       "forced_includes": ["tools/matching/retail_bindings.h"],
       "compiler_flags": ["-O2", "-G8", "-msoft-float", "-ffunction-sections"],
@@ -3799,6 +4224,30 @@
       "include_directories": ["include"],
       "forced_includes": ["tools/matching/retail_bindings.h"],
       "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "ui-render-frame-adv-crystal",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "UI_RenderFrame_AdvHub",
+      "end_symbol": "UI_RenderFrame_Wumpa3D_2P3P4P",
+      "symbol_prefix": "UI_RenderFrame_",
+      "source": "game/UI/UI_RenderFrame.c",
+      "include_directories": [
+        "include"
+      ],
+      "forced_includes": [
+        "tools/matching/retail_bindings.h"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float"
+      ],
       "small_data_limit": 8,
       "aspsx_version": "2.77",
       "linked_block": {}
@@ -3971,6 +4420,145 @@
       "linked_block": {}
     },
     {
+      "name": "draw-sky",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "DrawSky_Full",
+      "end_symbol": "AnimateQuad",
+      "symbol_prefix": "DrawSky_",
+      "source": "game/DrawSky.c",
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {
+        "game/DrawSky.c": [
+          "-fcall-used-s0",
+          "-ffixed-t5",
+          "-fno-schedule-insns",
+          "-fno-schedule-insns2",
+          "-mpsx-normal-ram-lhu-delay=on",
+          "-mpsx-local-bgez=on",
+          "-mpsx-normal-ram-lw-delay=on"
+        ]
+      },
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "animate-quad",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "code_intervals": [
+        {
+          "start_symbol": "AnimateQuad",
+          "end_symbol": "DrawConfetti"
+        }
+      ],
+      "symbol_prefix": "",
+      "sources": [
+        "game/RenderLevel/AnimateQuad.c",
+        "game/RenderLevel/AnimateQuadVertex.c",
+        "game/MATH/TRIG_AngleSinCos_r19r17r18.c"
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {
+        "game/RenderLevel/AnimateQuad.c": [
+          "-fomit-frame-pointer", "-mpsx-local-bgez=on", "-mcommon-head-slot=on",
+          "-fno-schedule-insns", "-fno-schedule-insns2"
+        ],
+        "game/MATH/TRIG_AngleSinCos_r19r17r18.c": ["-fno-crossjumping"]
+      },
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "animate-water",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "code_intervals": [
+        {
+          "start_symbol": "AnimateWater1P",
+          "end_symbol": "RedBeaker_RenderRain"
+        }
+      ],
+      "symbol_prefix": "AnimateWater",
+      "sources": [
+        "game/RenderLevel/AnimateWater1P.c",
+        "game/RenderLevel/AnimateWater2P.c",
+        "game/RenderLevel/AnimateWater.c"
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {
+        "game/RenderLevel/AnimateWater1P.c": [
+          "-fomit-frame-pointer", "-mpsx-local-bgez=on", "-mcommon-head-slot=on",
+          "-fno-schedule-insns", "-fno-schedule-insns2", "-ffixed-2"
+        ],
+        "game/RenderLevel/AnimateWater2P.c": [
+          "-fomit-frame-pointer", "-mpsx-local-bgez=on", "-mcommon-head-slot=on",
+          "-fno-schedule-insns", "-fno-schedule-insns2", "-ffixed-2"
+        ]
+      },
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "draw-tires",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "DrawTires_Solid",
+      "end_symbol": "RenderWeather",
+      "symbol_prefix": "",
+      "sources": ["game/DrawTires.c", "game/MATH/TRIG_AngleSinCos_r9r8r10.c", "game/DrawTires_Sqrt.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {"game/MATH/TRIG_AngleSinCos_r9r8r10.c": ["-fno-crossjumping"]},
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "function_rodata_addresses": {"DrawTires_Solid": "0x8008a344", "DrawTires_Reflection": "0x8008a344"},
+      "linked_block": {"rodata_address": "0x8008a344", "rodata_size": 196}
+    },
+    {
+      "name": "render-weather",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "RenderWeather",
+      "end_symbol": "RenderLists_Init1P2P",
+      "symbol_prefix": "",
+      "sources": ["game/RenderWeather/RenderWeather.c", "game/MATH/TRIG_AngleSinCos_r16r17r18.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {"game/MATH/TRIG_AngleSinCos_r16r17r18.c": ["-fno-crossjumping"]},
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "draw-confetti",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "DrawConfetti",
+      "end_symbol": "RenderBucket_DrawFunc_Normal",
+      "symbol_prefix": "",
+      "sources": ["game/DrawConfetti.c", "game/MATH/TRIG_AngleSinCos_r15r16r17.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "source_flags": {"game/MATH/TRIG_AngleSinCos_r15r16r17.c": ["-fno-crossjumping"]},
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "function_rodata_addresses": {"DrawConfetti": "0x8008a2a0"},
+      "linked_block": {"rodata_address": "0x8008a2a0", "rodata_size": 36}
+    },
+    {
       "name": "vector",
       "kind": "resident",
       "artifact": "exe",
@@ -3985,6 +4573,75 @@
       "small_data_limit": 8,
       "aspsx_version": "2.77",
       "linked_block": {}
+    },
+    {
+      "name": "redbeaker-rain",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "RedBeaker_RenderRain",
+      "end_symbol": "RenderStars",
+      "symbol_prefix": "",
+      "sources": ["game/RenderWeather/RedBeaker_RenderRain.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "render-stars",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "RenderStars",
+      "end_symbol": "DrawTires_Solid",
+      "symbol_prefix": "RenderStars",
+      "sources": ["game/RenderStars.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "render-lists",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "RenderLists_Init1P2P",
+      "end_symbol": "RenderBucket_QueueLevInstances",
+      "symbol_prefix": "",
+      "sources": ["game/RenderLevel/RenderLists.c"],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "function_rodata_addresses": {"RenderLists_PreInit": "0x8008a408"},
+      "linked_block": {"rodata_address": "0x8008a408", "rodata_size": 32}
+    },
+    {
+      "name": "ui-race-clock",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "UI_DrawRaceClock",
+      "end_symbol": "UI_DrawLimitClock",
+      "symbol_prefix": "UI_DrawRaceClock",
+      "source": "game/UI/UI_Clock.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float", "-fschedule-store-load-order", "-mpreserve-small-si-constants=on"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "link_symbols": {
+        "_gp": "0x8008cf6c",
+        "ctr_sdata_relicTime_1min": "0x8008d9b0",
+        "ctr_sdata_relicTime_10sec": "0x8008d9e0",
+        "ctr_sdata_relicTime_1sec": "0x8008d9e8",
+        "ctr_sdata_relicTime_10ms": "0x8008d9d4",
+        "ctr_sdata_relicTime_1ms": "0x8008d9b8"
+      }
     },
     {
       "name": "ui-limit-clock",
@@ -4017,6 +4674,288 @@
       "small_data_limit": 8,
       "aspsx_version": "2.77",
       "linked_block": {}
+    },
+    {
+      "name": "coll-moved-test-triangles",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "symbol_prefix": "COLL_",
+      "sources": [
+        "game/COLL/COLL_Barycentrics.c",
+        "game/COLL/COLL_GetNormVec.c",
+        "game/COLL/COLL_QuadBlockNormals.c",
+        "game/COLL/COLL_LoadScratchpadVerts.c",
+        "game/COLL/COLL_MovedReorderNormals.c",
+        "game/COLL/COLL_MovedTrianglePoint.c",
+        "game/COLL/COLL_MovedQuadBlock.c",
+        "game/COLL/COLL_MovedBspLeaf.c"
+      ],
+      "source_flags": {
+        "game/COLL/COLL_QuadBlockNormals.c": [
+          "-mstack-align=4",
+          "-ffixed-25",
+          "-mprologue-arg-alias=on",
+          "-mframed-return-boundary=on"
+        ],
+        "game/COLL/COLL_MovedBspLeaf.c": [
+          "-mordered-gp-prologue=on"
+        ],
+        "game/COLL/COLL_MovedQuadBlock.c": [
+          "-mordered-gp-prologue=on",
+          "-mclone-fixed-epilogues=on",
+          "-fno-schedule-insns",
+          "-mpsx-prebranch-lw-delay=on"
+        ]
+      },
+      "code_intervals": [
+        {
+          "start_symbol": "COLL_FIXED_TRIANGL_Barycentrics",
+          "end_symbol": "COLL_FIXED_TRIANGL_UNUSED"
+        },
+        {
+          "start_symbol": "COLL_FIXED_TRIANGL_GetNormVec",
+          "end_symbol": "COLL_FIXED_QUADBLK_TestTriangles"
+        },
+        {
+          "start_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD",
+          "end_symbol": "COLL_MOVED_TRIANGL_ReorderNormals"
+        },
+        {
+          "start_symbol": "COLL_MOVED_TRIANGL_ReorderNormals",
+          "end_symbol": "COLL_MOVED_FindScrub"
+        }
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-moved-dispatch",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "symbol_prefix": "COLL_",
+      "sources": [
+        "game/COLL/COLL_Barycentrics.c",
+        "game/COLL/COLL_GetNormVec.c",
+        "game/COLL/COLL_QuadBlockNormals.c",
+        "game/COLL/COLL_LoadScratchpadVerts.c",
+        "game/COLL/COLL_MovedQuadBlock.c",
+        "game/COLL/COLL_MovedBspLeaf.c"
+      ],
+      "source_flags": {
+        "game/COLL/COLL_QuadBlockNormals.c": [
+          "-mstack-align=4",
+          "-ffixed-25",
+          "-mprologue-arg-alias=on",
+          "-mframed-return-boundary=on"
+        ],
+        "game/COLL/COLL_MovedBspLeaf.c": ["-mordered-gp-prologue=on"],
+        "game/COLL/COLL_MovedQuadBlock.c": [
+          "-mordered-gp-prologue=on",
+          "-mclone-fixed-epilogues=on",
+          "-fno-schedule-insns",
+          "-mpsx-prebranch-lw-delay=on"
+        ]
+      },
+      "code_intervals": [
+        {"start_symbol": "COLL_FIXED_TRIANGL_Barycentrics", "end_symbol": "COLL_FIXED_TRIANGL_UNUSED"},
+        {"start_symbol": "COLL_FIXED_TRIANGL_GetNormVec", "end_symbol": "COLL_FIXED_QUADBLK_TestTriangles"},
+        {"start_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD", "end_symbol": "COLL_MOVED_TRIANGL_ReorderNormals"},
+        {"start_symbol": "COLL_MOVED_QUADBLK_TestTriangles", "end_symbol": "COLL_MOVED_FindScrub"}
+      ],
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-fixed-test-point",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "COLL_FIXED_TRIANGL_UNUSED",
+      "end_symbol": "COLL_FIXED_TRIANGL_GetNormVec",
+      "symbol_prefix": "COLL_FIXED_TRIANGL_",
+      "source": "game/COLL/COLL_TestPoint.c",
+      "include_directories": ["include"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-fixed-test-triangles",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "symbol_prefix": "COLL_FIXED_",
+      "sources": [
+        "game/COLL/COLL_InstanceQuery.c",
+        "game/COLL/COLL_TestPoint.c",
+        "game/COLL/COLL_GetNormVec.c",
+        "game/COLL/COLL_TestTriangles.c",
+        "game/COLL/COLL_BspLeaf.c",
+        "game/COLL/COLL_QuadBlockNormals.c",
+        "game/COLL/COLL_LoadScratchpadVerts.c"
+      ],
+      "code_intervals": [
+        {"start_symbol": "COLL_FIXED_BSPLEAF_TestInstance", "end_symbol": "COLL_FIXED_BotsSearch"},
+        {"start_symbol": "COLL_FIXED_TRIANGL_UNUSED", "end_symbol": "COLL_FIXED_TRIANGL_GetNormVec"},
+        {"start_symbol": "COLL_FIXED_TRIANGL_GetNormVec", "end_symbol": "COLL_FIXED_QUADBLK_TestTriangles"},
+        {"start_symbol": "COLL_FIXED_QUADBLK_TestTriangles", "end_symbol": "COLL_FIXED_BSPLEAF_TestQuadblocks"},
+        {"start_symbol": "COLL_FIXED_BSPLEAF_TestQuadblocks", "end_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD"},
+        {"start_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD", "end_symbol": "COLL_MOVED_TRIANGL_ReorderNormals"}
+      ],
+      "source_flags": {
+        "game/COLL/COLL_QuadBlockNormals.c": [
+          "-mstack-align=4",
+          "-ffixed-25",
+          "-mprologue-arg-alias=on",
+          "-mframed-return-boundary=on"
+        ],
+        "game/COLL/COLL_BspLeaf.c": ["-mordered-gp-prologue=on"],
+        "game/COLL/COLL_TestTriangles.c": [
+          "-mordered-gp-prologue=on",
+          "-mclone-fixed-epilogues=on",
+          "-fno-schedule-insns",
+          "-mpsx-prebranch-lw-delay=on"
+        ]
+      },
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "coll-bsp-leaf",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "COLL_FIXED_BSPLEAF_TestQuadblocks",
+      "end_symbol": "COLL_FIXED_QUADBLK_GetNormVecs_LoLOD",
+      "symbol_prefix": "COLL_FIXED_BSPLEAF_TestQuadblocks",
+      "source": "game/COLL/COLL_BspLeaf.c",
+      "include_directories": [
+        "include"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float",
+        "-mordered-gp-prologue=on"
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
+    },
+    {
+      "name": "renderbucket",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "symbol_prefix": "RenderBucket_",
+      "sources": [
+        "game/RenderBucket/RenderBucket_Normal.c",
+        "game/RenderBucket/RenderBucket_Execute.c",
+        "game/RenderBucket/RenderBucket_DrawInstPrim_ClampDepth.c",
+        "game/RenderBucket/RenderBucket_DrawInstPrim_Normal.c",
+        "game/RenderBucket/RenderBucket_DrawInstPrim_DepthFade.c",
+        "game/RenderBucket/RenderBucket_Special.c",
+        "game/RenderBucket/RenderBucket_Split.c",
+        "game/RenderBucket/RenderBucket_UncompressAnimationFrame.c",
+        "game/RenderBucket/RenderBucket_UncompressAnimationFrame_NextFrame.c",
+        "game/RenderBucket/RenderBucket_QueueInstances.c",
+        "game/RenderBucket/RenderBucket_CopyDispatchTables.c",
+        "game/RenderBucket/RenderBucket_QueueDraw.c",
+        "game/RenderBucket/RenderBucket_ExpandProjectedBounds.c",
+        "game/RenderBucket/RenderBucket_InstSetupCallbacks.c",
+        "game/RenderBucket/RenderBucket_UncompressAnimationFrame_Transformed.c",
+        "game/RenderBucket/RenderBucket_Reflection.c"
+      ],
+      "source_flags": {
+        "game/RenderBucket/RenderBucket_DrawInstPrim_Normal.c": [
+          "-fno-schedule-insns",
+          "-fno-schedule-insns2"
+        ],
+        "game/RenderBucket/RenderBucket_DrawInstPrim_DepthFade.c": [
+          "-fno-schedule-insns",
+          "-fno-schedule-insns2"
+        ],
+        "game/RenderBucket/RenderBucket_DrawInstPrim_ClampDepth.c": [
+          "-fno-schedule-insns",
+          "-fno-schedule-insns2",
+          "-mpsx-local-bgez=on"
+        ]
+      },
+      "include_directories": [
+        "include"
+      ],
+      "compiler_flags": [
+        "-O2",
+        "-G8",
+        "-msoft-float"
+      ],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {},
+      "code_intervals": [
+        {
+          "start_symbol": "RenderBucket_DrawFunc_Normal",
+          "end_symbol": "RenderBucket_Execute"
+        },
+        {
+          "start_symbol": "RenderBucket_Execute",
+          "end_symbol": "RenderBucket_InitDepthGTE"
+        },
+        {
+          "start_symbol": "RenderBucket_DrawFunc_Split",
+          "end_symbol": "RenderBucket_UncompressAnimationFrame_NextFrame"
+        },
+        {
+          "start_symbol": "RenderBucket_UncompressAnimationFrame_NextFrame",
+          "end_symbol": "Unknown_8006b4c8"
+        },
+        {
+          "start_symbol": "RenderBucket_DrawInstPrim_DepthFade",
+          "end_symbol": "RenderBucket_UncompressAnimationFrame_Split"
+        },
+        {
+          "start_symbol": "RenderBucket_UncompressAnimationFrame_Split",
+          "end_symbol": "ConvertRotToMatrix_InverseTranspose_NoRotY"
+        },
+        {
+          "start_symbol": "RenderBucket_InstSetupLightColor",
+          "end_symbol": "RenderBucket_DrawFunc_Reflection"
+        },
+        {
+          "start_symbol": "RenderBucket_DrawFunc_Reflection",
+          "end_symbol": "RenderBucket_UncompressAnimationFrame_ReflectNextFrame"
+        },
+        {
+          "start_symbol": "RenderBucket_UncompressAnimationFrame_ReflectNextFrame",
+          "end_symbol": "Unknown_8006d094"
+        },
+        {
+          "start_symbol": "RenderBucket_QueueLevInstances",
+          "end_symbol": "RenderBucket_CopyDispatchTables"
+        },
+        {
+          "start_symbol": "RenderBucket_CopyDispatchTables",
+          "end_symbol": "ThTick_RunBucket"
+        }
+      ],
+      "link_symbols": {
+        "RenderBucket_WaterSplit_Import": "0x8006d094",
+        "RenderBucket_SetupDispatchWindow_Import": "0x8008a428",
+        "RenderBucket_PrimitiveDispatchWindow_Import": "0x8008a444"
+      }
     },
     {
       "name": "ui-cup-ranks",
@@ -4083,6 +5022,22 @@
       "aspsx_version": "2.77",
       "function_rodata_addresses": {"UI_VsQuipAssignAll": "0x80011718"},
       "linked_block": {"rodata_address": "0x80011718", "rodata_size": "0x28"}
+    },
+    {
+      "name": "ui-vs-wait",
+      "kind": "resident",
+      "artifact": "exe",
+      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
+      "start_symbol": "UI_VsWaitForPressX",
+      "end_symbol": "UI_RaceEnd_GetDriverClock",
+      "symbol_prefix": "UI_VsWait",
+      "source": "game/UI/UI_VsWait.c",
+      "include_directories": ["include"],
+      "forced_includes": ["tools/matching/retail_bindings.h"],
+      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
+      "small_data_limit": 8,
+      "aspsx_version": "2.77",
+      "linked_block": {}
     },
     {
       "name": "ui-race-end-clock",
@@ -4420,7 +5375,19 @@
       "source_flags": {
         "game/PSX/PSX_SDK_CdReset.c": ["-fno-delayed-branch"]
       },
-      "code_intervals": [{"start_symbol": "CdStatus", "end_symbol": "CdMode"}, {"start_symbol": "CdMode", "end_symbol": "CdLastCom"}, {"start_symbol": "CdLastCom", "end_symbol": "CdLastPos"}, {"start_symbol": "CdLastPos", "end_symbol": "CdReset"}, {"start_symbol": "CdReset", "end_symbol": "CdSetDebug"}, {"start_symbol": "CdSetDebug", "end_symbol": "CdReady"}, {"start_symbol": "CdSyncCallback", "end_symbol": "CdReadyCallback"}, {"start_symbol": "CdReadyCallback", "end_symbol": "CdControl"}, {"start_symbol": "CdIntToPos", "end_symbol": "CdPosToInt"}, {"start_symbol": "CdPosToInt", "end_symbol": "CdInit"}],
+      "code_intervals": [
+        {"start_symbol": "CdStatus", "end_symbol": "CdMode"},
+        {"start_symbol": "CdMode", "end_symbol": "CdLastCom"},
+        {"start_symbol": "CdLastCom", "end_symbol": "CdLastPos"},
+        {"start_symbol": "CdLastPos", "end_symbol": "CdReset"},
+        {"start_symbol": "CdReset", "end_symbol": "CdSetDebug"},
+        {"start_symbol": "CdSetDebug", "end_symbol": "CdReady"},
+        {"start_symbol": "CdSyncCallback", "end_symbol": "CdReadyCallback"},
+        {"start_symbol": "CdReadyCallback", "end_symbol": "CdControl"},
+        {"start_symbol": "CdIntToPos", "end_symbol": "CdPosToInt"},
+        {"start_symbol": "CdPosToInt", "end_symbol": "CdInit"},
+        {"start_symbol": "CD_ResetController", "end_symbol": "LOAD_InitCDvol"}
+      ],
       "linker_script": "tools/matching/psx-cd-core.ld",
       "data_ranges": [
         {"output_section": ".data.sdk_cd_core", "symbol": "CD_cbsync", "symbol_address": "0x8008c41c", "offset": 0, "size": 4},
@@ -4444,20 +5411,6 @@
       "small_data_limit": 0,
       "aspsx_version": "2.77",
       "linked_block": {}
-    },
-    {
-      "name": "matrix-load-rotation-gte",
-      "kind": "resident",
-      "artifact": "exe",
-      "symbol_file": "metadata/retail/ntsc-u-926/symbols/syms926.txt",
-      "start_symbol": "MATRIX_SET_r11r12r13r14r15",
-      "end_symbol": "Unknown_8006c558",
-      "symbol_prefix": "MATRIX_SET_r11r12r13r14r15",
-      "source": "game/MATH/MATH_7_MatrixStubs.c",
-      "include_directories": ["include"],
-      "compiler_flags": ["-O2", "-G8", "-msoft-float"],
-      "small_data_limit": 8,
-      "aspsx_version": "2.77"
     }
   ]
 }

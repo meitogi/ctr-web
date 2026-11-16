@@ -113,6 +113,11 @@
 #include "LOAD/LOAD_Level.c"
 #include "LOAD/LOAD_IsOpen.c"
 
+#include "MAIN/MainInit_Memory.c"
+#include "MAIN/MainInit_Peripheral.c"
+#include "MAIN/MainVisibility.c"
+#include "MAIN/MainInit_Pools.c"
+#include "MAIN/MainInit_Drivers.c"
 #include "MAIN/MainInit.c"
 #include "MAIN/MainKillGame.c"
 #include "MAIN/MainLoadVLC.c"
@@ -120,6 +125,8 @@
 #include "MAIN/MainDB.c"
 #include "MAIN/MainDrawCb.c"
 
+#include "MAIN/MainFrame_Services.c"
+#include "MAIN/MainFrame_ResetDB.c"
 #include "MAIN/MainFrame.c"
 #include "MAIN/MainFrame_RenderFrame.c"
 
@@ -133,12 +140,17 @@
 
 #include "MATH/MATH_0_Sin.c"
 #include "MATH/MATH_1_Cos.c"
+// NOTE(aalhendi): Retail register owners belong to their isolated leaf TU.
+#ifdef CTR_NATIVE
 #include "MATH/TRIG_AngleSinCos.c"
+#include "MATH/TRIG_AngleSinCos_Unsigned.c"
+#endif
 #include "MATH/MATH_2_FastSqrt.c"
 #include "MATH/MATH_3_HitboxMatrix.c"
 #include "MATH/MATH_7_MatrixStubs.c"
-// NOTE(aalhendi): Retail compiles this register-entry leaf separately.
+// NOTE(aalhendi): Retail compiles these register-entry leaves separately.
 #ifdef CTR_NATIVE
+#include "MATH/MATH_RotMatrix.c"
 #include "MATH/MATH_LightMatrix.c"
 #endif
 #include "MATH/MATH_MatrixRotate.c"
@@ -212,6 +224,7 @@
 #include "UI/UI_Icon.c"
 #include "UI/UI_Lerp2D.c"
 #include "UI/UI_Clock.c"
+#include "UI/UI_LimitClock.c"
 #include "UI/UI_RaceHud.c"
 #include "UI/UI_Weapon.c"
 #include "UI/UI_DrawNum.c"

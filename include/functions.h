@@ -76,7 +76,7 @@ u32 DecalFont_boolRacingWheel(void);
 void DecalFont_DrawLine(char *str, s16 posX, s16 posY, s16 fontType, s16 flags);
 void DecalFont_DrawLineStrlen(char *str, s16 len, s16 posX, s16 posY, s16 fontType, s16 flags);
 s32 DecalFont_DrawMultiLine(char *str, s16 posX, s16 posY, s16 maxPixLen, s16 fontType, s16 flags);
-void DecalGlobal_EmptyFunc_MainFrame_ResetDB(void);
+void DecalGlobal_EmptyFunc_MainFrame_ResetDB(struct GameTracker *tracker);
 void DecalGlobal_Clear(struct GameTracker *gGT);
 void DecalGlobal_Store(struct GameTracker *gGT, struct LevTexLookup *LTL);
 // Lookup keys contain 16 readable bytes (including padding), word-aligned on PSX.
@@ -405,8 +405,17 @@ void RenderBucket_Execute(void *param_1, struct PrimMem *param_2);
 void DrawTires_Solid(struct Thread *thread, struct PrimMem *primMem, u8 numPlyr);
 void DrawTires_Reflection(struct Thread *thread, struct PrimMem *primMem, u8 numPlyr);
 void Torch_Main(void *particleList_heatWarp, struct PushBuffer *pb, struct PrimMem *primMem, u8 numPlyr, int swapchainIndex);
-void AnimateWater1P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList);
-void AnimateQuad(int timer, int numSCVert, struct SCVert *scVert, int *visSCVertList);
+void AnimateWater1P(s32 timer, s32 numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, s32 *visOVertList);
+void AnimateQuad(s32 timer, s32 numSCVert, struct SCVert *scVert, s32 *visSCVertList);
+#ifdef CTR_NATIVE
+void AnimateQuadVertex(s32 timer, struct SCVert *scVert, u32 *visBits);
+void AnimateWaterVertex(struct WaterVert *waterVert, u16 colorOffset, s32 firstOffset, s32 secondOffset, u32 *visBits);
+#else
+// NOTE(aalhendi): Custom kernel lanes, not ordinary argument lists. AT survives
+// the S-bank call while the wrapper's source-owned sparse scratch image is live.
+void CTR_PSX_REGCALL_SBANK(0x2050) CTR_PSX_PRESERVES_AT44 AnimateQuadVertex(void);
+void CTR_PSX_REGCALL_SBANK(0x38c0) CTR_PSX_PRESERVES_AT44 AnimateWaterVertex(void);
+#endif
 void RenderLists_PreInit(void);
 void RenderBucket_InitDepthGTE(void);
 void WindowBoxLines(struct GameTracker *gGT);
@@ -454,20 +463,23 @@ void MainRaceTrack_RequestLoad(s16 levelID);
 int MATH_Sin(u32 angle);
 int MATH_Cos(u32 angle);
 s32 MATH_FastSqrt(u32 value, s32 shift);
+#ifdef CTR_NATIVE
+// NOTE(aalhendi): Retail trig entries use the named register lanes, not C pointer arguments.
 void TRIG_AngleSinCos_r19r17r18(u32 angle, s32 *sine, s32 *cosine);
 void TRIG_AngleSinCos_r15r16r17(u32 angle, s32 *sine, s32 *cosine);
 void TRIG_AngleSinCos_r16r17r18_duplicate(u32 angle, u32 *sine, u32 *cosine);
 void TRIG_AngleSinCos_r9r8r10(u32 angle, s32 *sine, s32 *cosine);
 void TRIG_AngleSinCos_r16r17r18(u32 angle, s32 *sine, s32 *cosine);
+#endif
 void MATH_HitboxMatrix(MATRIX *output, MATRIX *input);
 void ConvertRotToMatrix_InverseTranspose_NoRotY(MATRIX *m, const SVec3 *rot);
 void ConvertRotToMatrix_InverseTranspose(MATRIX *m, const SVec3 *rot);
 void ConvertRotToMatrix(MATRIX *m, const SVec3 *rot);
 void ConvertRotToMatrix_Transpose(MATRIX *m, const SVec3 *rot);
 void MatrixRotate(void *dst, MATRIX *src, MATRIX *rot);
-void Unknown_8006c49c(u32 *r0, u32 *r1, u32 *r2, u32 *r3, u32 *r4);
 #ifdef CTR_NATIVE
 // NOTE(aalhendi): Retail matrix kernels/loaders take t3-t7, not C ABI arguments.
+void Unknown_8006c49c(u32 *r0, u32 *r1, u32 *r2, u32 *r3, u32 *r4);
 void Unknown_8006c558(u32 *r0, u32 *r1, u32 *r2, u32 *r3, u32 *r4);
 void MATRIX_SET_r11r12r13r14r15(u32 r0, u32 r1, u32 r2, u32 r3, u32 r4);
 void Unknown_8006c600(u32 r0, u32 r1, u32 r2, u32 r3, u32 r4);
@@ -476,7 +488,10 @@ int SquareRoot0_stub(int param_1);
 VECTOR *Unknown_8006c6c8(VECTOR *input, VECTOR *output, MATRIX *matrix);
 VECTOR *ApplyMatrixLV_stub(VECTOR *input, VECTOR *output);
 void MATH_MatrixMul(MATRIX *output, MATRIX *input, MATRIX *transform);
+#ifdef CTR_NATIVE
+// NOTE(aalhendi): The retail wheel renderer passes s5 and receives s6, not a0/v0.
 s32 Unknown_8006ef98(s32 radicand);
+#endif
 
 void MEMCARD_InitCard(void);
 void MEMCARD_SetIcon(int iconID);
@@ -1303,12 +1318,12 @@ void DrawLevelOvr3P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspL
                     const int *visFaceList2, const struct TextureLayout *waterEnvMap);
 void DrawLevelOvr4P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList0, const int *visFaceList1,
                     const int *visFaceList2, const int *visFaceList3, const struct TextureLayout *waterEnvMap);
-void AnimateWater2P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
-                    int *visOVertList1);
-void AnimateWater3P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
-                    int *visOVertList1, int *visOVertList2);
-void AnimateWater4P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
-                    int *visOVertList1, int *visOVertList2, int *visOVertList3);
+void AnimateWater2P(s32 timer, s32 numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, s32 *visOVertList0,
+                    s32 *visOVertList1);
+void AnimateWater3P(s32 timer, s32 numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, s32 *visOVertList0,
+                    s32 *visOVertList1, s32 *visOVertList2);
+void AnimateWater4P(s32 timer, s32 numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, s32 *visOVertList0,
+                    s32 *visOVertList1, s32 *visOVertList2, s32 *visOVertList3);
 int RenderLists_Init1P2P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList, u8 numPlyr);
 int RenderLists_Init3P4P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList);
 // TODO:

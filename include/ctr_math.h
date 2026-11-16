@@ -169,6 +169,14 @@ static inline u32 CTR_MipsMulHiU(u32 lhs, u32 rhs)
 	return (u32)(((u64)lhs * (u64)rhs) >> 32);
 }
 
+#ifdef CTR_NATIVE
+// NOTE(aalhendi): Pure signed high half; no emulated HI/LO state is changed.
+static inline s32 CTR_MipsMulHiS(s32 lhs, s32 rhs)
+{
+	return (s32)((u64)((s64)lhs * (s64)rhs) >> 32);
+}
+#endif
+
 static inline s32 CTR_MipsAddLo(s32 lhs, s32 rhs)
 {
 	return (s32)((u32)lhs + (u32)rhs);
@@ -183,6 +191,15 @@ static inline s32 CTR_MipsNegLo(s32 value)
 {
 	return CTR_MipsSubLo(0, value);
 }
+
+// NOTE(aalhendi): Ordinary signed negation requires value != INT_MIN. The
+// PSX compiler primitive selects SUB without changing other C operators.
+#ifdef CTR_NATIVE
+static inline s32 CTR_NegateS32(s32 value)
+{
+	return -value;
+}
+#endif
 
 static inline u32 CTR_PackS16Pair(s32 lo, s32 hi)
 {
