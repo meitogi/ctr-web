@@ -51,10 +51,15 @@ fi
 
 # ---- 1. the files ----
 step 1/5 "the home frpc's files in $DIR"
+# the files as copied : beside frpc.toml, or in its certs/ (the home compose's layout) ; a folder
+# chmod 600'd along with its files cannot be opened : given back its x
+for d in "$DIR" "$DIR/certs"; do [ -d "$d" ] && chmod 700 "$d"; done
+find_file() { if [ -s "$DIR/$1" ]; then echo "$DIR/$1"; elif [ -s "$DIR/certs/$1" ]; then echo "$DIR/certs/$1"; fi; }
 missing=''
 for f in frpc.toml ca.crt client.crt client.key; do
-  if [ -s "$DIR/$f" ]; then ok "$f"; else bad "$f missing"; missing="$missing $f"; fi
+  if [ -n "$(find_file "$f")" ]; then ok "${f}$( [ "$(find_file "$f")" = "$DIR/certs/$f" ] && echo ' (certs/)')"; else bad "$f missing"; missing="$missing $f"; fi
 done
+CA=$(find_file ca.crt); CRT=$(find_file client.crt); KEY=$(find_file client.key)
 if [ -n "$missing" ]; then
   cat <<EOF
 
@@ -63,7 +68,7 @@ if [ -n "$missing" ]; then
     mkdir -p "$DIR" && chmod 700 "$DIR"
     scp <user>@<home-server>:<compose folder>/frpc.toml "$DIR/"
     scp <user>@<home-server>:'<compose folder>/certs/{ca.crt,client.crt,client.key}' "$DIR/"
-    chmod 600 "$DIR"/*
+    find "$DIR" -type f -exec chmod 600 {} +
   Then run this script again.
 EOF
   exit 1
@@ -159,8 +164,8 @@ remotePort = $FPORT
 EOF
 docker rm -f "$NAME" > /dev/null 2>&1 || true
 docker run -d --name "$NAME" \
-  -v "$CONF:/etc/frp/frpc.toml:ro" -v "$DIR/ca.crt:/etc/frp/ca.crt:ro" \
-  -v "$DIR/client.crt:/etc/frp/client.crt:ro" -v "$DIR/client.key:/etc/frp/client.key:ro" \
+  -v "$CONF:/etc/frp/frpc.toml:ro" -v "$CA:/etc/frp/ca.crt:ro" \
+  -v "$CRT:/etc/frp/client.crt:ro" -v "$KEY:/etc/frp/client.key:ro" \
   "$IMAGE" > /dev/null
 trap 'docker rm -f "$NAME" > /dev/null 2>&1 || true; rm -f "$CONF"; echo; echo "phone-tunnel.sh : tunnel closed"' EXIT INT TERM
 
