@@ -13,6 +13,9 @@
 //     « Keyboard » and the guest on « Gamepad » (the user's « ça boucle », 2026-10-22).
 //   SHARE-RELOAD : the guest reloads its page : the slot it gets back (recorded), the stream again,
 //     no slot left behind on the host.
+//   SHARE-GUEST-TOUCH : a guest on a phone (812 × 375, touch) gets the touch controls at its first
+//     touch, the menus' pad while the host is in a menu ; its OK (Cross) by touch reaches the host's
+//     pad bus on slot 1 (session 42).
 //   SHARE-FULL : three guests are P2, P3, P4 (the game pulls slots 1–3) ; a fourth is refused `full`
 //     and given no slot.
 //
@@ -46,7 +49,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture } from '/opt/devcontainer/base/skills/visual-loop/scripts/cdp.mjs'
 import { makePlayer, pageScript } from '/opt/devcontainer/base/skills/visual-loop/lib/player.mjs'
-import { PLAYER, menuTo, startAt, state, until } from './ctr.mjs'
+import { IPHONE_MINI, PLAYER, fingers, menuTo, phone, startAt, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8091/index.html',
@@ -62,6 +65,7 @@ export const tags = {
 	'SHARE-NAMES': ['share', 'page'],
 	'SHARE-RELOAD': ['share'],
 	'SHARE-FULL': ['share', 'input'],
+	'SHARE-GUEST-TOUCH': ['share', 'input'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -472,13 +476,44 @@ export default async ctx => {
 			const gear = await g.js("const b = document.getElementById('ctr-gear').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }")
 			for (const type of ['mousePressed', 'mouseReleased']) await ctx.conn.send('Input.dispatchMouseEvent', { type, x: gear.x, y: gear.y, button: 'left', clickCount: 1 }, g.sid)
 			const panel = await waitIn(g.js, 'Settings open', "document.getElementById('ctr-settings') ? { tabs: [...document.querySelectorAll('#ctr-settings [data-tab]')].map(t => t.dataset.tab), name: document.getElementById('ctr-name')?.value, room: [...document.querySelectorAll('#ctr-room-players li')].map(l => l.innerText.replace(/\\s+/g, ' ')), who: !!document.getElementById('ctr-device-auto') } : null", 5000)
-			if (panel.tabs.join() !== 'players,controls,system') throw new Error(`guest tabs ${panel.tabs.join()}`)
+			// Dev : the debug build's own tab, loaded as Settings opens (here or not by the time it is read)
+			if (panel.tabs.filter(t => t !== 'dev').join() !== 'players,controls,system') throw new Error(`guest tabs ${panel.tabs.join()}`)
 			if (!panel.name || !panel.who || panel.room.length < 2) throw new Error(`Players tab ${JSON.stringify(panel)}`)
 			await sleep(600) // the sidebar's slide-in
 			await shoot('guest-settings')
 			await g.js("document.querySelector('#ctr-settings .x').click(); return true")
 			return `HUD ${JSON.stringify(hud)} · volume ${vol} · Settings ${JSON.stringify(panel)}`
 		} finally {
+			await g.close()
+		}
+	})
+
+	await ctx.scenario('SHARE-GUEST-TOUCH', async () => {
+		await boot(ctx)
+		const link = await share(ctx)
+		// the touch settings' defaults (one origin : a touch suite's run can leave others behind)
+		await ctx.js("for (const k of ['mode', 'layout', 'hold', 'hold-ms', 'size']) localStorage.removeItem('ctr-ui.touch-' + k); return true")
+		const g = await guestWindow(ctx, link)
+		const gctx = { conn: ctx.conn, sid: g.sid, js: g.js }
+		try {
+			const gs = await settled(g.js)
+			if (gs.state !== 'connected') {
+				if (gs.code === 'online-mode') ctx.skip(`no direct WebRTC path between the two windows (${gs.message})`)
+				throw new Error(`guest : ${JSON.stringify(gs)}`)
+			}
+			await phone(gctx, IPHONE_MINI)
+			const f = fingers(gctx)
+			await f.down(1, 400, 180)
+			await f.all()
+			const kind = await waitIn(g.js, 'the guest\'s touch controls', "document.getElementById('ctr-touch')?.dataset.kind ?? null", 5000)
+			if (kind !== 'menu') throw new Error(`the host is in a menu, the guest's controls are « ${kind} »`)
+			await f.on(2, 'cross')
+			const CROSS = 0xbfff
+			await waitIn(ctx.js, 'the guest\'s touch Cross on the host\'s slot 1', `document.getElementById('log').textContent.includes('remote pad slot=1 buttons=0x${CROSS.toString(16)}')`, 5000)
+			await f.all()
+			return `the guest's touch controls : ${kind} · its OK by touch on the host's slot 1 (0x${CROSS.toString(16)})`
+		} finally {
+			await phone(gctx, null).catch(() => {})
 			await g.close()
 		}
 	})

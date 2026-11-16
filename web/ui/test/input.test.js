@@ -144,11 +144,26 @@ test('« Who plays » reaches the game as 4 ints : mode, vendor, product, rank (
   assert.deepEqual([...old.subarray(52, 56)], [7, 7, 7, 7])
 })
 
-test('« Unlock everything » reaches the game as the page\'s box says (include/platform/native_web_ui.h)', async () => {
+test('« Unlock everything » reaches the game as it was when the game started (include/platform/native_web_ui.h)', async () => {
   const { createInputHook } = await import('../src/lib/input-hook.js')
-  let s = { keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, unlockAll: true }
-  const hook = createInputHook({ get: () => s }, { blocked: () => false })
-  assert.equal(hook.unlockAll(), true)
-  s = { ...s, unlockAll: false }
-  assert.equal(hook.unlockAll(), false)
+  for (const first of [true, false]) {
+    let s = { keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, unlockAll: first }
+    const hook = createInputHook({ get: () => s }, { blocked: () => false })
+    assert.equal(hook.unlockAll(), first)
+    // changed while the game runs (Settings › System) : the menus keep their locks until a restart
+    s = { ...s, unlockAll: !first }
+    assert.equal(hook.unlockAll(), first)
+  }
+})
+
+test('the touch pad is pulled with the game\'s « racing » and the hook\'s clock', async () => {
+  const { createInputHook } = await import('../src/lib/input-hook.js')
+  const seen = []
+  const touch = { packet: (heap, dst, racing, now) => { seen.push([dst, racing, now]); heap[dst] = 9; return 1 } }
+  const hook = createInputHook({ get: () => ({}) }, { blocked: () => false }, { touch, now: () => 42 })
+  const heap = new Uint8Array(16)
+  assert.equal(hook.touch(heap, 4, 1), 1)
+  assert.deepEqual(seen, [[4, true, 42]])
+  assert.equal(heap[4], 9)
+  assert.equal(createInputHook({ get: () => ({}) }, { blocked: () => false }).touch(heap, 0, 1), 0, 'no touch pad : nothing')
 })

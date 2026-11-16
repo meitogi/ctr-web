@@ -14,6 +14,13 @@
 //     with Copy) and is the one guests get ; a guest joins while the host is on the main menu, sees
 //     it, and its pad reaches the game (the main menu itself is P1's, as on the PS1) ; pressed
 //     again, Share stops and the guest is told the host left.
+//   AUTO-START   : « Start the game by itself » (Settings › System, on by default) : with the disc
+//     stored, a load goes into the game with no press (no boot screen) ; off, the boot screen waits
+//     for the press ; the switch in Settings writes it (session 42).
+//   UNLOCK-RESTART : « Unlock everything » in Settings › System, the boot screen's box in step ;
+//     changed while the game runs it asks : « Later » keeps the change for the next start (the
+//     game keeps the value it started with), changed back nothing is asked, « Restart now » reloads
+//     straight into the game (whatever the auto start says) and the game has the new value.
 //   TOO-MANY     : the host's machine has two gamepads besides its keyboard : the guests take the
 //     seats left, the next guest reads « Too many players » on its own window and gets no seat.
 //
@@ -42,10 +49,13 @@ export const tags = {
 	'CARD-CLEAN': ['card', 'unlock', 'race'],
 	'SHARE-BUTTON': ['share', 'page'],
 	'TOO-MANY': ['share', 'input'],
+	'AUTO-START': ['page', 'boot'],
+	'UNLOCK-RESTART': ['unlock', 'page'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const UNLOCK_KEY = 'ctr-ui.unlock-all'
+const AUTO_START_KEY = 'ctr-ui.auto-start'
 
 /** A shot of the page's own layers (Page.captureScreenshot, no surface : the guest page's way). */
 async function pageShot(ctx, label) {
@@ -59,11 +69,14 @@ let unlockedOn = null // UNLOCK-ON's counts, for UNLOCK-OFF
 
 /** The home page with the box as `checked` (null : as the browser has it), reloaded, not started. */
 async function home(ctx, checked = null) {
-	await ctx.js(`${checked === null ? '' : checked ? `localStorage.removeItem('${UNLOCK_KEY}')` : `localStorage.setItem('${UNLOCK_KEY}', '0')`}; return true`)
+	// the home page, not the game : « Start the game by itself » (on by default) off for it
+	await ctx.js(`${checked === null ? '' : checked ? `localStorage.removeItem('${UNLOCK_KEY}')` : `localStorage.setItem('${UNLOCK_KEY}', '0')`}; localStorage.setItem('${AUTO_START_KEY}', '0'); return true`)
 	// a load can stall on « Looking for the game in this browser… » with nothing else on screen
 	// (home-code.suite.mjs saw it too) : another load, three in all
 	for (let attempt = 1; ; attempt++) {
-		await ctx.reload()
+		// the page itself, not a test start left in the address (?turbo=, ?state= boot by themselves)
+		await ctx.conn.send('Page.navigate', { url: await ctx.js('return location.origin + location.pathname') }, ctx.sid)
+		await sleep(500)
 		try {
 			return await waitIn(ctx.js, 'the home page', "!!(document.getElementById('press-start') || document.getElementById('drop-zone'))", 25_000)
 		} catch (e) {
@@ -247,6 +260,73 @@ export default async ctx => {
 			if (f.unlocks.join() !== s.unlocks.save.join()) throw new Error(`${f.path} carries ${f.unlocks.map(w => w.toString(16))}, the game's save ${s.unlocks.save.map(w => w.toString(16))}`)
 		}
 		return `race ended on ${end.screen} (lap ${end.kart?.lap}) · menus ${met.join(' > ')}${saved ? '' : ' (no SAVE row met)'} · files written ${written.map(f => `${f.path} (${f.bytes.length} B)`).join(', ') || 'none'} · profiles ${profiles.map(f => `${f.path} ${f.unlocks.map(w => w.toString(16))}`).join(', ') || 'none'} · memory ${s.unlocks.save.map(w => w.toString(16))}`
+	})
+
+	await ctx.scenario('AUTO-START', async () => {
+		const screen = () => ctx.js("return { ready: !!document.getElementById('press-start'), game: !!document.querySelector('script[src=\"ctr_native.js\"]'), boot: !document.getElementById('boot').classList.contains('hidden') }")
+		await ctx.js(`localStorage.removeItem('${AUTO_START_KEY}'); return true`)
+		// the page itself : no test start in the address (a ?turbo= or ?state= boots by itself anyway)
+		await ctx.conn.send('Page.navigate', { url: await ctx.js('return location.origin + location.pathname') }, ctx.sid)
+		await sleep(500)
+		// the debug build streams the disc's data before its first published frame : up to ~40 s
+		const on = await waitIn(ctx.js, 'the game started by itself', "!!window.__ctr && document.getElementById('boot').classList.contains('hidden')", 90_000)
+			.catch(async (e) => { throw new Error(`${e.message} : ${JSON.stringify(await ctx.js("return { url: location.href, auto: localStorage.getItem('ctr-ui.auto-start'), boot: document.getElementById('boot')?.className, status: document.getElementById('boot-status')?.textContent, ctr: !!window.__ctr, ready: !!document.getElementById('press-start') }").catch((x) => String(x)))}`) })
+		const seen = await screen()
+		if (seen.ready) throw new Error(`the boot screen waited : ${JSON.stringify(seen)}`)
+		const sound = await ctx.js('return globalThis.ctrAudio?.context?.state ?? null')
+		await home(ctx, null)
+		await sleep(2500)
+		const off = await screen()
+		if (!off.ready || off.game) throw new Error(`auto start off : ${JSON.stringify(off)}`)
+		// the switch in Settings › System (the game started by the press, Settings opened)
+		await ctx.press('Enter')
+		await waitIn(ctx.js, 'the game', '!!window.__ctr', 90_000)
+		await ctx.press('Escape')
+		await waitIn(ctx.js, 'Settings', "!!document.getElementById('ctr-settings')", 5000)
+		const box = await waitIn(ctx.js, 'the switch', "(document.querySelector('#ctr-settings [data-tab=system]')?.click(), document.getElementById('ctr-auto-start') ? { checked: document.getElementById('ctr-auto-start').checked } : null)", 5000)
+		if (box.checked) throw new Error('the switch shows on, the setting is off')
+		await ctx.js("document.getElementById('ctr-auto-start').click(); return true")
+		const stored = await ctx.js(`return localStorage.getItem('${AUTO_START_KEY}')`)
+		if (stored !== null) throw new Error(`switched on, stored ${stored}`)
+		await ctx.press('Escape')
+		return `on : into the game with no press (sound ${sound} until a touch / key) · off : the boot screen waits · Settings' switch : on (${on})`
+	})
+
+	await ctx.scenario('UNLOCK-RESTART', async () => {
+		await home(ctx, true)
+		await sleep(1500)
+		await ctx.press('Enter')
+		await waitIn(ctx.js, 'the game', '!!window.__ctr && !!window.__ctr.unlocks', 90_000)
+		const openAt = async () => (await state(ctx))?.unlocks?.open
+		const system = async () => {
+			await ctx.press('Escape')
+			await waitIn(ctx.js, 'Settings', "!!document.getElementById('ctr-settings')", 5000)
+			// the tab clicked until its panel shows (Settings mounts on the next tick)
+			await waitIn(ctx.js, 'the unlock switch', "(document.querySelector('#ctr-settings [data-tab=system]')?.click(), !!document.getElementById('ctr-unlock-all'))", 5000)
+		}
+		const confirm = () => ctx.js("const c = document.getElementById('ctr-confirm'); return c ? { text: c.querySelector('p').textContent, buttons: [...c.querySelectorAll('button')].map(b => b.textContent.trim()) } : null")
+		if (!(await openAt())) throw new Error('the game started without the unlock')
+		await system()
+		await ctx.js("document.getElementById('ctr-unlock-all').click(); return true")
+		const asked = await waitIn(ctx.js, 'the restart question', "document.getElementById('ctr-confirm') ? true : null", 3000).then(confirm)
+		if (!asked.buttons.some(b => b.startsWith('Later')) || !asked.buttons.includes('Restart now')) throw new Error(`the question : ${JSON.stringify(asked)}`)
+		await ctx.js("document.querySelector('#ctr-confirm .btn:not(.primary)').click(); return true")
+		await sleep(500)
+		const later = { stored: await ctx.js(`return localStorage.getItem('${UNLOCK_KEY}')`), box: await ctx.js("return document.getElementById('ctr-unlock-all').checked"), game: await openAt() }
+		if (later.stored !== '0' || later.box || !later.game) throw new Error(`Later : ${JSON.stringify(later)}`)
+		// changed back : nothing to restart for
+		await ctx.js("document.getElementById('ctr-unlock-all').click(); return true")
+		await sleep(500)
+		if (await confirm()) throw new Error('asked again when back to the value the game started with')
+		// off again, Restart now : into the game, unlocked no more — auto start off all along
+		await ctx.js("document.getElementById('ctr-unlock-all').click(); return true")
+		await waitIn(ctx.js, 'the restart question', "document.getElementById('ctr-confirm') ? true : null", 3000)
+		await ctx.js("document.querySelector('#ctr-confirm .btn.primary').click(); return true")
+		await sleep(1500)
+		const after = await waitIn(ctx.js, 'the game after the restart', "window.__ctr?.unlocks ? { open: window.__ctr.unlocks.open, ready: !!document.getElementById('press-start') } : null", 90_000)
+		if (after.open || after.ready) throw new Error(`after Restart now : ${JSON.stringify(after)}`)
+		await ctx.js(`localStorage.removeItem('${UNLOCK_KEY}'); localStorage.removeItem('${AUTO_START_KEY}'); return true`)
+		return `the question : « ${asked.text} » [${asked.buttons.join(' | ')}] · Later : stored off, the game still unlocked · back : not asked · Restart now : straight into the game, locked`
 	})
 
 	await ctx.scenario('SHARE-BUTTON', async () => {

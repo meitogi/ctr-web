@@ -78,6 +78,10 @@ const started = ctx => until(ctx, 'the game running', p => p.game && !p.boot && 
 export default async ctx => {
 	const first = await page(ctx)
 	if (first.preload) ctx.skip('preloaded-disc build : nothing stored, it boots by itself (use -DCTR_WEB_PRELOAD_DISC=OFF)')
+	// the ready screen is the boot screen with « Start the game by itself » off (on by default since
+	// session 42 : bare.suite.mjs AUTO-START covers it)
+	await ctx.js("localStorage.setItem('ctr-ui.auto-start', '0'); return true")
+	await ctx.reload()
 
 	await ctx.scenario('READY-STORE', async () => {
 		const p = await until(ctx, 'the boot screen', p => p.ready || (p.drop && !p.status))

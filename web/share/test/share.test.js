@@ -33,8 +33,15 @@ test('a direct guest : welcome with slot 1, the host offers its tracks, the gues
   const fromHost = controls(p.log, 'host');
   assert.deepEqual(fromHost.map((m) => [m.tag, m.reliable]), [[TAG.welcome, true], [TAG.players, true], [TAG.offer, true]]);
   assert.deepEqual(fromHost[0].body, { slot: 1, host: 'P1' });
-  assert.deepEqual(fromHost[1].body, { players: 2, list: [{ slot: 0, name: 'P1' }, { slot: 1, name: 'P2' }] });
+  assert.deepEqual(fromHost[1].body, { players: 2, list: [{ slot: 0, name: 'P1' }, { slot: 1, name: 'P2' }], racing: false });
   assert.equal(guest.players, 2);
+  assert.equal(guest.racing, false);
+  // a race starts on the host (the game's word, ctrUI.racing) : the guests are told, once
+  host.setRacing(true);
+  host.setRacing(true);
+  await tick(5);
+  const racing = controls(p.log, 'host').filter((m) => m.tag === TAG.players && m.body.racing);
+  assert.equal(racing.length, 1);
   assert.equal(fromHost[2].body.sdp, p.host.pc.localDescription.sdp, 'the offer is the host pc\'s own');
   assert.match(fromHost[2].body.sdp, /m=video\r\nm=audio/);
 

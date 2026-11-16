@@ -162,3 +162,14 @@ test('the player\'s own mapping : web/ui guest-input.js tables drive the guest\'
   assert.equal(pickPad({ mode: 'keyboard' }, { KeyC: true }, [], mine).buttons, 0xffff, 'C is no longer Cross');
   assert.equal(pickPad({ mode: 'gamepad' }, {}, [gp('Xbox', { pressed: [1] })], mine).buttons & BTN.cross, 0);
 });
+
+test('a touch pad over the page\'s own pad : buttons ANDed, its stick while moved (mergeTouch)', async () => {
+  const { mergeTouch, PAD_ID } = await import('../protocol.js');
+  const keys = { id: PAD_ID.digital, buttons: 0xffdf, analog: [0x80, 0x80, 0x80, 0x80] };
+  const still = { id: PAD_ID.analog, buttons: 0xbfff, analog: [0x80, 0x80, 0x80, 0x80] };
+  assert.deepEqual(mergeTouch(still, keys), { id: PAD_ID.analog, buttons: 0xbfff & 0xffdf, analog: [0x80, 0x80, 0x80, 0x80] });
+  const pad = { id: PAD_ID.analog, buttons: 0xffff, analog: [0x10, 0x20, 0x30, 0x40] };
+  assert.deepEqual(mergeTouch(still, pad).analog, [0x10, 0x20, 0x30, 0x40], 'the touch stick at rest : the pad\'s');
+  const moved = { ...still, analog: [0x80, 0x80, 0x01, 0x90] };
+  assert.deepEqual(mergeTouch(moved, pad).analog, [0x10, 0x20, 0x01, 0x90], 'moved : the touch stick');
+});

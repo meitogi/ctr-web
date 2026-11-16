@@ -623,3 +623,50 @@ export async function tap(ctx, x, y) {
 	await sleep(80)
 	await send('touchEnd', [])
 }
+
+/** An iPhone mini in landscape (the user's : 812 × 375 CSS px, DPR 3, Safari's user agent). */
+export const IPHONE_MINI = { width: 812, height: 375, deviceScaleFactor: 3, mobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1' }
+
+/**
+ * Several fingers on the touch screen at once (CDP Input.dispatchTouchEvent : every event carries
+ * all the fingers still down ; one missing from the last event is lifted). down / move / up by a
+ * finger's id ; `on(id, control)` puts it on the centre of a touch control of the page
+ * (#ctr-touch [data-id=…], TouchPad.svelte), `off(id)` lifts it, `all()` lifts every finger.
+ */
+export function fingers(ctx) {
+	const points = {}
+	const send = (type) => {
+		const touchPoints = []
+		for (const id in points) touchPoints.push({ x: points[id].x, y: points[id].y, id: Number(id), radiusX: 8, radiusY: 8, force: 1 })
+		return ctx.conn.send('Input.dispatchTouchEvent', { type, touchPoints }, ctx.sid)
+	}
+	const self = {
+		points,
+		async down(id, x, y) { points[id] = { x, y }; await send('touchStart') },
+		async move(id, x, y) { points[id] = { x, y }; await send('touchMove') },
+		async up(id) {
+			if (!points[id]) return
+			delete points[id]
+			await send(Object.keys(points).length ? 'touchMove' : 'touchEnd')
+		},
+		async all() {
+			if (!Object.keys(points).length) return
+			for (const id in points) delete points[id]
+			await send('touchEnd')
+		},
+		/** a touch control's box (CSS px), or null when it is not drawn */
+		rect: (control) => ctx.js(`const e = document.querySelector('#ctr-touch [data-id="${control}"]'); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, cx: r.x + r.width / 2, cy: r.y + r.height / 2 }`),
+		async on(id, control, { dx = 0, dy = 0 } = {}) {
+			const r = await self.rect(control)
+			if (!r) throw new Error(`no touch control « ${control} » on the screen`)
+			if (points[id]) await self.move(id, r.cx + dx, r.cy + dy)
+			else await self.down(id, r.cx + dx, r.cy + dy)
+			return r
+		},
+		off: (id) => self.up(id),
+	}
+	return self
+}
+
+/** The touch controls as drawn : { kind, hold, ids } or null (TouchPad.svelte). */
+export const touchState = ctx => ctx.js("const t = document.getElementById('ctr-touch'); return t ? { kind: t.dataset.kind, hold: t.dataset.hold, ids: [...t.querySelectorAll('[data-id]')].map(e => e.dataset.id), on: [...t.querySelectorAll('.on')].map(e => e.dataset.id) } : null")

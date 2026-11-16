@@ -319,6 +319,9 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('UX-SOUND', async () => {
+		// no level of a run before (a Share guest's page shares this origin's storage and leaves its
+		// inaudible 0.001) : the volume set below must be a change, or the forced mute stays
+		await ctx.js("localStorage.removeItem('ctr-ui.volume'); localStorage.removeItem('ctr-ui.muted'); return true")
 		await startAt(ctx, 'menu')
 		// The test browser plays on the host's speakers : every level here is inaudible (0.001).
 		const level = () => ctx.js('return window.ctrAudio?.level ?? null')

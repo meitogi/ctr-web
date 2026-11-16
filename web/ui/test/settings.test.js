@@ -4,17 +4,19 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { DEFAULT_GAMEPAD, DEFAULT_KEYBOARD, DEFAULT_KEYBOARD_LEFT, DEFAULT_KEYBOARD_RIGHT, bind } from '../src/lib/mappings.js'
 import { NAMES } from '../src/lib/names.js'
-import { DEFAULT_DEVICE, DEFAULT_VOLUME, GUEST_DEVICE_KEY, KEYS, NAME_LEN, cleanName, createSettings } from '../src/lib/settings.js'
+import { DEFAULT_DEVICE, DEFAULT_VOLUME, GUEST_DEVICE_KEY, KEYS, NAME_LEN, TOUCH_HOLD_MS, cleanName, createSettings } from '../src/lib/settings.js'
 
 const memory = (init = {}) => {
   const m = new Map(Object.entries(init))
   return { map: m, getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }
 }
 
+const TOUCH_DEFAULTS = { autoStart: true, touchMode: 'auto', touchLayout: 'a', touchHold: true, touchHoldMs: 800, touchSize: 'm' }
+
 test('defaults on an empty storage : a random name, drawn once and stored', () => {
   const storage = memory()
   const s = createSettings(storage, { random: () => 0 }).get()
-  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, unlockAll: true, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE })
+  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, unlockAll: true, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE, ...TOUCH_DEFAULTS })
   assert.equal(storage.map.get(KEYS.name), NAMES[0]) // Online reads this key
   assert.equal(createSettings(storage, { random: () => 0.99 }).get().name, NAMES[0]) // not drawn again
 })
@@ -52,9 +54,10 @@ test('round trip : every field survives a reload of the page', () => {
   const a = createSettings(storage)
   const keyboard = bind(DEFAULT_KEYBOARD, 'cross', 22)
   const keyboardRight = bind(DEFAULT_KEYBOARD_RIGHT, 'start', 42)
-  a.patch({ name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, duo: true, keyboardRight })
+  const touch = { autoStart: false, touchMode: 'minimal', touchLayout: 'c', touchHold: false, touchHoldMs: 1200, touchSize: 'l' }
+  a.patch({ name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, duo: true, keyboardRight, ...touch })
   const b = createSettings(storage).get()
-  assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE })
+  assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE, ...touch })
   assert.equal(storage.map.has(KEYS.keyboardLeft), false)
   assert.equal(storage.map.has(KEYS.gamepad), false) // defaults are not written
 })
@@ -78,4 +81,15 @@ test('a storage that throws (private mode) : defaults, and setting still works i
   assert.equal(s.get().volume, DEFAULT_VOLUME)
   s.patch({ volume: 0.1 })
   assert.equal(s.get().volume, 0.1)
+})
+
+test('start by itself and the touch controls : on / auto by default, defaults not written, nonsense cleaned', () => {
+  const storage = memory()
+  const a = createSettings(storage, { random: () => 0 })
+  assert.deepEqual(TOUCH_DEFAULTS, { autoStart: true, touchMode: 'auto', touchLayout: 'a', touchHold: true, touchHoldMs: TOUCH_HOLD_MS.default, touchSize: 'm' })
+  for (const k of ['autoStart', 'touchMode', 'touchLayout', 'touchHold', 'touchHoldMs', 'touchSize']) assert.equal(storage.map.has(KEYS[k]), false, k)
+  a.patch({ touchMode: 'nonsense', touchLayout: 'z', touchHoldMs: 99999, touchSize: 'xl' })
+  assert.deepEqual([a.get().touchMode, a.get().touchLayout, a.get().touchHoldMs, a.get().touchSize], ['auto', 'a', TOUCH_HOLD_MS.default, 'm'])
+  storage.map.set(KEYS.touchHoldMs, '450')
+  assert.equal(createSettings(storage).get().touchHoldMs, 450)
 })

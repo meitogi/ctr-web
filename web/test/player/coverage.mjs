@@ -11,14 +11,14 @@
 //   render  the picture : the renderer, the split screen
 //   unlock  the home page's « Unlock everything » box and what the menus open with it
 //   card    the memory card : what the game saves and reads back
-//   input   keyboards, pads, mappings, the players' seats
+//   input   keyboards, pads, mappings, the players' seats, the touch controls
 //   audio   the sound
 //   page    the page around the game : boot screen, Settings, toasts, the Share button
 //   share   Share : the room, the guests, the relay
 //   harness the tests' own tools (the fast and precise starts, the snapshots, saves, replays, ctr.mjs)
 
 /** The suites a level can run, in the order they run. */
-export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio', 'bot']
+export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio', 'bot', 'touch']
 
 /** The tag level : one scenario per area, ~5 min. */
 export const SMOKE = [
@@ -57,7 +57,7 @@ export const PATHS = [
 	// the page
 	[/^web\/audio\//, ['audio']],
 	[/^web\/(share|net)\/|^relay\//, ['share']],
-	[/^web\/ui\/src\/lib\/(keys|binding|mappings|pads|pad-events|input-hook|players|guest-input|autopilot)\.js$|^web\/ui\/src\/(Controls|Players|WhoPlays)\.svelte$/, ['input', 'page']],
+	[/^web\/ui\/src\/lib\/(keys|binding|mappings|pads|pad-events|input-hook|players|guest-input|autopilot)\.js$|^web\/ui\/src\/lib\/touch\/|^web\/ui\/src\/(Controls|Players|WhoPlays|TouchPad|TouchSettings)\.svelte$/, ['input', 'page']],
 	[/^web\/ui\/src\/ShareButton\.svelte$/, ['share', 'page']],
 	[/^web\/ui\//, ['page']],
 	[/^web\/(index\.html|disc\.js)$/, ['page', 'boot']],

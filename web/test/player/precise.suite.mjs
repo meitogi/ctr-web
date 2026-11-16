@@ -325,6 +325,8 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('FAULT-STORAGE', async () => {
+		// the boot screen is where a disc is offered : « Start the game by itself » off for it
+		await ctx.js("localStorage.setItem('ctr-ui.auto-start', '0'); return true")
 		await ctx.conn.send('Page.navigate', { url: `${await ctx.js('return location.origin + location.pathname')}?fault=storage-full` }, ctx.sid)
 		await sleep(500)
 		const end = Date.now() + 20_000
