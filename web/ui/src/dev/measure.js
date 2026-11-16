@@ -260,14 +260,17 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
       report.audio.first = { t: now(), state: ctx.state, sinceStart: state.startTap ? now() - state.startTap : null }
       ctx.addEventListener('statechange', () => report.audio.changes.push({ t: now(), state: ctx.state, visible: document.visibilityState }))
     }
+    // the disc stored : the page goes on to 'starting' (a direct start) or 'ready', or back to the
+    // boot screen on an error — the first second out of 'preparing' times it
+    if (state.discFrom && ui.phase !== 'preparing' && report.disc?.storedInS == null) {
+      report.disc.storedInS = Math.round((now() - state.discFrom) / 100) / 10
+      report.disc.error = ui.error || null
+      storage().then((s) => { report.storage.afterDisc = s })
+    }
     // the boot screen's own Play (or a key) started the game : measured all the same
     if (state.step === 'disc' && (ui.phase === 'starting' || ui.phase === 'running')) onStart({ started: true })
     if (state.step === 'disc') {
       if (ui.phase === 'preparing' && !state.discFrom) { state.discFrom = now(); report.disc = { ...(report.disc ?? {}), picker: report.disc?.picker ?? 'boot screen', bytes: ui.progress?.total ?? null } }
-      if (state.discFrom && ui.phase === 'ready' && !report.disc.storedInS) {
-        report.disc.storedInS = Math.round((now() - state.discFrom) / 100) / 10
-        storage().then((s) => { report.storage.afterDisc = s })
-      }
       if (ui.phase === 'ready' && !report.disc) report.disc = { alreadyStored: true, bytes: ui.disc?.size ?? null }
     }
     if (state.step === 'loading' && c?.kart && (c.screen === 'race' || c.screen === 'countdown')) {
