@@ -15,10 +15,10 @@
 //   audio   the sound
 //   page    the page around the game : boot screen, Settings, toasts, the Share button
 //   share   Share : the room, the guests, the relay
-//   harness the tests' own tools (the fast start, the snapshots, ctr.mjs)
+//   harness the tests' own tools (the fast and precise starts, the snapshots, saves, replays, ctr.mjs)
 
 /** The suites a level can run, in the order they run. */
-export const SUITES = ['fast', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio']
+export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio']
 
 /** The tag level : one scenario per area, ~5 min. */
 export const SMOKE = [
@@ -39,7 +39,7 @@ export const PATHS = [
 	// words only (and no `node --test` either)
 	[WORDS, []],
 	// the tests' tools
-	[/^web\/test\/player\/(ctr|coverage|select)\.mjs$|^web\/test\/player\/serve\.py$|^web\/ui\/src\/dev\/|^platform\/web_debug_bridge\.c$/, ['harness']],
+	[/^web\/test\/player\/(ctr|coverage|select|memcard|saves)\.mjs$|^web\/test\/player\/serve\.py$|^web\/ui\/src\/dev\/|^platform\/web_debug_bridge\.c$/, ['harness']],
 	[/^web\/test\/player\/audio-meter\.mjs$/, ['audio']],
 	[/^web\/test\//, []],
 	[/^web\/(ui|net|share)\/test\//, []],

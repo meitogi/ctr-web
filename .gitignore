@@ -44,3 +44,6 @@ __pycache__/
 *~
 # The tests' snapshots (web/test/player/serve.py, /__states) : the game's memory, never committed.
 /web/test/player/.states/
+# The tests' memory cards and recorded races (session 45b) : the game's icon frames, its memory.
+/web/test/player/.saves/
+/web/test/player/.replays/

@@ -4,7 +4,8 @@
 // Game state comes from window.__ctr (platform/web_debug_bridge.c, debug web
 // builds only), never from pixels.
 
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as autopilot from '../../ui/src/lib/autopilot.js'
@@ -319,4 +320,306 @@ export async function startAt(ctx, point, { turbo: keep = false } = {}) {
 	const s = await until(ctx, name, ready, { timeout: 30_000, every: 100 })
 	await ctx.js("document.getElementById('canvas')?.focus(); return true")
 	return { from, ms: Date.now() - t0, state: s }
+}
+
+// ---- the precise start (web/ui/src/dev/precise.js, dev/presets.js, debug builds) ----
+// What a test sets before it begins, beside a snapshot : a seed (?seed=), a recorded race
+// (recordRace / playRace), a memory card (makeSave, importSave, ?card=), the settings (?preset=), the
+// players (players), the frames (ctrDev.pause / step), faults (?fault=, ctrDev.fault) and a phone
+// (phone, tap). Saves and replays hold pieces of the game (icon frames, a checkpoint) : kept beside
+// this file in .saves/ and .replays/, gitignored, served by serve.py, refused by web/pages/guard.sh.
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+/** web/test/player/.saves/<name>/ : one folder per memory card, its save files as the game wrote them. */
+export const SAVES_DIR = join(HERE, '.saves')
+/** web/test/player/.replays/<name>/ : one folder per recorded race (upstream's replay files). */
+export const REPLAYS_DIR = join(HERE, '.replays')
+
+let awaited = 0
+/**
+ * Runs `expr` (a promise in the page, ctrDev's) to its end : one evaluation may last 15 s at most
+ * (the harness), a recording or a replay minutes — started, then polled, a line every 10 s.
+ */
+export async function inPage(ctx, expr, { label = expr, timeout = 120_000 } = {}) {
+	const key = `__ctrAwait${++awaited}`
+	await ctx.js(`globalThis.${key} = { done: false }; Promise.resolve().then(() => ${expr}).then((value) => { globalThis.${key} = { done: true, value } }, (e) => { globalThis.${key} = { done: true, error: String(e?.message ?? e) } }); return true`)
+	const t0 = Date.now()
+	let beat = t0 + HEARTBEAT_MS
+	for (;;) {
+		const r = await ctx.js(`return globalThis.${key}`)
+		if (r?.done) {
+			await ctx.js(`delete globalThis.${key}; return true`)
+			if (r.error) throw new Error(`${label} : ${r.error}`)
+			return r.value
+		}
+		if (Date.now() - t0 > timeout) throw new Error(`${label} : not done after ${timeout / 1000} s`)
+		if (Date.now() >= beat) {
+			say(`still waiting for ${label} (${Math.round((Date.now() - t0) / 1000)} s) : ${brief(await state(ctx))}`)
+			beat += HEARTBEAT_MS
+		}
+		await sleep(250)
+	}
+}
+
+/** A Uint8Array the page holds (`expr`, `size` bytes) pulled in pieces (one 4 MB answer once dropped the connection). */
+async function pullBytes(ctx, expr, size) {
+	const PIECE = 384 << 10
+	const parts = []
+	for (let at = 0; at < size; at += PIECE) {
+		const b64 = await ctx.js(`const a = (${expr}).subarray(${at}, ${at + PIECE}); let s = ''; for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s)`)
+		parts.push(Buffer.from(b64, 'base64'))
+	}
+	const bytes = Buffer.concat(parts)
+	if (bytes.length !== size) throw new Error(`${bytes.length} bytes read of ${size}`)
+	return bytes
+}
+
+/** Writes `files` ({ 'rel/path': Buffer }) into `dir`, emptied first. */
+function writeFolder(dir, files) {
+	rmSync(dir, { recursive: true, force: true })
+	mkdirSync(dir, { recursive: true })
+	for (const rel in files) {
+		mkdirSync(dirname(join(dir, rel)), { recursive: true })
+		writeFileSync(join(dir, rel), files[rel])
+	}
+}
+
+/** The query of a direct start with a seed : raceQuery's, plus &seed=. */
+export const seededQuery = r => `${raceQuery(r)}&seed=${r.seed ?? 1}`
+
+/**
+ * Records a race as replay `name` : the direct start of `race` ({ race, char, mode, players, laps,
+ * diff, seed }) in turbo, upstream's recorder from the race's first frame (after the seed), the page's
+ * Bot driving, until P1 finishes or `maxFrames`. Kept in .replays/<name>/ : the replay's files,
+ * samples.json (the karts and generators every 300 frames) and what.json. Returns what.json.
+ */
+export async function recordRace(ctx, name, race, { maxFrames = 3000, timeout = 600_000 } = {}) {
+	await open(ctx, `${seededQuery(race)}&turbo=1`)
+	await inPage(ctx, 'globalThis.ctrDev.replay.record()', { label: `the recording of ${name} to start` })
+	await ctx.js('return globalThis.ctrDev.bot(true)')
+	const t0 = Date.now()
+	let beat = t0 + HEARTBEAT_MS
+	for (;;) {
+		const at = await ctx.js('return { finished: !!window.__ctr?.kart?.finished, frame: globalThis.__ctrReplay?.frame ?? 0, lap: window.__ctr?.kart?.lap }')
+		if (at.finished || at.frame >= maxFrames) break
+		if (Date.now() > t0 + timeout) throw new Error(`recording ${name} : P1 not finished after ${timeout / 1000} s (${JSON.stringify(at)})`)
+		if (Date.now() >= beat) {
+			say(`recording ${name} : replay frame ${at.frame}, lap ${at.lap}`)
+			beat += HEARTBEAT_MS
+		}
+		await sleep(500)
+	}
+	await ctx.js('return globalThis.ctrDev.bot(false)')
+	const r = await inPage(ctx, 'globalThis.ctrDev.replay.stop()', { label: `the recording of ${name} to stop` })
+	const files = {}
+	for (const rel in r.files) files[rel] = await pullBytes(ctx, `globalThis.__ctrReplayFiles[${JSON.stringify(rel)}]`, r.files[rel])
+	const what = {
+		name, race, frames: r.frames, files: r.files, build: await ctx.js("return (await fetch('/__build')).text()"),
+		version: execSync('git describe --tags --dirty', { cwd: HERE }).toString().trim(),
+		recorded: new Date().toISOString(), seconds: Math.round((Date.now() - t0) / 1000),
+	}
+	writeFolder(join(REPLAYS_DIR, name), { ...files, 'samples.json': `${JSON.stringify(r.samples)}\n`, 'what.json': `${JSON.stringify(what, null, 2)}\n` })
+	return { ...what, samples: r.samples.length }
+}
+
+/** A replay's what.json and samples.json, as recorded. */
+export function replayKept(name) {
+	const dir = join(REPLAYS_DIR, name)
+	if (!existsSync(join(dir, 'what.json'))) throw new Error(`no replay « ${name} » in ${dir} (recordRace makes it)`)
+	return { what: JSON.parse(readFileSync(join(dir, 'what.json'), 'utf8')), samples: JSON.parse(readFileSync(join(dir, 'samples.json'), 'utf8')) }
+}
+
+/** Where two lists of samples first differ : null, or { frame, field, recorded, played }. */
+export function samplesDiffer(recorded, played) {
+	const n = Math.max(recorded.length, played.length)
+	for (let i = 0; i < n; i++) {
+		const a = recorded[i]
+		const b = played[i]
+		if (!a || !b) return { frame: (a ?? b).frame, field: a ? 'missing in the playback' : 'beyond the recording', recorded: a ?? null, played: b ?? null }
+		for (const field of ['frame', 'level', 'raceTime', 'rng', 'karts']) {
+			if (JSON.stringify(a[field]) !== JSON.stringify(b[field])) return { frame: a.frame, field, recorded: a[field], played: b[field] }
+		}
+	}
+	return null
+}
+
+/**
+ * Plays replay `name` (upstream's playback, from its first checkpoint) and compares it with the
+ * recording : upstream's per-frame check (its log's divergence lines) and the samples. rebase : the
+ * start made again on this build (the same direct start and seed, a one-frame recording for its
+ * checkpoint), the old pads played from it — a recording from another build (an upstream merge),
+ * whose checkpoint this build's memory layout cannot load. Returns { divergence, differ, frames, of }.
+ */
+export async function playRace(ctx, name, { rebase = false, timeout = 600_000 } = {}) {
+	const { what, samples } = replayKept(name)
+	let play = JSON.stringify(name)
+	await open(ctx, rebase ? `${seededQuery(what.race)}&turbo=1` : '?turbo=1')
+	const build = await ctx.js("return (await fetch('/__build')).text()")
+	if (rebase) {
+		await inPage(ctx, 'globalThis.ctrDev.replay.record()', { label: 'the start made again' })
+		await inPage(ctx, 'globalThis.ctrDev.replay.stop()', { label: 'its checkpoint' })
+		// this build's start (state.ctrstates, memcard.seed/), the recording's pads (input.ctrreplay)
+		await inPage(ctx, `globalThis.ctrDev.replay.fetch(${JSON.stringify(name)}).then((kept) => { globalThis.__ctrRebased = { ...globalThis.__ctrReplayFiles, 'input.ctrreplay': kept['input.ctrreplay'] }; return true })`, { label: 'the recording\'s pads' })
+		play = 'globalThis.__ctrRebased'
+	}
+	const r = await inPage(ctx, `globalThis.ctrDev.replay.play(${play}, { bypass: ${rebase || what.build !== build}, timeout: ${timeout} })`, { label: `the playback of ${name}`, timeout })
+	const differ = samplesDiffer(samples, r.samples)
+	return { ...r, differ, recorded: samples.length, played: r.samples.length }
+}
+
+/** The card as the game holds it (__ctr.card : its screen, version, ghosts, profiles). */
+export const card = ctx => ctx.js('return window.__ctr?.card ?? null')
+
+/** Boots for real in turbo on card `name` (?card=, 'new' : empty) to the main menu, turbo off after. */
+export async function bootOnCard(ctx, name, query = '') {
+	await open(ctx, `?turbo=1&card=${encodeURIComponent(name)}${query}`)
+	const put = await ctx.js('return globalThis.__ctrCardPut ?? null')
+	if (put?.error) throw new Error(`card ${name} : ${put.error}`)
+	const s = await bootToMenu(ctx)
+	await turbo(ctx, false)
+	return s
+}
+
+/** Pulls the card's files from the page into `dir` (/memcards/slot0, as the game wrote them). */
+async function pullCard(ctx) {
+	const sizes = await ctx.js('return globalThis.ctrDev.card.files()')
+	const files = {}
+	for (const file in sizes) files[file] = await pullBytes(ctx, `globalThis.__ctrCardFiles[${JSON.stringify(file)}]`, sizes[file])
+	return files
+}
+
+/**
+ * Makes the named card `name` (saves.mjs SAVES) by the game's own save and keeps it in
+ * .saves/<name>/ with what.json (what it holds, how it was made). `done` : the cards made already in
+ * this run (a damaged card is another one with a byte changed). Returns what.json.
+ */
+export async function makeSave(ctx, name, { SAVES }) {
+	const def = SAVES[name]
+	if (!def) throw new Error(`no card « ${name} » in saves.mjs`)
+	let files = {}
+	if (def.from) {
+		const dir = join(SAVES_DIR, def.from)
+		for (const file of readdirSync(dir).filter(f => f !== 'what.json')) files[file] = readFileSync(join(dir, file))
+		const profile = files['BASCUS-94426-SLOTS']
+		if (!profile) throw new Error(`${name} : « ${def.from} » has no profile to change`)
+		profile[def.flip] ^= 0xff
+	} else if (def.ghost) {
+		await bootOnCard(ctx, 'new')
+		await open(ctx, `${raceQuery({ ...def.ghost, mode: 'tt' })}&turbo=1`)
+		await ctx.js('globalThis.ctrDev.bot(true); return true')
+		await until(ctx, 'the end of the Time Trial', s => s.kart?.finished && s.mode?.includes('END_OF_RACE'), { timeout: 300_000, every: 500 })
+		await ctx.js('globalThis.ctrDev.bot(false); return true')
+		await inPage(ctx, 'globalThis.ctrDev.card.ghost()', { label: `${name} : the ghost save` })
+		files = await pullCard(ctx)
+	} else if (def.spec) {
+		await bootOnCard(ctx, 'new')
+		await inPage(ctx, `globalThis.ctrDev.card.write(${JSON.stringify(def.spec)})`, { label: `${name} : the game's save` })
+		files = await pullCard(ctx)
+	}
+	const what = { name, holds: def.holds, spec: def.spec ?? null, made: def.from ? `from « ${def.from} », byte 0x${def.flip.toString(16)} changed` : def.ghost ? 'a Time Trial and the game\'s ghost save' : def.spec ? "the game's profile save" : 'nothing written', files: Object.fromEntries(Object.entries(files).map(([f, b]) => [f, b.length])), at: new Date().toISOString(), version: execSync('git describe --tags --dirty', { cwd: HERE }).toString().trim() }
+	writeFolder(join(SAVES_DIR, name), { ...files, 'what.json': `${JSON.stringify(what, null, 2)}\n` })
+	return what
+}
+
+/**
+ * The user's own saves as a named card : a folder of save files as the web build keeps them (38's
+ * format, /memcards/slot0's files), or a PS1 card image / an emulator's (.mcr, .mcd : 128 KB, cut by
+ * memcard.mjs). Only CTR's saves are kept. Returns { name, files, others }.
+ */
+export async function importSave(path, name) {
+	const { splitCardImage } = await import('./memcard.mjs')
+	let files = {}
+	let others = []
+	if (statSync(path).isDirectory()) {
+		for (const file of readdirSync(path).filter(f => /^BASCUS-94426/.test(f))) files[file] = readFileSync(join(path, file))
+	} else {
+		;({ files, others } = splitCardImage(readFileSync(path)))
+	}
+	if (!Object.keys(files).length) throw new Error(`${path} : no save of CTR (BASCUS-94426…)${others.length ? `, only ${others.join(', ')}` : ''}`)
+	const what = { name, holds: `imported from ${path.split('/').pop()}`, made: 'imported', files: Object.fromEntries(Object.entries(files).map(([f, b]) => [f, b.length])), others, at: new Date().toISOString() }
+	writeFolder(join(SAVES_DIR, name), { ...Object.fromEntries(Object.entries(files).map(([f, b]) => [f, Buffer.from(b)])), 'what.json': `${JSON.stringify(what, null, 2)}\n` })
+	return { name, files: Object.keys(files), others }
+}
+
+/** A named card as a PS1 card image (.mcr / .mcd) at `path`, for an emulator. */
+export async function exportSave(name, path) {
+	const { cardImage } = await import('./memcard.mjs')
+	const dir = join(SAVES_DIR, name)
+	const files = {}
+	for (const file of readdirSync(dir).filter(f => /^BASCUS-94426/.test(f))) files[file] = new Uint8Array(readFileSync(join(dir, file)))
+	writeFileSync(path, cardImage(files))
+	return path
+}
+
+/** The card `name` of saves.mjs, made (makeSave) when it is not kept yet ; returns its what.json. */
+export async function ensureSave(ctx, name, { SAVES }) {
+	const what = join(SAVES_DIR, name, 'what.json')
+	if (existsSync(what)) return JSON.parse(readFileSync(what, 'utf8'))
+	if (SAVES[name]?.from) await ensureSave(ctx, SAVES[name].from, { SAVES })
+	say(`card ${name} : not kept yet — making it`)
+	return makeSave(ctx, name, { SAVES })
+}
+
+/** P1–P4 as the page holds them : 'pad', 'kb', 'kb2' ('kb+kb2' : both halves), '-' for nobody. */
+export const seats = ctx => ctx.js(`return (globalThis.ctrUI?.players?.slots ?? []).map(s => [s.pad ? 'pad' : '', s.keyboard ? 'kb' : '', s.keyboard2 ? 'kb2' : ''].filter(Boolean).join('+') || '-')`)
+
+/**
+ * The players of a test : `pads` virtual pads plugged in (the harness's, as real ones arrive : the
+ * first seats), then the page's swaps (Settings › Players) until the seats read `want` — e.g.
+ * ['pad', 'kb', 'pad', 'pad'] : the keyboard on P2. Returns the seats.
+ */
+export async function players(ctx, { pads = 0, want = null } = {}) {
+	for (let i = 0; i < pads; i++) {
+		await ctx.pad(i).connect()
+		await sleep(300)
+	}
+	const deadline = Date.now() + 5000
+	let now = await seats(ctx)
+	while (now.filter(s => s.includes('pad')).length < pads && Date.now() < deadline) {
+		await sleep(150)
+		now = await seats(ctx)
+	}
+	if (!want) return now
+	for (let i = 0; i < 4; i++) {
+		if (now[i] === want[i]) continue
+		const j = now.findIndex((s, k) => k > i && s === want[i])
+		if (j < 0) throw new Error(`no seat to bring ${want[i]} to P${i + 1} (seats ${now.join(' ')})`)
+		await ctx.js(`globalThis.ctrUI.players.swap(${i}, ${j}); return true`)
+		const end = Date.now() + 5000
+		const before = now.join()
+		while ((now = await seats(ctx)).join() === before && Date.now() < end) await sleep(150)
+	}
+	if (now.join() !== want.join()) throw new Error(`seats ${now.join(' ')}, not ${want.join(' ')}`)
+	return now
+}
+
+/** A phone : the viewport (CSS px), its pixel ratio, a mobile browser's user agent, touch. */
+export const PHONE = { width: 844, height: 390, deviceScaleFactor: 3, mobile: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' }
+
+/**
+ * The page seen as on a phone (Emulation : its viewport, a mobile user agent, touch events), until
+ * `phone(ctx, null)`. Landscape by default (the game's way) ; { portrait: true } turns it.
+ */
+export async function phone(ctx, opts = {}) {
+	const send = (m, p) => ctx.conn.send(m, p, ctx.sid)
+	if (opts === null) {
+		await send('Emulation.clearDeviceMetricsOverride', {})
+		await send('Emulation.setTouchEmulationEnabled', { enabled: false })
+		await send('Emulation.setUserAgentOverride', { userAgent: '' })
+		return null
+	}
+	const p = { ...PHONE, ...opts }
+	const [width, height] = p.portrait ? [p.height, p.width] : [p.width, p.height]
+	await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: p.deviceScaleFactor, mobile: p.mobile, screenOrientation: p.portrait ? { type: 'portraitPrimary', angle: 0 } : { type: 'landscapePrimary', angle: 90 } })
+	await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
+	await send('Emulation.setUserAgentOverride', { userAgent: p.userAgent, platform: 'Android' })
+	return { width, height }
+}
+
+/** A finger's tap at (x, y) CSS px (touchstart, then touchend 80 ms later). */
+export async function tap(ctx, x, y) {
+	const send = (type, touchPoints) => ctx.conn.send('Input.dispatchTouchEvent', { type, touchPoints }, ctx.sid)
+	await send('touchStart', [{ x, y, id: 1, radiusX: 8, radiusY: 8, force: 1 }])
+	await sleep(80)
+	await send('touchEnd', [])
 }

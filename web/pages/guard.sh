@@ -44,9 +44,15 @@ while IFS= read -r -d '' f; do
     *.data) fail "a .data file (preloaded disc)" "$f" ;;
     *.bin | *.iso | *.cue | *.img) fail "a disc image extension" "$f" ;;
     *.ctrstate | *.ctrstates) fail "a snapshot of the game (its memory)" "$f" ;;
+    *.ctrreplay | memcard.seed | memcard.recording | memcard.playback) fail "a recorded race (upstream's replay files)" "$f" ;;
+    bascus-94426*) fail "a memory card save of the game (its icon frames)" "$f" ;;
+    *.mcr | *.mcd | *.mc | *.mcs | *.gme | *.psv | *.psx | *.srm | *.vmp | *.vm1 | *.ddf) fail "a memory card image" "$f" ;;
   esac
   case "/${f#"$site"}" in
     */.states/* | */__states/*) fail "a snapshot folder (the tests' game states)" "$f" ;;
+    */.saves/* | */__saves/*) fail "a memory card folder (the tests' saves)" "$f" ;;
+    */.replays/* | */__replays/*) fail "a replay folder (the tests' recorded races)" "$f" ;;
+    */memcard.seed/* | */memcard.recording/* | */memcard.playback/*) fail "a replay's memory card" "$f" ;;
   esac
 
   size=$(stat -c%s "$f")

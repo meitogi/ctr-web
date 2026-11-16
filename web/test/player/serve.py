@@ -18,10 +18,15 @@ Default port 8093, bound to 127.0.0.1 like web/serve.sh.
 web/test/player/.states/ (gitignored), where the harness writes them (ctr.mjs saveState, the bytes
 pulled over the devtools connection). A snapshot holds the game's memory, pieces of the disc : local
 only, never committed, never in a site (web/pages/guard.sh refuses them).
+/__saves/<name>/index.json, /__saves/<name>/<file> : the tests' memory cards (web/ui/src/dev/precise.js
+?card=), from web/test/player/.saves/<name>/ ; /__replays/<name>/… : the tests' recorded races
+(ctrDev.replay.play), from web/test/player/.replays/<name>/ — index.json lists a folder's files.
+Both hold pieces of the game too (a save's icon frames, a replay's checkpoint) : local only, the same.
 """
 import functools
 import hashlib
 import http.server
+import json
 import os
 import re
 import sys
@@ -30,6 +35,9 @@ import urllib.parse
 STATES = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".states")
 BUILD = {}
 STATE_PATH = re.compile(r"^/__states/([0-9a-f]{16})/([A-Za-z0-9._:+-]{1,80})\.(ctrstate|json)$")
+HERE = os.path.dirname(os.path.abspath(__file__))
+# /__saves/<name>/<file> and /__replays/<name>/<file, maybe in a folder>
+KEPT_PATH = re.compile(r"^/__(saves|replays)/([A-Za-z0-9._+-]{1,80})/([A-Za-z0-9._+/-]{1,120})$")
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -71,9 +79,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return None
         return os.path.join(STATES, m.group(1), f"{m.group(2)}.{m.group(3)}")
 
+    def kept_file(self):
+        """A save's or a replay's file, or its folder's index.json ; (path, None) or (None, json)."""
+        m = KEPT_PATH.match(urllib.parse.unquote(self.path.split("?")[0]))
+        if not m or ".." in m.group(2) or ".." in m.group(3):
+            return None, None
+        folder = os.path.join(HERE, f".{m.group(1)}", m.group(2))
+        if m.group(3) == "index.json" and os.path.isdir(folder):
+            files = sorted(os.path.relpath(os.path.join(d, f), folder) for d, _, fs in os.walk(folder) for f in fs)
+            return None, json.dumps({"files": [f for f in files if f != "what.json"]})
+        return os.path.join(folder, m.group(3)), None
+
     def do_GET(self):
         if self.path.split("?")[0] == "/__build":
             return self.send_body(self.build_id().encode(), "text/plain")
+        if self.path.startswith(("/__saves/", "/__replays/")):
+            f, index = self.kept_file()
+            if index is not None:
+                return self.send_body(index.encode(), "application/json")
+            if not f or not os.path.isfile(f):
+                return self.send_error(404)
+            with open(f, "rb") as fh:
+                return self.send_body(fh.read(), "application/octet-stream")
         if not self.path.startswith("/__states/"):
             return None if self.revalidated() else super().do_GET()
         f = self.state_file()

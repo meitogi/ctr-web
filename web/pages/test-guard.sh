@@ -82,5 +82,26 @@ mkdir -p "$bad/.states/0123456789abcdef"
 printf '{}' >"$bad/.states/0123456789abcdef/menu.json"
 check "a snapshot folder (.states/, its metadata)" "$bad" fail
 
+# session 45b : saves, card images and recorded races
+refused() { # <name> <relative path> <description>
+  bad="$tmp/$1"
+  cp -r "$clean/." "$bad/"
+  mkdir -p "$(dirname "$bad/$2")"
+  printf 'fake' >"$bad/$2"
+  check "$3" "$bad" fail
+}
+refused replay input.ctrreplay "a recorded race (.ctrreplay)"
+refused replay-seed debug/memcard.seed "a replay's card seed"
+refused replay-card memcard.seed/slot0/BASCUS-94426-SLOTS "a replay's card folder (memcard.seed/)"
+refused replays-folder .replays/cc/samples.json "a replay folder (.replays/, its samples)"
+refused replays-served __replays/cc/what.json "the replays' served path (__replays/)"
+refused profile BASCUS-94426-SLOTS "the game's profile save"
+refused ghost bascus-94426gAAAAAA "a ghost save (lowercase)"
+refused mcr card.mcr "a memory card image (.mcr)"
+refused mcd card.MCD "a memory card image (.MCD)"
+refused gme card.gme "a memory card image (.gme)"
+refused saves-folder .saves/full-100/what.json "a save folder (.saves/, its notes)"
+refused saves-served __saves/new/index.json "the saves' served path (__saves/)"
+
 echo "test-guard.sh: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

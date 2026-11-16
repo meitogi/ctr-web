@@ -11,7 +11,8 @@
 //           `node --test` in web/ runs first.
 //   tag     the smoke (coverage.mjs SMOKE) : boot, a race, the page, the unlock, Share.
 //   full    every scenario of every suite in coverage.mjs SUITES : a release, an upstream merge.
-//   setup   the snapshots the suites start from (setup.suite.mjs), made once per build.
+//   setup   the snapshots the suites start from (setup.suite.mjs), made once per build ; the named
+//           memory cards and the recorded races (session 45b), made once.
 //
 // Prints one line per suite, `<suite>: A,B,…`. --run runs each through $CTR_PLAY, a command
 // template where {suite} is the suite's name and the scenarios are appended as `--only A,B`, e.g.
@@ -165,7 +166,7 @@ async function main(argv) {
 	const run = args.includes('--run')
 	let p
 	if (level === 'setup') {
-		p = { suites: { setup: ['SETUP'] }, why: ['setup : the snapshots'], unit: false }
+		p = { suites: { setup: ['SETUP', 'SAVES', 'RECORDINGS'] }, why: ['setup : the snapshots, the saves, the recordings'], unit: false }
 	} else {
 		const since = flag('since') ?? git('describe', '--tags', '--abbrev=0')
 		const suites = await loadSuites()
