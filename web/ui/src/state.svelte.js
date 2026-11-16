@@ -43,4 +43,6 @@ export const ui = $state({
   // window's progress line ({ mode, text, error })
   bot: false,
   second: null,
+  // a phone's Home Screen (lib/install.js) : { ios, touch, standalone, canPrompt, persisted, kept }
+  install: null,
 })

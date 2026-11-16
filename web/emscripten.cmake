@@ -94,6 +94,19 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/web/disc.js" "${CMAKE_BINARY_DIR}/disc.js"
     DEPENDS "${CMAKE_SOURCE_DIR}/web/disc.js"
 )
+# Installing the page on a phone's Home Screen (session 41) : the web app manifest and its icons
+file(GLOB CTR_WEB_INSTALL_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/web/manifest.webmanifest" "${CMAKE_SOURCE_DIR}/web/icons/*.png" "${CMAKE_SOURCE_DIR}/web/icons/*.svg")
+set(CTR_WEB_INSTALL_OUTPUTS)
+foreach(src IN LISTS CTR_WEB_INSTALL_FILES)
+    file(RELATIVE_PATH rel "${CMAKE_SOURCE_DIR}/web" "${src}")
+    add_custom_command(
+        OUTPUT "${CMAKE_BINARY_DIR}/${rel}"
+        COMMAND ${CMAKE_COMMAND} -E copy "${src}" "${CMAKE_BINARY_DIR}/${rel}"
+        DEPENDS "${src}"
+    )
+    list(APPEND CTR_WEB_INSTALL_OUTPUTS "${CMAKE_BINARY_DIR}/${rel}")
+endforeach()
+add_custom_target(ctr_web_install_files ALL DEPENDS ${CTR_WEB_INSTALL_OUTPUTS})
 # The interface (web/ui : Svelte 5 + Vite, see its package.json) : boot screen, disc drop, Settings,
 # toasts. Built into ui/ next to index.html (ui.js, ui.css, the font's licence) with the node / npm
 # on PATH (emsdk_env.sh puts emsdk's node there). npm ci runs when package-lock.json changes ;

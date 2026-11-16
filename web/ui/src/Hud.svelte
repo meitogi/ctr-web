@@ -60,7 +60,7 @@
 </div>
 
 <style>
-  .hud { position: fixed; top: 14px; right: calc(var(--sidebar) + 14px); z-index: 30; display: flex; gap: 10px; opacity: 0.12; transition: opacity 400ms, right 220ms ease; }
+  .hud { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: calc(var(--sidebar) + 14px + env(safe-area-inset-right)); z-index: 30; display: flex; gap: 10px; opacity: 0.12; transition: opacity 400ms, right 220ms ease; }
   .hud.awake, .hud:hover, .hud:focus-within { opacity: 1; transition: opacity 120ms, right 220ms ease; }
   .speaker { position: relative; }
   .hbtn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(20, 22, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(12px); }

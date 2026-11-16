@@ -6,6 +6,8 @@
   // With a stored disc (phase 'ready'), #press-start : the disc, and the real button that starts
   // the game — the connected pad's Cross in its family's look, the keyboard's Start key.
   // #boot-version : the build's version (preload-flag.js), bottom right as on the game's title.
+  // #install-hint (session 41, a touch screen not opened from its Home Screen) : Chromium's install
+  // button, or iOS's Share › Add to Home Screen ; #disc-kept : what the browser promised for the disc.
   import Glyph from './Glyph.svelte'
   import Logo from './Logo.svelte'
   import { codeOf } from './lib/keys.js'
@@ -14,7 +16,7 @@
   import { ui } from './state.svelte.js'
   import { live, settings } from './store.js'
 
-  let { handleFile, startGame, layout = null } = $props()
+  let { handleFile, startGame, layout = null, promptInstall = async () => false } = $props()
   let input = $state()
 
   const mb = (n) => Math.round(n / (1024 * 1024))
@@ -47,7 +49,7 @@
           <circle cx="32" cy="32" r="27" /><circle cx="32" cy="32" r="7" /><path d="M32 13a19 19 0 0 1 19 19" stroke-linecap="round" opacity=".6" />
         </svg>
         <div class="disp big">{T.readyTitle}</div>
-        <div class="dim">{T.found(ui.disc?.serial?.replace('_', '-').replace('.', ''))} · {T.readyKept}</div>
+        <div id="disc-kept" class="dim">{T.found(ui.disc?.serial?.replace('_', '-').replace('.', ''))} · {ui.install?.kept === 'device' ? T.keptDevice : ui.install?.kept === 'may-go' ? T.keptMayGo : T.readyKept}</div>
         <p class="press" aria-live="polite">
           {T.pressTo}
           {#if ui.pads.length}<Glyph kind="pad" value={padCross} family={ui.pads[0].family} size={34} /> {T.or}{/if}
@@ -80,6 +82,16 @@
       </label>
     {/if}
 
+    {#if ui.install?.touch && !ui.install.standalone && !ui.progress && (ui.install.canPrompt || ui.install.ios)}
+      <p id="install-hint" class="dim small install">
+        {#if ui.install.ios}
+          {T.installIos}
+        {:else}
+          <button id="install-app" type="button" class="link" onclick={promptInstall}>{T.installApp}</button> {T.installWhy}
+        {/if}
+      </p>
+    {/if}
+
     <p id="boot-status" class="dim small" aria-live="polite">{ui.status}</p>
     <div id="drop-error" class="error" role="alert" hidden={!ui.error}>{ui.error}</div>
   </div>
@@ -89,6 +101,8 @@
 <style>
   .screen {
     position: fixed; inset: 0; display: grid; place-items: center; overflow: auto; z-index: 10;
+    /* a phone's notch and home bar (index.html : viewport-fit=cover ; 0 on a desktop) */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     background: radial-gradient(900px 600px at 30% 15%, #1b2a55, transparent), radial-gradient(800px 600px at 85% 95%, #3a1a4a, transparent), var(--bg);
   }
   .glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(600px 300px at 50% 30%, rgba(255, 178, 30, 0.08), transparent); }
@@ -103,6 +117,7 @@
   .press { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 22px 0 4px; font-size: 18px; animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.55; } }
   .other { margin: 16px 0 0; }
+  .install { margin: 12px auto 0; max-width: 440px; text-align: center; }
   .unlock { display: flex; align-items: center; gap: 12px; margin-top: 18px; text-align: left; cursor: pointer; }
   .unlock input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; cursor: pointer; }
   .unlock small { display: block; color: var(--ink-dim); font-size: 12px; }
@@ -131,5 +146,5 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .error { margin-top: 10px; width: 100%; box-sizing: border-box; text-align: left; padding: 14px 18px; border-radius: 16px; background: rgba(255, 80, 80, 0.12); border: 1px solid rgba(255, 107, 107, 0.5); white-space: pre-wrap; }
   #boot-status { min-height: 1.4em; margin: 12px 0 0; }
-  .version { position: fixed; right: 16px; bottom: 12px; margin: 0; pointer-events: none; }
+  .version { position: fixed; right: calc(16px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); margin: 0; pointer-events: none; }
 </style>

@@ -19,6 +19,7 @@ import { findCachedDisc, forgetDisc, probeDisc, storeDiscStream } from '../../di
 import { resolveDisc } from './lib/discsource.js'
 import { guestInput } from './lib/guest-input.js'
 import { createInputHook } from './lib/input-hook.js'
+import { installSupport } from './lib/install.js'
 import { createPlayers } from './lib/players.js'
 import { LANG, T, errorText } from './lib/strings.js'
 import { ui } from './state.svelte.js'
@@ -51,6 +52,9 @@ const players = createPlayers({
 })
 const input = createInputHook(settings, { blocked: () => ui.phase === 'running' && (ui.listening !== null || ui.confirm !== null || (ui.settingsOpen && inPanel() && !ui.bot)) }, { players })
 if (Module) Module.ctrInput = input
+
+// ---- a phone's Home Screen (lib/install.js) : the install hint, what is kept, the screen kept awake ----
+const install = installSupport(ui)
 
 // ---- boot ----
 function bootGame(serial) {
@@ -97,6 +101,7 @@ async function storeAndBoot(found, { reload }) {
     return
   }
   ui.disc = { serial: probe.serial, size: stored.size }
+  install.keep()
   if (reload) {
     location.reload()
     return
@@ -191,7 +196,7 @@ globalThis.__ctrTestHandleFileFromUrl = async (url) => {
 // is read and the game boots
 const devReady = __CTR_DEV__ ? import('./dev/index.js').then((dev) => dev.install({ toast, start: startGame, handleFile })).catch((e) => console.error('[CTR Dev]', e)) : null
 
-mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame } })
+mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame, promptInstall: install.promptInstall } })
 
 ;(async () => {
   if (__CTR_DEV__) await devReady
@@ -227,6 +232,7 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   // the boot screen stays : the game starts on the player's press (Boot.svelte, App.svelte), which
   // also lets the page's audio start with sound
   ui.disc = { serial: probe.serial, size: cached.size }
+  install.keep()
   globalThis.__ctrDisc = cached
   ui.phase = 'ready'
   ui.status = ''

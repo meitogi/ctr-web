@@ -17,8 +17,8 @@ build=${1:?usage: assemble.sh <build-dir> <site-dir>}
 site=${2:?usage: assemble.sh <build-dir> <site-dir>}
 
 # Every build (web/emscripten.cmake, web/share/share.cmake, web/audio/audio.cmake).
-COMMON_FILES=(index.html disc.js preload-flag.js ctr_native.js ctr_native.wasm)
-COMMON_DIRS=(ui share net audio)
+COMMON_FILES=(index.html disc.js preload-flag.js ctr_native.js ctr_native.wasm manifest.webmanifest)
+COMMON_DIRS=(ui share net audio icons)
 
 copy_build() {
   local src=$1 dst=$2

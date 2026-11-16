@@ -2,12 +2,24 @@
 <html lang="en" data-page="share-guest">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CTR Native Web — Couch guest</title>
+<!-- a guest installs too (session 41) : no start_url in its manifest, so the Home Screen keeps this
+     room's link -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CTR guest">
+<meta name="theme-color" content="#000000">
 <!-- the site's interface (web/ui : src/guest.js, built into ui/ beside share/) -->
 <link rel="stylesheet" href="../ui/ui.css">
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  html, body { overscroll-behavior: none; touch-action: manipulation; }
+  #video { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   /* the host's game, beside Settings when it is open (--sidebar, ui.css) */
   #video { position: fixed; top: 0; left: 0; width: calc(100% - var(--sidebar, 0px)); height: 100%; object-fit: contain; background: #000; transition: width 220ms ease; }
   /* without the interface (ui/ not built) : one line of text */

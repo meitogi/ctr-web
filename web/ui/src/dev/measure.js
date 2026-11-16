@@ -235,10 +235,11 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     render()
   }
 
-  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() } }, null, 1)
+  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() }, install: ui.install ? { ...ui.install } : null }, null, 1)
   async function send() {
     state.sent = 'sending…'
     render()
+    report.storage.atSend = await storage()
     try {
       const r = await fetch('__report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text() })
       state.sent = r.ok ? `sent as ${(await r.json()).saved}` : `failed (HTTP ${r.status}) : use Copy`
@@ -248,6 +249,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     render()
   }
   async function copy() {
+    report.storage.atSend = await storage()
     const t = text()
     try { await navigator.clipboard.writeText(t); state.sent = 'copied' } catch { state.text = t; state.sent = 'not copied : select the text below' }
     render()

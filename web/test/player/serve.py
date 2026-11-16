@@ -27,7 +27,8 @@ Both hold pieces of the game too (a save's icon frames, a replay's checkpoint) :
 
 A phone on the developer's own HTTPS tunnel (web/dev.sh phone) : /__states, /__saves and /__replays
 answer 404 (a tunnel would publish them), and POST /__report (JSON, 256 KB at most : the measuring
-panel's report, web/ui/src/dev/measure.js) is written to web/test/player/.reports/ (gitignored).
+panel's report, web/ui/src/dev/measure.js) is written to web/test/player/.reports/ (gitignored) ; the
+manifest's start_url becomes ./?measure, so the app added to the Home Screen opens on the panel.
 """
 import functools
 import hashlib
@@ -121,6 +122,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.phone and self.path.startswith(("/__states/", "/__saves/", "/__replays/")):
             return self.send_error(404)
+        if self.phone and self.path.split("?")[0] == "/manifest.webmanifest":
+            # the app added to a phone's Home Screen opens on the measuring panel (?measure)
+            with open(os.path.join(self.directory, "manifest.webmanifest")) as fh:
+                manifest = json.load(fh)
+            manifest["start_url"] = "./?measure"
+            return self.send_body(json.dumps(manifest).encode(), "application/manifest+json")
         if self.path.split("?")[0] == "/__build":
             return self.send_body(self.build_id().encode(), "text/plain")
         if self.path.startswith(("/__saves/", "/__replays/")):

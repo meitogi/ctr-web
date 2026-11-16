@@ -18,7 +18,7 @@
 </div>
 
 <style>
-  .toasts { position: fixed; top: 18px; left: calc((100vw - var(--sidebar)) / 2); transform: translateX(-50%); z-index: 40; display: grid; gap: 8px; justify-items: center; pointer-events: none; }
+  .toasts { position: fixed; top: calc(18px + env(safe-area-inset-top)); left: calc((100vw - var(--sidebar)) / 2); transform: translateX(-50%); z-index: 40; display: grid; gap: 8px; justify-items: center; pointer-events: none; }
   .toast { display: flex; gap: 14px; align-items: center; padding: 10px 24px 10px 12px; border-radius: 999px; min-width: 260px; max-width: min(560px, 90vw);
     background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); animation: in 220ms ease-out; }
   .toast:not([data-family]) , .toast[data-family=''] { padding-left: 22px; border-radius: 16px; }

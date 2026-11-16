@@ -148,6 +148,7 @@
 <style>
   aside {
     position: fixed; top: 0; right: 0; bottom: 0; width: var(--sidebar-width); max-width: 100vw; z-index: 20;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
     display: flex; flex-direction: column; background: var(--panel-solid); border-left: 1px solid var(--line);
     animation: slide 200ms ease-out;
   }

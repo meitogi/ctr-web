@@ -3,7 +3,8 @@
 # Included from web/emscripten.cmake ; no link flag, the game reaches the page through two
 # EM_JS hooks (platform/native_renderer.c, platform/native_input.c).
 file(GLOB CTR_WEB_SHARE_FILES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/web/share/*.js" "${CMAKE_SOURCE_DIR}/web/share/*.html")
+    "${CMAKE_SOURCE_DIR}/web/share/*.js" "${CMAKE_SOURCE_DIR}/web/share/*.html"
+    "${CMAKE_SOURCE_DIR}/web/share/*.webmanifest")
 # The CTR_ONLINE build already copies web/net/ (CMakeLists.txt) : one rule per output.
 if(NOT TARGET ctr_web_online_page)
     file(GLOB CTR_WEB_NET_FILES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/web/net/*.js")

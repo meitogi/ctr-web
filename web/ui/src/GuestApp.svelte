@@ -124,7 +124,7 @@
   .back { margin-top: 8px; padding: 9px 20px; border-radius: 12px; border: 1px solid var(--line-strong); background: none; color: var(--ink); font-weight: 700; cursor: pointer; }
   .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line-strong); border-top-color: var(--accent-2); animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .status { position: fixed; left: 14px; bottom: 14px; z-index: 30; padding: 8px 14px; border-radius: 999px; background: rgba(20, 22, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(12px); font-weight: 600; font-size: 13px; }
+  .status { position: fixed; left: calc(14px + env(safe-area-inset-left)); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 30; padding: 8px 14px; border-radius: 999px; background: rgba(20, 22, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(12px); font-weight: 600; font-size: 13px; }
   .view { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-radius: 22px; cursor: pointer; color: #fff; background: rgba(20, 22, 30, 0.6); border: 1px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(12px); font-weight: 600; font-size: 13px; }
   .view[aria-pressed='true'] { background: rgba(79, 140, 255, 0.45); }
 </style>

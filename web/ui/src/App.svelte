@@ -27,7 +27,7 @@
   import { ui } from './state.svelte.js'
   import { settings } from './store.js'
 
-  let { input, handleFile, forgetStoredDisc, startGame } = $props()
+  let { input, handleFile, forgetStoredDisc, startGame, promptInstall } = $props()
 
   const running = $derived(ui.phase === 'running' || ui.phase === 'starting')
   let layout = $state(null)
@@ -250,7 +250,7 @@
 </script>
 
 <div id="boot" class:hidden={running && !ui.progress}>
-  <Boot {handleFile} {startGame} {layout} />
+  <Boot {handleFile} {startGame} {layout} {promptInstall} />
 </div>
 
 {#if running}

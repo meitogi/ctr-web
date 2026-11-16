@@ -7,6 +7,11 @@
 //                  on an iPhone, the context stayed `interrupted` for good) — Chrome has no such state :
 //                  the context is suspended and reports `interrupted`, and resumes only inside a
 //                  gesture (navigator.userActivation), as Safari's ; a finger's tap must bring it back
+//   INSTALL        what a phone's Home Screen reads : Chrome's own parse of the manifest (no error, name,
+//                  display, orientation, icons), each icon loaded at its size, Safari's tags ; as an
+//                  iPhone's Safari in a tab (its user agent, touch), the boot screen's iOS hint and the
+//                  line saying the disc may go ; with a notch's safe areas (Emulation, when Chrome has
+//                  it), the speaker / Settings buttons and the version inside them
 //
 // RUN
 //   Build : web/dev.sh build debug ; web/pages/assemble.sh build-web-debug build-web-debug-site
@@ -26,7 +31,10 @@ export const tags = {
 	'MEASURE-PANEL': ['page', 'race', 'harness'],
 	'PHONE-SERVER': ['harness'],
 	'AUDIO-BACK': ['audio', 'page'],
+	INSTALL: ['page'],
 }
+
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const REPORTS = join(dirname(fileURLToPath(import.meta.url)), '.reports')
@@ -108,6 +116,46 @@ export default async ctx => {
 			for (const end = Date.now() + 3000; (await state()) !== 'running'; await sleep(100)) if (Date.now() > end) throw new Error(`no sound after a tap : the context is still ${await state()}`)
 			return 'interrupted for 2.5 s with no gesture, running again after one tap'
 		} finally {
+			await phone(ctx, null)
+		}
+	})
+
+	await ctx.scenario('INSTALL', async () => {
+		const send = (m, p) => ctx.conn.send(m, p, ctx.sid)
+		const base = await ctx.js('return location.origin + location.pathname')
+		await send('Page.navigate', { url: base })
+		await sleep(1500)
+		const m = await send('Page.getAppManifest', {})
+		if (m.errors?.length) throw new Error(`the manifest : ${JSON.stringify(m.errors)}`)
+		const man = JSON.parse(m.data)
+		const want = { name: 'CTR Web', display: 'fullscreen', orientation: 'landscape' }
+		for (const k in want) if (man[k] !== want[k]) throw new Error(`manifest ${k} « ${man[k]} », not « ${want[k]} »`)
+		const icons = await ctx.js(`return Promise.all([...${JSON.stringify(man.icons.map(i => i.src))}, 'icons/apple-touch-icon.png'].map((src) => new Promise((ok) => { const im = new Image(); im.onload = () => ok(src + ' ' + im.naturalWidth); im.onerror = () => ok(src + ' FAILED'); im.src = src })))`)
+		const sizes = { 'icon-192.png': 192, 'icon-512.png': 512, 'icon-maskable-512.png': 512, 'apple-touch-icon.png': 180 }
+		for (const line of icons) { const [src, w] = line.split(' '); if (Number(w) !== sizes[src.split('/').pop()]) throw new Error(`icon ${line}`) }
+		const tags = await ctx.js(`const q = (s) => document.querySelector(s)?.getAttribute('content') ?? document.querySelector(s)?.getAttribute('href') ?? null
+			return { capable: q('meta[name=apple-mobile-web-app-capable]'), bar: q('meta[name=apple-mobile-web-app-status-bar-style]'), title: q('meta[name=apple-mobile-web-app-title]'), touch: q('link[rel=apple-touch-icon]'), viewport: q('meta[name=viewport]') }`)
+		if (tags.capable !== 'yes' || tags.title !== 'CTR Web' || !tags.touch || !/viewport-fit=cover/.test(tags.viewport)) throw new Error(`Safari's tags : ${JSON.stringify(tags)}`)
+		const guest = await ctx.js(`return fetch('share/manifest.webmanifest').then((r) => r.json()).then((j) => j.name + ' · start_url ' + (j.start_url ?? 'none'))`)
+
+		// an iPhone's Safari in a tab, a notch on the left in landscape
+		await phone(ctx, { userAgent: IPHONE })
+		let insets = 'not emulated (this Chrome has no Emulation.setSafeAreaInsetsOverride)'
+		try { await send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 47, right: 47, bottom: 21 } }); insets = 'left 47, right 47, bottom 21' } catch { /* an older Chrome */ }
+		try {
+			await send('Page.navigate', { url: base })
+			let page = null
+			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
+				page = await ctx.js(`const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(innerWidth - b.right), bottom: Math.round(innerHeight - b.bottom), text: e.innerText } }
+					return { hint: r('#install-hint'), kept: r('#disc-kept'), version: r('#boot-version'), w: innerWidth }`)
+				if (page.hint && page.kept) break
+			}
+			if (!/Add to Home Screen/.test(page?.hint?.text ?? '')) throw new Error(`no iOS install hint (safe areas ${insets}) : ${JSON.stringify(page)}`)
+			if (!/7 days/.test(page?.kept?.text ?? '')) throw new Error(`the disc line does not say it may go : ${JSON.stringify(page?.kept)}`)
+			if (insets.startsWith('left') && (page.version.right < 47 || page.version.bottom < 21)) throw new Error(`the version sits under the notch / home bar : ${JSON.stringify(page.version)}`)
+			return `manifest « ${man.name} » ${man.display} ${man.orientation}, ${man.icons.length} icons · ${icons.join(', ')} · Safari tags ok · guest : ${guest} · as an iPhone : « ${page.hint.text.slice(0, 60)}… », « ${page.kept.text.split('·').pop().trim().slice(0, 50)}… » · safe areas ${insets}, version ${page.version.right} px from the right, ${page.version.bottom} from the bottom`
+		} finally {
+			try { await send('Emulation.setSafeAreaInsetsOverride', { insets: {} }) } catch { /* none */ }
 			await phone(ctx, null)
 		}
 	})
