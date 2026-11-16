@@ -75,6 +75,29 @@ box, Share by one button and the local pads. What the project is and how to run 
   &players=<n>` starts a race from the main menu as the menus would ; `?turbo=1` /
   `ctrDev.turbo(on)` runs frames back to back — never for the sound or Share (off by itself while
   sharing) ; the page's Bot (`ctrDev.bot(true)`) drives in step with it.
+- The precise start (debug builds only, `web/ui/src/dev/precise.js`, `dev/presets.js`,
+  `platform/web_debug_bridge.c`, [precise.suite.mjs](web/test/player/precise.suite.mjs)) :
+  - **a seed** : `?seed=<n>` sets the game's generators and its frame counters on each race's first
+    frame (`__ctr.raceFrame` 0) — the same race twice, however the menus were walked ;
+  - **replay** : upstream's recorder (`native_replay_scheduler.c`, started with its command line's
+    arguments) : `ctr.mjs recordRace(ctx, name, { race, char, mode, laps, seed })` records a seeded
+    race the Bot drives, `playRace(ctx, name)` plays it and compares (upstream's per-frame check and
+    the karts every 300 frames) ; `{ rebase: true }` makes the start again on the running build — the
+    way to replay across an upstream merge (a checkpoint is bound to the memory layout). Kept in
+    `web/test/player/.replays/<name>/` ; `cc-arcade-seed1` (setup's RECORDINGS) is the merges' race ;
+  - **saves** : [saves.mjs](web/test/player/saves.mjs) names the cards (new, full-100, partial, the
+    Adventure points, ghost, N. Tropy, old version, damaged) and what each holds ; each is written
+    by the game's own save (`ctrDev.card.write(spec)`, `.ghost()`), kept in `.saves/<name>/`, put in
+    place before the boot by `?card=<name>` ; `importSave(path, name)` takes the user's own (a
+    folder of save files, or a `.mcr` / `.mcd`), `exportSave` gives one to an emulator ;
+  - `?preset=<name>` (the settings, in memory : the player's own untouched), `players(ctx, { pads,
+    want })` (the seats), `ctrDev.pause() / pauseAt(raceFrame) / step(n) / resume()`, `?fault=` /
+    `ctrDev.fault(name, on)` (disc-read, storage-full, card-full, relay-silent), `phone(ctx)` +
+    `tap(ctx, x, y)` (a phone's viewport and touch, over CDP) ;
+  - `select.mjs setup --run` makes the snapshots, the saves and the recordings ahead. Saves and
+    replays hold pieces of the game : gitignored, refused by `web/pages/guard.sh`.
+- Turbo emits no catch-up VBlank (debug) : a turbo run is deterministic, a slow frame no longer adds
+  game time. A replay counts the XA track by VBlanks (debug, `native_audio.c`).
 - The release build stays identical in code : check with `main.c` preprocessed (native) and the
   web release preprocess against the previous tag.
 

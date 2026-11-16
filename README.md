@@ -169,6 +169,28 @@ name or id, the unlocked ones too) and **turbo** (`?turbo=1` : frames back to ba
 for the races the Bot drives. debug builds only. a snapshot holds the game's memory, pieces of the
 disc : they stay in `web/test/player/.states/`, never committed, and the site's guard refuses them.
 
+and they start *exactly* where they need to be ([precise.suite.mjs](web/test/player/precise.suite.mjs)
+shows each) :
+
+- **a seed** — `?seed=7` : the same race twice, items and AI included.
+- **a recorded race** — upstream's replay recorder : `recordRace` in
+  [ctr.mjs](web/test/player/ctr.mjs) records a seeded race the Bot drives, `playRace` plays it back
+  and stops at the first frame where anything differs (the karts, the laps, the random numbers).
+  `playRace(…, { rebase: true })` replays it on another build — that's how an upstream merge is
+  checked.
+- **a memory card** — `?card=full-100` (or `new`, `partial`, `adv-2-keys`, `ghost-crash-cove`,
+  `damaged`…, listed with what each holds in [saves.mjs](web/test/player/saves.mjs)), every one
+  written by the game's own save. your own saves too : `importSave('<your card>.mcr', 'mine')`
+  (a PS1 / emulator card image, or a folder of save files), then `?card=mine`.
+- **settings** `?preset=duo` (or `unlock-off`, `pad-only`, `remapped`…, in memory : yours stay as
+  they are), **players** `players(ctx, { pads: 3, want: ['pad', 'kb', 'pad', 'pad'] })`, **frames**
+  `ctrDev.pause()` / `ctrDev.step(1)`, **faults** `?fault=disc-read` (or `storage-full`,
+  `card-full`, `relay-silent`), **a phone** `phone(ctx)` (its screen, touch).
+
+`node web/test/player/select.mjs setup --run` makes the snapshots, the cards and the recorded races
+once. cards and recordings hold pieces of the game too : `web/test/player/.saves/` and `.replays/`,
+never committed, refused by the site's guard.
+
 the ports (one list : [web/dev-ports.tsv](web/dev-ports.tsv), checked by `web/dev.sh ports --check`) :
 
 <!-- ports -->
