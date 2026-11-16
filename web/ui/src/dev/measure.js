@@ -49,7 +49,7 @@ function device() {
   return {
     userAgent: nav.userAgent,
     platform: nav.userAgentData?.platform || (/iPhone|iPad/.test(nav.userAgent) ? 'iOS' : /Android/.test(nav.userAgent) ? 'Android' : nav.platform),
-    screen: { w: screen.width, h: screen.height, dpr: devicePixelRatio, orientation: screen.orientation?.type ?? null, inner: [innerWidth, innerHeight] },
+    screen: { w: screen.width, h: screen.height, dpr: devicePixelRatio, orientation: screen.orientation?.type ?? null, inner: [innerWidth, innerHeight], visual: globalThis.visualViewport ? [Math.round(visualViewport.width), Math.round(visualViewport.height)] : null, client: [document.documentElement.clientWidth, document.documentElement.clientHeight] },
     standalone: matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || nav.standalone === true,
     cores: nav.hardwareConcurrency ?? null,
     deviceMemoryGB: nav.deviceMemory ?? null,
@@ -136,7 +136,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
   const r1 = (v) => Math.round(v * 10) / 10
   addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return
-    live[e.pointerId] = { t: now(), on: e.target?.closest?.('[data-id]')?.dataset.id ?? null, y0: e.clientY, dyMin: 0, dyMax: 0, w: [e.width, e.width], h: [e.height, e.height], p: [e.pressure, e.pressure] }
+    live[e.pointerId] = { t: now(), on: e.target?.closest?.('[data-id]')?.dataset.id ?? null, x0: Math.round(e.clientX), y0: e.clientY, dyMin: 0, dyMax: 0, w: [e.width, e.width], h: [e.height, e.height], p: [e.pressure, e.pressure] }
   }, true)
   addEventListener('pointermove', (e) => {
     const l = live[e.pointerId]

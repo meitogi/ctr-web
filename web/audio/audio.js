@@ -97,16 +97,30 @@
 			// phone is locked or the page goes to the background, and nothing brought it back
 			// (session 41, measured on an iPhone : no sound after the lock).
 			let retry = 0;
+			// a phone's page put away (locked, the Home Screen) : the context suspended on purpose, so
+			// the worklet does not play a starved game's last sounds while iOS takes the audio away
+			// (session 42 : « quand je lock j'ai un son anormal ») ; back with the page. Not while
+			// sharing (the guests hear this page) nor on a desktop (a hidden tab keeps its music).
+			let parked = false;
+			const park = () => {
+				const phone = globalThis.matchMedia?.('(pointer: coarse)').matches;
+				if (!phone || globalThis.__ctrShare?.state?.().sharing) return;
+				parked = true;
+				ctx.suspend().catch(() => {});
+			};
 			const keepRunning = () => {
-				if (retry || ctx.state === 'running' || ctx.state === 'closed') return;
+				if (parked || retry || ctx.state === 'running' || ctx.state === 'closed') return;
 				ctx.resume().catch(() => {});
 				retry = setInterval(() => {
-					if (ctx.state === 'running' || ctx.state === 'closed') { clearInterval(retry); retry = 0; }
+					if (parked || ctx.state === 'running' || ctx.state === 'closed') { clearInterval(retry); retry = 0; }
 					else ctx.resume().catch(() => {});
 				}, 1000);
 			};
 			ctx.addEventListener('statechange', keepRunning);
-			document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepRunning(); });
+			document.addEventListener('visibilitychange', () => {
+				if (document.visibilityState === 'visible') { parked = false; keepRunning(); }
+				else park();
+			});
 			keepRunning();
 			start(ctx).catch((e) => {
 				pending = null;
