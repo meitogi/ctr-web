@@ -11,6 +11,9 @@
 #                                       served on 8090 (release : guard.sh checks it first)
 #   Both start a ctr-relay on 8787 with a fresh key and print two ready links : that local relay,
 #   and the VPS one with the key from web/.relay-key (gitignored, the VPS's CTR_RELAY_KEY).
+#   web/dev.sh phone                    the debug site for a phone on 8090, behind your HTTPS tunnel
+#                                       (CTR_PHONE_HOST, default ctr-dev.suuuper.app) : no game
+#                                       data served, the measuring panel's reports kept (?measure)
 #   web/dev.sh ports [--env|--check]    the port list (web/dev-ports.tsv) ; --env : the agent
 #                                       browser's AGENT_BROWSER_ORIGINS value ; --check : README,
 #                                       .devcontainer/.env and .env.example agree with it
@@ -32,7 +35,7 @@ RELAY_KEY_FILE="$tree/web/.relay-key"
 PORTS_FILE="$tree/web/dev-ports.tsv"
 DEVCONTAINER=${DEVCONTAINER_DIR:-/workspace/.devcontainer}
 
-usage() { sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; }
 
 config_of() {
   case "${1:-debug}" in debug|release) echo "${1:-debug}" ;; *) usage >&2; exit 2 ;; esac
@@ -151,6 +154,63 @@ EOF
   wait
 }
 
+# A phone needs HTTPS (OPFS, the AudioWorklet, install) : the page goes out through the
+# developer's frp + Traefik tunnel. The site is the debug build assembled as the published one is,
+# guarded with --debug (the debug tools let through, no game data) ; serve.py --phone answers 404
+# on the tests' snapshots, saves and replays, and keeps the reports POSTed to /__report.
+cmd_phone() {
+  local build="$tree/build-web-debug" site="$tree/build-web-debug-site"
+  local host=${CTR_PHONE_HOST:-ctr-dev.suuuper.app} fport=${CTR_PHONE_FRP_PORT:-8098}
+  [ $# -eq 0 ] || { usage >&2; exit 2; }
+  port_free "$PAGE"
+  cmd_build debug
+  bash "$tree/web/pages/assemble.sh" "$build" "$site" > /dev/null
+  bash "$tree/web/pages/guard.sh" --debug "$site" > /dev/null
+  trap stop_servers EXIT INT TERM
+  python3 "$tree/web/test/player/serve.py" --phone "$site" "$PAGE" 2>/dev/null &
+  servers+=($!)
+  wait_port "$PAGE" "the page server did not start"
+  local tick='`'
+  cat <<EOF
+
+On the phone : https://$host/?measure   ($(sed -n 's/.*__CTR_VERSION = "\(.*\)".*/\1/p' "$site/preload-flag.js"), debug)
+Each report the phone sends is kept in web/test/player/.reports/ (a line below).
+
+The first time only, the tunnel (frp + Traefik : /workspace/docs/frp-traefik-tunnel-guide.md) :
+  1. Mac : forward $PAGE in VS Code's Ports panel (local port $PAGE).
+  2. frpc.toml, a block at the end (frpc in Docker on this Mac ; if it runs on another machine,
+     localIP is this Mac's LAN IP and the forward must listen on the LAN), then
+     docker compose up -d frpc :
+       [[proxies]]
+       name = "ctr-dev"
+       type = "tcp"
+       localIP = "host.docker.internal"
+       localPort = $PAGE
+       remotePort = $fport
+  3. VPS : docker/traefik/dynamic/03-ctr-dev.yml (Traefik watches the folder) :
+       http:
+         routers:
+           ctr-dev:
+             rule: "Host(${tick}$host${tick})"
+             entryPoints:
+               - websecure
+             service: ctr-dev
+             middlewares:
+               - crowdsec@file
+             tls:
+               certResolver: acme-ssl
+         services:
+           ctr-dev:
+             loadBalancer:
+               servers:
+                 - url: "http://frps:$fport"
+  4. DNS : $host  A  <the VPS's IP>, grey cloud (DNS only).
+  5. Check, from the Mac : curl -sI https://$host/ | head -1    → HTTP/1.1 200
+Ctrl-C here stops the server.
+EOF
+  wait
+}
+
 # ---- ports : web/dev-ports.tsv is the one list ----
 rows() { grep -v '^#' "$PORTS_FILE" | grep -v '^$'; }
 origins() { rows | awk -F'\t' '$4 != "-" { printf "%s%s", sep, $4; sep=" " } END { print "" }'; }
@@ -185,6 +245,7 @@ case "${1:-}" in
   build) shift; cmd_build "$@" ;;
   dev) shift; cmd_dev "$@" ;;
   prod) shift; cmd_prod "$@" ;;
+  phone) shift; cmd_phone "$@" ;;
   ports) shift; cmd_ports "$@" ;;
   -h|--help|help) usage ;;
   *) usage >&2; exit 2 ;;

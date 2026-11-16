@@ -47,3 +47,5 @@ __pycache__/
 # The tests' memory cards and recorded races (session 45b) : the game's icon frames, its memory.
 /web/test/player/.saves/
 /web/test/player/.replays/
+# The measuring panel's reports from a phone (session 41, serve.py --phone).
+/web/test/player/.reports/

@@ -3,7 +3,10 @@
 # leave this repo through the published site. Run after assemble.sh, before
 # actions/upload-pages-artifact (ROLLOUT.md "No game data is ever hosted").
 #
-#   web/pages/guard.sh <site-dir>
+#   web/pages/guard.sh [--debug] <site-dir>
+#
+# --debug : a debug site for a phone on the developer's own tunnel (web/dev.sh phone) — the debug
+# tools' bundle is let through, every game-data check below stays on.
 #
 # Fails (prints the offending path, exits 1) on the first of :
 #   - any symlink (find -type f never matches one, so a linked disc image
@@ -22,7 +25,9 @@
 # the second lock, not the only one.
 set -euo pipefail
 
-site=${1:?usage: guard.sh <site-dir>}
+debug=0
+if [ "${1:-}" = --debug ]; then debug=1; shift; fi
+site=${1:?usage: guard.sh [--debug] <site-dir>}
 [ -d "$site" ] || { echo "guard.sh: no such directory: $site" >&2; exit 1; }
 
 max_bytes=$((50 * 1024 * 1024))
@@ -66,7 +71,7 @@ while IFS= read -r -d '' f; do
       if grep -q 'window\.__CTR_WEB_PRELOAD *= *true' "$f"; then
         fail "sets window.__CTR_WEB_PRELOAD = true" "$f"
       fi
-      if grep -q 'ctr-dev-tools' "$f"; then
+      if [ "$debug" = 0 ] && grep -q 'ctr-dev-tools' "$f"; then
         fail "the debug tools (a Debug build's page bundle)" "$f"
       fi
       ;;

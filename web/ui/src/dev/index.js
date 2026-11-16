@@ -2,7 +2,8 @@
 // in a release bundle : the « Bot » switch (bot.js : on by itself in the second window),
 // Settings › Dev (Dev.svelte) with its second window (second.js), the tests' fast start (fast.js :
 // snapshots, the direct start, turbo) and precise start (precise.js : a seed, replay, the card, frames,
-// faults), globalThis.ctrDev for scripts. install() resolves once what must precede the game's boot
+// faults), the measuring panel (measure.js, ?measure : a race measured on a phone), globalThis.ctrDev
+// for scripts. install() resolves once what must precede the game's boot
 // is in place (main.js waits for it).
 import { ui } from '../state.svelte.js'
 import { guestPage, role } from '../store.js'
@@ -12,11 +13,14 @@ import { SECOND } from '../lib/second-window.js'
 import { openSecond, walkToRace } from './second.js'
 import { installFast } from './fast.js'
 import { installPrecise } from './precise.js'
+import { installMeasure, measuring } from './measure.js'
 
-export function install({ toast = () => {} } = {}) {
+export function install({ toast = () => {}, start = () => {}, handleFile = () => {} } = {}) {
   const log = (line) => { console.log(line); globalThis.Module?.print?.(line) }
   ui.bot = !!role.second || ui.bot
   startBot(ui, { log })
+  // ?measure (measure.js) puts its race in the URL before the direct start reads it
+  const measure = !guestPage && measuring()
   const fast = installFast({ log })
   const { ready, ...precise } = installPrecise({ log })
   globalThis.ctrDev = {
@@ -44,5 +48,6 @@ export function install({ toast = () => {} } = {}) {
     // the precise start (precise.js) : seed, replay, card, pause / step / resume, fault
     ...precise,
   }
+  if (measure) installMeasure({ start, handleFile, log })
   return ready
 }

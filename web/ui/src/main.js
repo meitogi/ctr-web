@@ -189,7 +189,7 @@ globalThis.__ctrTestHandleFileFromUrl = async (url) => {
 
 // debug : the tests' precise start (dev/precise.js : a card, faults) is in place before the stored disc
 // is read and the game boots
-const devReady = __CTR_DEV__ ? import('./dev/index.js').then((dev) => dev.install({ toast })).catch((e) => console.error('[CTR Dev]', e)) : null
+const devReady = __CTR_DEV__ ? import('./dev/index.js').then((dev) => dev.install({ toast, start: startGame, handleFile })).catch((e) => console.error('[CTR Dev]', e)) : null
 
 mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame } })
 
@@ -233,5 +233,6 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   // the second window of Settings › Dev (debug) : in the room already, nobody to press
   // or a test's fast or precise start (dev/fast.js : ?race=, ?state=, ?turbo= ; dev/precise.js : ?card=,
   // ?seed=, ?pause= ; dev/presets.js : ?preset=)
-  if (__CTR_DEV__ && (role.second || /[?&](race|state|turbo|card|seed|pause|preset)=/.test(location.search))) startGame()
+  // — but not ?measure (dev/measure.js) : its Start tap boots, so the sound's first resume is a touch
+  if (__CTR_DEV__ && !/[?&]measure\b/.test(location.search) && (role.second || /[?&](race|state|turbo|card|seed|pause|preset)=/.test(location.search))) startGame()
 })()

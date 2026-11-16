@@ -21,7 +21,7 @@ fail=0
 check() {
   local desc=$1 dir=$2 want=$3 # want: pass | fail
   local out got
-  if out=$("$guard" "$dir" 2>&1); then got=pass; else got=fail; fi
+  if out=$("$guard" ${4:-} "$dir" 2>&1); then got=pass; else got=fail; fi
   if [ "$got" = "$want" ]; then
     echo "PASS: $desc (guard $got, expected $want)"
     pass=$((pass + 1))
@@ -102,6 +102,25 @@ refused mcd card.MCD "a memory card image (.MCD)"
 refused gme card.gme "a memory card image (.gme)"
 refused saves-folder .saves/full-100/what.json "a save folder (.saves/, its notes)"
 refused saves-served __saves/new/index.json "the saves' served path (__saves/)"
+
+# session 41 : --debug (web/dev.sh phone) lets the debug tools through, nothing of the game
+bad="$tmp/dev-tools"
+cp -r "$clean/." "$bad/"
+echo "const tools = 'ctr-dev-tools'" >"$bad/ui/ui.js"
+check "the debug tools' bundle" "$bad" fail
+check "the debug tools' bundle, --debug" "$bad" pass --debug
+mkdir -p "$tmp/dev-bin"; cp -r "$bad/." "$tmp/dev-bin/"
+printf 'fake' >"$tmp/dev-bin/ctr-u.bin"
+check "--debug : a fake ctr-u.bin" "$tmp/dev-bin" fail --debug
+mkdir -p "$tmp/dev-states"; cp -r "$bad/." "$tmp/dev-states/"
+mkdir -p "$tmp/dev-states/.states/0123456789abcdef"; printf '{}' >"$tmp/dev-states/.states/0123456789abcdef/menu.json"
+check "--debug : a snapshot folder" "$tmp/dev-states" fail --debug
+mkdir -p "$tmp/dev-link"; cp -r "$bad/." "$tmp/dev-link/"
+ln -s "$tmp/outside-disc.bin" "$tmp/dev-link/linked"
+check "--debug : a symlink" "$tmp/dev-link" fail --debug
+mkdir -p "$tmp/dev-card"; cp -r "$bad/." "$tmp/dev-card/"
+printf 'fake' >"$tmp/dev-card/BASCUS-94426-SLOTS"
+check "--debug : the game's profile save" "$tmp/dev-card" fail --debug
 
 echo "test-guard.sh: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

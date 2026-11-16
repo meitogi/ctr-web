@@ -22,6 +22,12 @@ only, never committed, never in a site (web/pages/guard.sh refuses them).
 ?card=), from web/test/player/.saves/<name>/ ; /__replays/<name>/… : the tests' recorded races
 (ctrDev.replay.play), from web/test/player/.replays/<name>/ — index.json lists a folder's files.
 Both hold pieces of the game too (a save's icon frames, a replay's checkpoint) : local only, the same.
+
+    python3 web/test/player/serve.py --phone <site-dir> [port]
+
+A phone on the developer's own HTTPS tunnel (web/dev.sh phone) : /__states, /__saves and /__replays
+answer 404 (a tunnel would publish them), and POST /__report (JSON, 256 KB at most : the measuring
+panel's report, web/ui/src/dev/measure.js) is written to web/test/player/.reports/ (gitignored).
 """
 import functools
 import hashlib
@@ -30,6 +36,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 
 STATES = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".states")
@@ -37,11 +44,14 @@ BUILD = {}
 STATE_PATH = re.compile(r"^/__states/([0-9a-f]{16})/([A-Za-z0-9._:+-]{1,80})\.(ctrstate|json)$")
 HERE = os.path.dirname(os.path.abspath(__file__))
 # /__saves/<name>/<file> and /__replays/<name>/<file, maybe in a folder>
+REPORTS = os.path.join(HERE, ".reports")
+REPORT_MAX = 256 * 1024
 KEPT_PATH = re.compile(r"^/__(saves|replays)/([A-Za-z0-9._+-]{1,80})/([A-Za-z0-9._+/-]{1,120})$")
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     etag = None
+    phone = False
     # keep-alive : a page's ~30 files over a few connections. One new connection per file (HTTP/1.0)
     # through the forwarded port left a request now and then that never reached this server : the
     # page stalled on « Looking for the game… » or before its first frame, one load in five
@@ -90,7 +100,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return None, json.dumps({"files": [f for f in files if f != "what.json"]})
         return os.path.join(folder, m.group(3)), None
 
+    def do_POST(self):
+        if not self.phone or self.path.split("?")[0] != "/__report":
+            return self.send_error(404)
+        size = int(self.headers.get("Content-Length") or 0)
+        if size <= 0 or size > REPORT_MAX:
+            return self.send_error(413)
+        try:
+            report = json.loads(self.rfile.read(size))
+        except ValueError:
+            return self.send_error(400)
+        os.makedirs(REPORTS, exist_ok=True)
+        ua = re.sub(r"[^A-Za-z0-9]+", "-", str(report.get("device", {}).get("platform", "phone")))[:24]
+        name = f"{time.strftime('%Y%m%d-%H%M%S')}-{ua}.json"
+        with open(os.path.join(REPORTS, name), "w") as fh:
+            json.dump(report, fh, indent=1)
+        print(f"serve.py: report {name}", flush=True)
+        self.send_body(json.dumps({"saved": name}).encode(), "application/json")
+
     def do_GET(self):
+        if self.phone and self.path.startswith(("/__states/", "/__saves/", "/__replays/")):
+            return self.send_error(404)
         if self.path.split("?")[0] == "/__build":
             return self.send_body(self.build_id().encode(), "text/plain")
         if self.path.startswith(("/__saves/", "/__replays/")):
@@ -127,8 +157,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    Handler.phone = bool(args) and args[0] == "--phone"
+    if Handler.phone:
+        args = args[1:]
+    if not args:
         sys.exit(__doc__)
-    port = int(sys.argv[2]) if len(sys.argv) > 2 else 8093
-    handler = functools.partial(Handler, directory=sys.argv[1])
+    port = int(args[1]) if len(args) > 1 else 8093
+    handler = functools.partial(Handler, directory=args[0])
     http.server.ThreadingHTTPServer(("127.0.0.1", port), handler).serve_forever()
