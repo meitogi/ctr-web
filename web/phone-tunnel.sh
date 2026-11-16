@@ -183,7 +183,9 @@ docker run -d --name "$NAME" \
   -v "$CONF:/etc/frp/frpc.toml:ro" -v "$CA:/etc/frp/ca.crt:ro" \
   -v "$CRT:/etc/frp/client.crt:ro" -v "$KEY:/etc/frp/client.key:ro" \
   "$IMAGE" > /dev/null
-trap 'docker rm -f "$NAME" > /dev/null 2>&1 || true; rm -f "$CONF"; echo; echo "phone-tunnel.sh : tunnel closed"' EXIT INT TERM
+close() { trap - EXIT INT TERM; docker rm -f "$NAME" > /dev/null 2>&1 || true; rm -f "$CONF"; echo; echo "phone-tunnel.sh : tunnel closed"; }
+trap close EXIT
+trap 'close; exit 130' INT TERM
 
 printf '  connecting'
 for _ in $(seq 1 30); do
