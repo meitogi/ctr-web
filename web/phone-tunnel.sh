@@ -107,7 +107,8 @@ else
   echo "  Cloudflare : $HOST  A  ${vps:-<the VPS IP>}, proxy OFF (grey cloud)."
 fi
 cat <<EOF
-  The VPS's route, once (Traefik watches the folder, nothing to restart) —
+  The VPS's route, once, AFTER the DNS record resolves (Traefik asks for the certificate as
+  soon as the route loads, and does not ask again after a failure until it restarts) —
   docker/traefik/dynamic/03-ctr-dev.yml in server-kevledev-mini, copied to the VPS :
     http:
       routers:
@@ -142,7 +143,7 @@ https_why() {
   case "$strict/$loose" in
     000/000) echo "nothing answers on https at $(dig +short "$HOST" A | tail -1) : is it the VPS ? (step 4)" ;;
     000/404) echo "Traefik answers with its default certificate and no route for $HOST : docker/traefik/dynamic/03-ctr-dev.yml is not on the VPS (step 4)" ;;
-    000/200 | 000/502) echo "the route is there, its certificate is not issued yet (acme-ssl : a minute or two after the first request) : run --check again in a minute" ;;
+    000/200 | 000/502) echo "the route is there, its certificate is not (yet) : acme-ssl tries once when the route loads — a route copied before the DNS record resolved failed (NXDOMAIN in Traefik's log) and is not tried again until Traefik restarts (docker restart traefik on the VPS) ; else run --check again in a minute" ;;
     502/* | 000/*) echo "Traefik routes $HOST but frps:$FPORT does not answer ($strict, $loose without the certificate check) : the tunnel is not open, or frpc is not on remotePort $FPORT" ;;
     *) echo "HTTP $strict (without the certificate check : $loose)" ;;
   esac
