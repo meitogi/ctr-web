@@ -60,6 +60,8 @@ export default async ctx => {
 			await tapButton(ctx, 'Start')
 			await panel(ctx, /Racing \d+ s/, 'the race being measured', 120_000)
 			await panel(ctx, /Race measured/, 'the end of the race', 240_000)
+			// the small panel (« Less ») still says what Send did : on the iPhone it did not, Send was tapped 4 times
+			await tapButton(ctx, 'Less')
 			await tapButton(ctx, 'Send')
 			const sent = await panel(ctx, /sent as/, 'the report sent', 20_000)
 			const name = readdirSync(REPORTS).find(n => !before.has(n))

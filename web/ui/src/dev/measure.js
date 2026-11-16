@@ -203,9 +203,11 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
       if (navigator.storage?.persist) button('Keep storage', persist, true)
     }
     button(el.classList.contains('small') ? 'More' : 'Less', () => { el.classList.toggle('small'); render() }, true)
-    more = `<div class="more line" style="opacity:.75;font-size:12px">${report.version ?? ''} · ${report.device.platform} · ${report.device.standalone ? 'installed' : 'in the browser'} · storage ${report.storage.atLoad ? `${report.storage.atLoad.usageMB} / ${report.storage.atLoad.quotaMB} MB, ${report.storage.atLoad.persisted ? 'persistent' : 'may be evicted'}` : '…'}${state.sent ? ` · sent ${state.sent}` : ''}</div>`
+    more = `<div class="more line" style="opacity:.75;font-size:12px">${report.version ?? ''} · ${report.device.platform} · ${report.device.standalone ? 'installed' : 'in the browser'} · storage ${report.storage.atLoad ? `${report.storage.atLoad.usageMB} / ${report.storage.atLoad.quotaMB} MB, ${report.storage.atLoad.persisted ? 'persistent' : 'may be evicted'}` : '…'}</div>`
+    // what Send / Copy did, in the small panel too (on the iPhone, « Less » hid it : Send tapped 4 times)
+    const sent = state.sent ? `<div class="line"><b>Report ${state.sent}</b></div>` : ''
     // the same panel again is left as it is : a tap on a button rebuilt under the finger is lost
-    const html = `${killed}<div class="line">${line}</div>${more}<div class="row"></div>${state.text ? `<textarea readonly>${state.text}</textarea>` : ''}`
+    const html = `${killed}<div class="line">${line}</div>${more}${sent}<div class="row"></div>${state.text ? `<textarea readonly>${state.text}</textarea>` : ''}`
     const key = html + buttons.map((b) => b.label).join()
     if (key === state.html) return
     state.html = key
@@ -239,7 +241,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     render()
     try {
       const r = await fetch('__report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text() })
-      state.sent = r.ok ? `as ${(await r.json()).saved}` : `failed (HTTP ${r.status}) : use Copy`
+      state.sent = r.ok ? `sent as ${(await r.json()).saved}` : `failed (HTTP ${r.status}) : use Copy`
     } catch (e) {
       state.sent = `failed (${e.message}) : use Copy`
     }
@@ -247,7 +249,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
   }
   async function copy() {
     const t = text()
-    try { await navigator.clipboard.writeText(t); state.sent = 'copied' } catch { state.text = t; state.sent = 'select the text below' }
+    try { await navigator.clipboard.writeText(t); state.sent = 'copied' } catch { state.text = t; state.sent = 'not copied : select the text below' }
     render()
   }
 
