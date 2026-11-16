@@ -104,6 +104,9 @@ export async function drive({ out, read, track, deadline, now = Date.now, sleep 
       if (s?.stop) break // the page's switch turned off
       if (!k) { await sleep(100); continue }
       if (s.screen === 'finished' || k.finished) { end = s; break }
+      // the countdown : the kart cannot move yet — not stuck, not turned round ; the accelerator held
+      // (the start boost is the player's, not the Bot's)
+      if (s.screen === 'countdown') { after(s); await sleep(30); continue }
       const t = clock(s)
       if (best.at < 0) best.since = t
       maxSpeed = Math.max(maxSpeed, k.speed)

@@ -72,6 +72,17 @@ test('drive : facing away from the line (turned round by a hit) → backs up tur
   assert.deepEqual(r.held, {}, 'nothing left held')
 })
 
+test('drive : the countdown is no wall — no back-out while the kart cannot move (the iPhone reversed off the start line)', async () => {
+  const c = clock()
+  const r = recorder()
+  const read = async () => (c.now() > 6000 ? { screen: 'finished', kart: { finished: true, rank: 0 } } : { screen: 'countdown', kart: { pos: { x: 0, y: 0, z: 100 }, angle: 0, speed: 0, finished: false } })
+  const res = await drive({ out: r.out, read, track: async () => line, deadline: 1e9, ...c })
+  assert.equal(res.recoveries, 0)
+  assert.equal(res.turns, 0)
+  assert.ok(!r.log.includes('+x'), `never reversed : ${r.log.join(' ')}`)
+  assert.ok(r.log.includes('+c'), 'the accelerator held')
+})
+
 test('drive : the switch off stops the race at once', async () => {
   const c = clock()
   const r = recorder()

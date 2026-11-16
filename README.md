@@ -45,6 +45,22 @@ browser now. nothing gets uploaded. next time you just press the button and send
   the podium — so a bit of delay — you get their pads, peer to peer. they lose, it's lag.
   they win, it's skill. classic. press it again to stop.
 
+## on a phone
+
+it runs : measured on an iPhone mini (Safari), a whole race at the game's own 30 fps. Android : not
+measured yet.
+
+- **put it on your Home Screen.** the bar at the bottom of the home page says how : on iPhone, the
+  Share button then « Add to Home Screen » ; on Android, Install (or the browser's ⋮ menu). it opens
+  full screen, no browser bars, and keeps the screen awake while you play.
+- **the disc, on the phone.** get `ctr-u.bin` (or its `.zip`) into the phone's Files (AirDrop, iCloud
+  Drive, a cable), then pick it on the home page. ~600 MB on the phone, a few seconds to store.
+- **the app has its own storage.** a disc stored in Safari is not in the Home Screen app : pick it once
+  more there. in the app it stays (closed, reopened : kept). in a Safari tab, Safari deletes a site's
+  storage after 7 days without a visit — the home page says which one you're in.
+- **no touch controls yet**, they come next (a Bluetooth pad : not checked yet). **no offline yet** :
+  the app needs the network to open (the disc and saves are on the phone).
+
 ## the limits (read this before you report them)
 
 - **your own NTSC-U disc.** PAL and Japanese discs are refused, for now.
@@ -57,7 +73,7 @@ browser now. nothing gets uploaded. next time you just press the button and send
   joined after ten minutes, and any room after six hours. « relay full » ? try later, or
   [run your own relay](#run-your-own-relay) and set it in Settings › Multiplayer › Share.
 - **browsers** : played in Chrome (and the other Chromium browsers) every session ; Safari
-  by hand ; Firefox not checked yet. no touch controls yet : phones are next.
+  by hand ; Firefox not checked yet. phones : [on a phone](#on-a-phone).
 - **not there yet** : the list right below.
 
 ## soon™
@@ -137,6 +153,14 @@ opens the dev page on http://localhost:8090 — the page's sources with hot relo
 built the first time. rebuild the game with `web/dev.sh build`, then reload the page.
 `web/dev.sh prod` serves the site exactly as GitHub Pages gets it (`web/dev.sh prod release`
 checks it with the guard too).
+
+on a real phone : a phone needs https (the browser's storage, the sound worklet, install), so the
+debug site goes out through your own tunnel. `web/dev.sh phone` serves it on 8090 (nothing of the
+game in it : the tests' snapshots, saves and replays answer 404) ; on the Mac, `web/phone-tunnel.sh`
+opens an frp tunnel to it (it checks what it needs and says what is missing — the frp client files in
+the gitignored `web/.phone-tunnel/`, the DNS record, the Traefik route) ; on the phone,
+`https://<your host>/?measure` : a panel leads one race the Bot drives and sends its report (frame
+rate, memory, storage, sound, what happens on a lock) to `web/test/player/.reports/`.
 
 testing alone ? on the debug page, from the main menu, Settings › Dev has a **second window** :
 one click, a window opens beside the first, joins Share by itself and plays as Bot ; the first
