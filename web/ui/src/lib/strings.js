@@ -156,6 +156,7 @@ const en = {
     'zip-size': 'The disc image in this zip is damaged (wrong size). Nothing was kept.',
     'zip-probe': 'The disc image in this zip could not be checked.',
     storage: 'The browser refused to store the disc (storage full, or a private window ?).',
+    read: 'The disc stored in this browser could not be read. Reload the page ; if it happens again, drop the disc again.',
     unknown: 'Something went wrong with this file.',
   },
 }
@@ -316,6 +317,7 @@ const fr = {
     'zip-size': 'L\'image disque de ce zip est abîmée (mauvaise taille). Rien n\'a été gardé.',
     'zip-probe': 'L\'image disque de ce zip n\'a pas pu être vérifiée.',
     storage: 'Le navigateur a refusé d\'enregistrer le disque (stockage plein, ou fenêtre privée ?).',
+    read: 'Le disque enregistré dans ce navigateur n\'a pas pu être lu. Recharge la page ; si ça recommence, dépose à nouveau le disque.',
     unknown: 'Un problème est survenu avec ce fichier.',
   },
 }

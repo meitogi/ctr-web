@@ -80,7 +80,9 @@ async function storeAndBoot(found, { reload }) {
   } catch (e) {
     ui.progress = null
     ui.phase = reload ? 'running' : 'boot'
-    const failure = e?.code ? { reason: `zip-${e.code}`, message: e.message } : { reason: 'storage', message: String(e) }
+    // a zip's own error (lib/zip.js ZipError : a word) ; a DOMException has a numeric code too — a full
+    // disk's QuotaExceededError (22) read as « zip-22 », « Something went wrong » (session 45b)
+    const failure = typeof e?.code === 'string' ? { reason: `zip-${e.code}`, message: e.message } : { reason: 'storage', message: String(e) }
     ui.error = errorText(T, failure)
     if (reload) toast(ui.error)
     return
@@ -185,11 +187,14 @@ globalThis.__ctrTestHandleFileFromUrl = async (url) => {
   return handleFile(new File([blob], url.split('/').pop()))
 }
 
-if (__CTR_DEV__) import('./dev/index.js').then((dev) => dev.install({ toast }))
+// debug : the tests' precise start (dev/precise.js : a card, faults) is in place before the stored disc
+// is read and the game boots
+const devReady = __CTR_DEV__ ? import('./dev/index.js').then((dev) => dev.install({ toast })).catch((e) => console.error('[CTR Dev]', e)) : null
 
 mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame } })
 
 ;(async () => {
+  if (__CTR_DEV__) await devReady
   if (globalThis.__CTR_WEB_PRELOAD) {
     // Dev build with assets/ctr-u.bin baked into MEMFS (CTR_WEB_PRELOAD_DISC) : nothing to drop.
     ui.disc = { serial: 'preloaded (dev build)', size: 0 }
@@ -204,12 +209,19 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
     return
   }
   ui.status = T.checking(cached.name || 'ctr-u.bin')
-  const probe = await probeDisc(cached)
+  let probe
+  try {
+    probe = await probeDisc(cached)
+  } catch (e) {
+    // the stored disc could not be read (the browser's storage failing) : said, and kept — it may be
+    // whole (the page stayed on « Checking… » for good before ; session 45b's fault disc-read)
+    probe = { ok: false, reason: 'read', message: String(e?.message ?? e) }
+  }
   if (!probe.ok) {
     ui.error = errorText(T, probe)
     ui.phase = 'boot'
     ui.status = ''
-    await forgetDisc()
+    if (probe.reason !== 'read') await forgetDisc()
     return
   }
   // the boot screen stays : the game starts on the player's press (Boot.svelte, App.svelte), which
@@ -219,6 +231,7 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   ui.phase = 'ready'
   ui.status = ''
   // the second window of Settings › Dev (debug) : in the room already, nobody to press
-  // or a test's fast start (dev/fast.js : ?race=, ?state=, ?turbo=)
-  if (__CTR_DEV__ && (role.second || /[?&](race|state|turbo)=/.test(location.search))) startGame()
+  // or a test's fast or precise start (dev/fast.js : ?race=, ?state=, ?turbo= ; dev/precise.js : ?card=,
+  // ?seed=, ?pause= ; dev/presets.js : ?preset=)
+  if (__CTR_DEV__ && (role.second || /[?&](race|state|turbo|card|seed|pause|preset)=/.test(location.search))) startGame()
 })()
