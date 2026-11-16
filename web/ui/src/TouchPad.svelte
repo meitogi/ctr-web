@@ -80,6 +80,9 @@
   })
   $effect(() => {
     pad.hold.configure({ enabled: s.touchHold, delay: s.touchHoldMs })
+    // the slide kept through a lift : the enhanced pad's (the minimal one is the pad, 1:1)
+    pad.slideMs = mode === 'enhanced' ? s.touchSlideMs : 0
+    pad.rockPx = mode === 'enhanced' ? s.touchRockPx : 0
   })
   $effect(() => {
     pad.show(shown)
@@ -116,7 +119,7 @@
     }
   }
   function down(e) {
-    if (!pad.down(e.pointerId, e.clientX, e.clientY)) return
+    if (!pad.down(e.pointerId, e.clientX, e.clientY, performance.now(), e.pointerType === 'touch' ? e.width : 0)) return
     e.target.setPointerCapture?.(e.pointerId)
     e.stopPropagation()
     paint()
@@ -124,12 +127,12 @@
   // a finger on the controls is the game's : its moves do not wake the page's HUD (Hud.svelte
   // listens on window) — no style write per move beyond the pad's own
   function move(e) {
-    if (!pad.move(e.pointerId, e.clientX, e.clientY)) return
+    if (!pad.move(e.pointerId, e.clientX, e.clientY, e.pointerType === 'touch' ? e.width : 0)) return
     e.stopPropagation()
     paint()
   }
   function up(e) {
-    if (!pad.up(e.pointerId)) return
+    if (!pad.up(e.pointerId, performance.now())) return
     e.stopPropagation()
     paint()
   }

@@ -123,12 +123,39 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     // the touch controls as set and drawn, the safe areas
     pads: { seen: [], pressed: {}, firstPress: null },
     touch: null,
+    // each touch (the last 40) : the control it started on, how far it travelled down and up, and
+    // the contact's size and pressure as this browser reports them (the rock on R reads them)
+    touches: [],
   }
   storage().then((s) => { report.storage.atLoad = s })
   const padSeen = (gp, type) => {
     report.pads.seen.push({ t: now(), type, id: gp.id, index: gp.index, mapping: gp.mapping, buttons: gp.buttons.length, axes: gp.axes.length, rumble: gp.vibrationActuator ? (gp.vibrationActuator.effects ?? gp.vibrationActuator.type ?? true) : null, audio: g.ctrAudio?.context?.state ?? null })
     render()
   }
+  const live = {}
+  const r1 = (v) => Math.round(v * 10) / 10
+  addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return
+    live[e.pointerId] = { t: now(), on: e.target?.closest?.('[data-id]')?.dataset.id ?? null, y0: e.clientY, dyMin: 0, dyMax: 0, w: [e.width, e.width], h: [e.height, e.height], p: [e.pressure, e.pressure] }
+  }, true)
+  addEventListener('pointermove', (e) => {
+    const l = live[e.pointerId]
+    if (!l) return
+    const dy = e.clientY - l.y0
+    l.dyMin = Math.min(l.dyMin, dy); l.dyMax = Math.max(l.dyMax, dy)
+    l.w = [Math.min(l.w[0], e.width), Math.max(l.w[1], e.width)]
+    l.h = [Math.min(l.h[0], e.height), Math.max(l.h[1], e.height)]
+    l.p = [Math.min(l.p[0], e.pressure), Math.max(l.p[1], e.pressure)]
+  }, true)
+  const touchEnd = (e) => {
+    const l = live[e.pointerId]
+    if (!l) return
+    delete live[e.pointerId]
+    report.touches.push({ ...l, ms: now() - l.t, dyMin: r1(l.dyMin), dyMax: r1(l.dyMax), w: l.w.map(r1), h: l.h.map(r1), p: l.p.map((v) => r1(v * 100) / 100) })
+    if (report.touches.length > 40) report.touches.shift()
+  }
+  addEventListener('pointerup', touchEnd, true)
+  addEventListener('pointercancel', touchEnd, true)
   addEventListener('gamepadconnected', (e) => padSeen(e.gamepad, 'connected'))
   addEventListener('gamepaddisconnected', (e) => padSeen(e.gamepad, 'disconnected'))
   setInterval(() => {

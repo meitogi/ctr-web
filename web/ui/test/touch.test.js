@@ -270,3 +270,83 @@ test('the analog id can be kept for a whole mode (menus included)', () => {
   pad.analog = true
   assert.equal(read(pad).id, PAD_ANALOG)
 })
+
+test('the slide kept through a lift : a re-touch on R inside the window taps L1 (the boost), R1 never let go', () => {
+  const pad = make('a')
+  pad.slideMs = 300
+  const r = centre(at(pad, 'slide'))
+  pad.down(1, ...r, 0)
+  assert.equal(read(pad, true, 0).bits, B.r1)
+  pad.up(1, 100)
+  assert.equal(read(pad, true, 150).bits, B.r1, 'lifted : R1 still held')
+  pad.down(1, ...r, 250)
+  assert.equal(read(pad, true, 260).bits, B.r1 | B.l1, 'touched again inside the window : the boost')
+  assert.equal(read(pad, true, 400).bits, B.r1, 'the boost a tap ; R1 held by the finger')
+  pad.up(1, 500)
+  assert.equal(read(pad, true, 700).bits, B.r1)
+  assert.equal(read(pad, true, 801).bits, 0, 'no touch inside the window : R1 let go, the slide ends')
+})
+
+test('the slide kept through a lift : the brake, the menus or off end it at once ; never outside a race', () => {
+  const pad = make('a')
+  pad.slideMs = 300
+  const r = centre(at(pad, 'slide'))
+  pad.down(1, ...r, 0)
+  read(pad, true, 0)
+  pad.up(1, 50)
+  pad.down(2, ...centre(at(pad, 'brake')), 60)
+  assert.equal(read(pad, true, 70).bits, B.square, 'the brake : R1 let go')
+  pad.up(2, 80)
+  pad.down(1, ...r, 100)
+  assert.equal(read(pad, true, 110).bits, B.r1, 'R again after the brake : a new hop, no boost')
+  pad.up(1, 120)
+  assert.equal(read(pad, false, 130).bits, 0, 'not racing : let go')
+  const off = make('a')
+  off.down(1, ...r, 0)
+  read(off, true, 0)
+  off.up(1, 50)
+  assert.equal(read(off, true, 60).bits, 0, 'slideMs 0 : off')
+})
+
+test('B : the glide lifted on GO + R keeps the slide ; back on GO + R = the boost', () => {
+  const pad = make('b', MINI, { hold: { enabled: false } })
+  pad.slideMs = 300
+  pad.down(1, ...centre(at(pad, 'slide')), 0)
+  assert.equal(read(pad, true, 0).bits, B.cross | B.r1)
+  pad.up(1, 100)
+  assert.equal(read(pad, true, 120).bits & B.r1, B.r1)
+  pad.down(1, ...centre(at(pad, 'slide')), 200)
+  assert.equal(read(pad, true, 210).bits, B.cross | B.r1 | B.l1)
+})
+
+test('the rock : a thumb on R lowered (its point moves down) taps L1 once ; raised, armed again', () => {
+  const pad = make('a')
+  pad.rockPx = 9
+  const [x, y] = centre(at(pad, 'slide'))
+  pad.down(1, x, y, 0)
+  assert.equal(read(pad, true, 0).bits, B.r1)
+  pad.move(1, x, y - 4)
+  pad.move(1, x, y + 4)
+  assert.equal(read(pad, true, 30).bits, B.r1, 'rests higher, then 8 px down from there : nothing yet')
+  pad.move(1, x, y + 6)
+  assert.equal(read(pad, true, 60).bits, B.r1 | B.l1, '10 px : the boost')
+  assert.equal(read(pad, true, 200).bits, B.r1, 'a tap, R kept')
+  pad.move(1, x, y + 12)
+  assert.equal(read(pad, true, 230).bits, B.r1, 'still down : no second boost')
+  pad.move(1, x, y - 3)
+  pad.move(1, x, y + 8)
+  assert.equal(read(pad, true, 260).bits, B.r1 | B.l1, 'raised then lowered : the next boost')
+})
+
+test('the rock by the contact\'s width (where the browser gives one), and off at 0', () => {
+  const pad = make('a')
+  pad.rockPx = 9
+  const [x, y] = centre(at(pad, 'slide'))
+  pad.down(1, x, y, 0, 20)
+  pad.move(1, x, y + 2, 32)
+  assert.equal(read(pad, true, 10).bits, B.r1 | B.l1)
+  const off = make('a')
+  off.down(1, x, y, 0)
+  off.move(1, x, y + 30)
+  assert.equal(read(off, true, 10).bits, B.r1)
+})

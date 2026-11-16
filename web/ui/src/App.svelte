@@ -20,6 +20,7 @@
   import { scancodeOf } from './lib/keys.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
   import { BUTTONS, STANDARD_TO_SDL } from './lib/mappings.js'
+  import { noZoom } from './lib/no-zoom.js'
   import { watchPadConnections } from './lib/pad-events.js'
   import { keyboardSets } from './lib/settings.js'
   import { T } from './lib/strings.js'
@@ -47,6 +48,8 @@
     document.querySelector('#ctr-settings [role=tab][aria-selected=true]')?.focus()
   }
   $effect(() => { document.body.classList.toggle('ctr-sidebar', ui.settingsOpen && running) })
+  // a phone neither zooms nor selects while the game is played (lib/no-zoom.js)
+  $effect(() => { noZoom(running); return () => noZoom(false) })
 
   // ---- the game's size : the canvas keeps its 800 × 600 pixels and is scaled for display ----
   // SDL sizes its window from the canvas's CSS box once, when it creates the window (it sets the

@@ -29,6 +29,9 @@
 
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; }
 body.ctr-sidebar { --sidebar: var(--sidebar-width); }
+/* the game being played on a phone : no selection, no callout (lib/no-zoom.js) ; fields keep theirs */
+body.ctr-game { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+body.ctr-game input, body.ctr-game textarea { -webkit-user-select: text; user-select: text; }
 
 /* The game : its own 800 × 600 pixels, centred in what the sidebar leaves, scaled by a transform
    (App.svelte sets --game-scale once SDL has created its window — never CSS width / height, which

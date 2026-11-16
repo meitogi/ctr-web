@@ -7,6 +7,7 @@
   import Settings from './Settings.svelte'
   import Toasts from './Toasts.svelte'
   import TouchPad from './TouchPad.svelte'
+  import { noZoom } from './lib/no-zoom.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
   import { watchPads } from './lib/input-hook.js'
   import { watchPadConnections } from './lib/pad-events.js'
@@ -16,6 +17,8 @@
   import { tick } from 'svelte'
 
   let { actions, touch = null } = $props()
+  // a phone neither zooms nor selects while the host's game is played (lib/no-zoom.js)
+  $effect(() => { noZoom(ui.guest?.state === 'connected'); return () => noZoom(false) })
   const g = $derived(ui.guest)
 
   let layout = $state(null)

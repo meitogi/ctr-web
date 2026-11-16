@@ -2,7 +2,7 @@
   // Settings › Controls › Touch (session 42) : the way to play on a touch screen (a pad / the minimal
   // on-screen pad / the enhanced one), the enhanced one's layout, the held accelerator and its delay,
   // the controls' size. Kept by the browser (lib/settings.js) ; TouchPad.svelte follows at once.
-  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_SIZES } from './lib/settings.js'
+  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_SLIDE_MS } from './lib/settings.js'
   import { T } from './lib/strings.js'
   import { live, settings } from './store.js'
 
@@ -42,6 +42,24 @@
           {/each}
         </div>
       </div>
+    {/if}
+
+    <div class="label">{T.touchSlide}</div>
+    <div class="seg" role="radiogroup" aria-label={T.touchSlide}>
+      {#each TOUCH_SLIDE_MS as ms}
+        <button type="button" role="radio" data-slide-ms={ms} aria-checked={s.touchSlideMs === ms} class:on={s.touchSlideMs === ms} onclick={() => settings.patch({ touchSlideMs: ms })}>{ms ? `${(ms / 1000).toFixed(ms % 100 ? 2 : 1)} s` : T.off}</button>
+      {/each}
+    </div>
+    <p class="help">{T.touchSlideHelp}</p>
+
+    {#if s.touchLayout !== 'b'}
+      <div class="label">{T.touchRock}</div>
+      <div class="seg" role="radiogroup" aria-label={T.touchRock}>
+        {#each TOUCH_ROCK_PX as px}
+          <button type="button" role="radio" data-rock-px={px} aria-checked={s.touchRockPx === px} class:on={s.touchRockPx === px} onclick={() => settings.patch({ touchRockPx: px })}>{px ? T.touchRockLevels[px] : T.off}</button>
+        {/each}
+      </div>
+      <p class="help">{T.touchRockHelp}</p>
     {/if}
   {/if}
 

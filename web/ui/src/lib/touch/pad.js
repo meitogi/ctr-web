@@ -36,6 +36,20 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   // update (~33 ms at 30 fps) still reaches it once
   let landed = 0
   let landedGo = false
+  // the slide kept through a lift (session 42, the user : « lever le doigt puis recliquer pour
+  // déclencher le boost sans arrêter le dérapage ») : the game ends a slide the frame its button
+  // (R1) is let go, and a boost is a tap of L1 or R1 during it. A finger that lifts while holding R1
+  // in a race leaves R1 held `slideMs` ms more ; touching a control with R1 again inside that time
+  // taps L1 (the boost) and holds R1 on ; no touch → R1 let go, the slide ends.
+  let slideUntil = 0
+  let boostPending = false
+  let boostUntil = 0
+  // the rock (the user : « avec le haut du pouce je reste appuyé pour le slide, … j'abaisse le
+  // pouce ») : one thumb is one touch point, but lowering it onto the screen moves that point down a
+  // few mm (and widens the contact where the browser says so). A finger that started on an
+  // `anchor` (R) and moves down `rockPx` from where it rests — or whose contact grows by half — taps
+  // L1 (the boost) once ; raised back, it is armed again.
+  const rocked = (f, y, w) => (y - f.restY > self.rockPx) || (w > 0 && f.restW > 0 && w > f.restW * 1.5)
   const self = {
     get controls() { return controls },
     get kind() { return kind },
@@ -57,31 +71,50 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       self.release()
       return true
     },
-    down(id, x, y) {
+    down(id, x, y, t = 0, w = 0) {
       const start = hit(controls, x, y)
       if (!start) return false
-      fingers[id] = { start, last: start, x, y, ox: x, oy: y }
+      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false }
       const r = self.read(id)
       landed |= r.bits
       landedGo = landedGo || r.go
+      if (slideUntil && t <= slideUntil && (r.bits & B.r1)) {
+        boostPending = true
+        slideUntil = 0
+      }
       return true
     },
-    move(id, x, y) {
+    move(id, x, y, w = 0) {
       const f = fingers[id]
       if (!f) return false
       f.x = x
       f.y = y
+      if (f.start.anchor && self.rockPx > 0) {
+        if (!f.rock && rocked(f, y, w)) {
+          f.rock = true
+          boostPending = true
+        } else if (f.rock && y - f.restY < self.rockPx * 0.4 && !(w > 0 && f.restW > 0 && w > f.restW * 1.2)) {
+          f.rock = false
+        }
+        // at rest the thumb drifts : where it rests follows it up (never down : that is the rock)
+        if (!f.rock && y < f.restY) f.restY = y
+      }
       return true
     },
-    up(id) {
+    up(id, t = 0) {
       if (!fingers[id]) return false
+      const r = self.read(id)
       delete fingers[id]
+      if (self.slideMs > 0 && racing && (r.bits & B.r1)) slideUntil = t + self.slideMs
       return true
     },
     release() {
       for (const id in fingers) delete fingers[id]
       landed = 0
       landedGo = false
+      slideUntil = 0
+      boostPending = false
+      boostUntil = 0
       hold.reset()
       cross = false
     },
@@ -147,12 +180,22 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       if (!shown) return 0
       const r = self.read()
-      const bits = r.bits | landed
+      let bits = r.bits | landed
       const go = r.go || landedGo
       const stick = r.stick
       landed = 0
       landedGo = false
       const brake = (bits & B.square) !== 0
+      // the slide kept through a lift, its boost tapped (see slideUntil)
+      if (brake || !racing) slideUntil = 0
+      if (slideUntil && now > slideUntil) slideUntil = 0
+      if (slideUntil) bits |= B.r1
+      if (boostPending) {
+        boostPending = false
+        boostUntil = now + 100
+      }
+      if (boostUntil && now < boostUntil) bits |= B.l1
+      else boostUntil = 0
       cross = hold.update(now, { go, brake, racing })
       if (hold.state !== held) {
         held = hold.state
@@ -172,6 +215,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     },
     /** the packet says analog whatever the layout (TouchPad.svelte : the enhanced A / B mode) */
     analog: false,
+    /** how long R1 outlives a lift in a race (the slide kept, a re-touch = a boost) ; 0 = off */
+    slideMs: 0,
+    /** how far down (CSS px) a thumb on R rocks to boost ; 0 = off */
+    rockPx: 0,
+    /** R1 kept by a lift right now (TouchPad.svelte draws it) */
+    get sliding() { return slideUntil > 0 },
     /** called with the new value when the game's « racing » changes (TouchPad.svelte) */
     onRacing: null,
     /** called with the hold's state when it changes (hold.js : idle, pressing, held, retouched) */

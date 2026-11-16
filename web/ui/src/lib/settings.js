@@ -35,6 +35,8 @@ export const KEYS = {
   touchHold: 'ctr-ui.touch-hold',
   touchHoldMs: 'ctr-ui.touch-hold-ms',
   touchSize: 'ctr-ui.touch-size',
+  touchSlideMs: 'ctr-ui.touch-slide-ms',
+  touchRockPx: 'ctr-ui.touch-rock-px',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -51,6 +53,12 @@ export const TOUCH_MODES = ['auto', 'pad', 'minimal', 'enhanced']
 export const TOUCH_LAYOUTS = ['a', 'b', 'c']
 export const TOUCH_SIZES = ['s', 'm', 'l']
 export const TOUCH_HOLD_MS = Object.freeze({ min: 400, max: 1500, default: 800 })
+/** how long the slide (R1) outlives a lift of the thumb, for a re-touch to boost ; 0 = off */
+export const TOUCH_SLIDE_MS = Object.freeze([0, 200, 300, 450])
+const slideMs = (v) => (TOUCH_SLIDE_MS.includes(Number(v)) ? Number(v) : 300)
+/** how far down (CSS px) the thumb on R rocks for a boost ; 0 = off */
+export const TOUCH_ROCK_PX = Object.freeze([0, 6, 9, 14])
+const rockPx = (v) => (TOUCH_ROCK_PX.includes(Number(v)) ? Number(v) : 9)
 const pick = (v, list) => (list.includes(v) ? v : list[0])
 const holdMs = (v) => {
   const n = Math.round(Number(v))
@@ -106,6 +114,8 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchHold: read(storage, KEYS.touchHold) !== '0',
     touchHoldMs: holdMs(read(storage, KEYS.touchHoldMs) ?? TOUCH_HOLD_MS.default),
     touchSize: pick(read(storage, KEYS.touchSize), ['m', 's', 'l']),
+    touchSlideMs: slideMs(read(storage, KEYS.touchSlideMs) ?? 300),
+    touchRockPx: rockPx(read(storage, KEYS.touchRockPx) ?? 9),
   }
 }
 
@@ -126,6 +136,8 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchHold, s.touchHold ? null : '0')
   write(storage, KEYS.touchHoldMs, s.touchHoldMs === TOUCH_HOLD_MS.default ? null : s.touchHoldMs)
   write(storage, KEYS.touchSize, s.touchSize === 'm' ? null : s.touchSize)
+  write(storage, KEYS.touchSlideMs, s.touchSlideMs === 300 ? null : s.touchSlideMs)
+  write(storage, KEYS.touchRockPx, s.touchRockPx === 9 ? null : s.touchRockPx)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -145,7 +157,7 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
     value = {
       ...next, name: cleanName(next.name), device: cleanDevice(next.device),
       touchMode: pick(next.touchMode, TOUCH_MODES), touchLayout: pick(next.touchLayout, TOUCH_LAYOUTS),
-      touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs),
+      touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx),
     }
     saveSettings(storage, value, deviceKey)
     for (const fn of subs.slice()) fn(value)
