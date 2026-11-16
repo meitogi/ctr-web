@@ -16,6 +16,9 @@
 //   TOUCH-MENUS-BACK   the menus by touch : the D-pad moves the main menu, OK opens Time Trial's
 //                      screens, BACK (Triangle) comes back, every time
 //   TOUCH-PAD-HIDES    a pad connecting hides the controls ; a touch brings them back
+//   TOUCH-BOOT-INTRO   a real boot (started by itself) : through the Naughty Dog crate and the title
+//                      intro's scenes to the main menu, the menus' pad only — never the race's
+//                      (the user saw it come up during the intro, b.25)
 //   TOUCH-SLIDE-HOLD   layout D : a slide (R with the stick turned, at speed) held 0.5 s holds
 //                      itself — the game's « sliding » reaches the page —, stays held with the thumb
 //                      lifted, a double tap on R lets it go
@@ -24,7 +27,7 @@
 // Not a node --test file.
 
 import { drive } from '../../ui/src/lib/autopilot.js'
-import { IPHONE_MINI, PLAYER, fingers, phone, say, shot, startAt, state, touchState, turbo, until } from './ctr.mjs'
+import { IPHONE_MINI, PLAYER, onMainMenu, fingers, phone, say, shot, startAt, state, touchState, turbo, until } from './ctr.mjs'
 
 export const meta = { url: 'http://localhost:8093/index.html', login: false, player: PLAYER }
 
@@ -38,6 +41,7 @@ export const tags = {
 	'TOUCH-MENUS-BACK': ['input', 'menu'],
 	'TOUCH-PAD-HIDES': ['input', 'page'],
 	'TOUCH-SLIDE-HOLD': ['input', 'race'],
+	'TOUCH-BOOT-INTRO': ['input', 'boot'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -320,6 +324,31 @@ export default async ctx => {
 			if (after?.label !== JSON.parse(before).label) throw new Error(`BACK did not come back : ${back.join(' | ')}`)
 		}
 		return `down : ${row0} → ${row1} · ${back.join(' | ')}`
+	})
+
+	await ctx.scenario('TOUCH-BOOT-INTRO', async () => {
+		await phone(ctx, IPHONE_MINI)
+		await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, ctx.sid).catch(() => {})
+		await touchSettings(ctx, {})
+		await ctx.js("localStorage.removeItem('ctr-ui.auto-start'); return true")
+		await ctx.conn.send('Page.navigate', { url: await ctx.js('return location.origin + location.pathname') }, ctx.sid)
+		await sleep(500)
+		const seen = {}
+		let s = null
+		for (const end = Date.now() + 150_000; Date.now() < end; await sleep(250)) {
+			s = await state(ctx).catch(() => null)
+			const t = await touchState(ctx).catch(() => null)
+			if (s && t) {
+				const key = `${t.kind}@${s.levelID}`
+				seen[key] = (seen[key] ?? 0) + 1
+			}
+			if (onMainMenu(s)) break
+		}
+		const kinds = Object.keys(seen)
+		if (!onMainMenu(s)) throw new Error(`no main menu in 150 s (${s?.screen}, level ${s?.levelID}) · seen ${kinds.join(' ')}`)
+		const race = kinds.filter((k) => !k.startsWith('menu@'))
+		if (race.length) throw new Error(`the race's controls during the boot : ${race.join(' ')} (all : ${kinds.join(' ')})`)
+		return `the boot to the main menu : ${kinds.join(' ')} (kind@level)`
 	})
 
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {

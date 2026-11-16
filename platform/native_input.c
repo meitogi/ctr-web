@@ -380,8 +380,8 @@ internal void NativeInput_WebBlockLocalInput(void)
 // (status, id, buttons, analog : right x y, left x y), pulled once per input update and played by
 // the first player's slot — its buttons ANDed with that slot's (active low), its left stick taken
 // while moved, the slot made analog when the packet says so. Before the Settings block, which
-// clears it too. `state` tells the page what the game is doing : bit 0 a race is being driven (no
-// menu, pause, loading, cutscene or end of race) — its held accelerator lets go outside one, its
+// clears it too. `state` tells the page what the game is doing : bit 0 a race is being driven (a
+// drivable level ; no menu, pause, loading, cutscene or end of race) — its held accelerator lets go outside one, its
 // controls change for the menus ; bit 1 the first player's kart is in a slide (KS_DRIFTING) — its
 // held slide lets go when the game ends the slide. Returns 0 while the page shows no touch controls
 // (the slot is left as it is).
@@ -393,7 +393,10 @@ EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int state), {
 internal void NativeInput_WebApplyTouchPad(void)
 {
 	const struct GameTracker *gGT = GAME_TRACKER;
-	const s32 racing = (sdata->Loading.stage == LOAD_IDLE) &&
+	// a drivable level (the tracks, arenas and Adventure's hubs) : the boot's title intro plays its
+	// scenes as levels of their own (INTRO_RACE_TODAY … INTRO_OXIDE) with none of these flags set
+	// (session 42 : the race controls came up during the intro)
+	const s32 racing = (sdata->Loading.stage == LOAD_IDLE) && (gGT->levelID <= CITADEL_CITY) &&
 		((gGT->gameMode1 & (PAUSE_ALL | MAIN_MENU | END_OF_RACE | GAME_CUTSCENE | LOADING)) == 0);
 	const struct Driver *kart = racing ? gGT->drivers[0] : NULL;
 	const s32 sliding = (kart != NULL) && (kart->kartState == KS_DRIFTING);
