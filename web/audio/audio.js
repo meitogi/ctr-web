@@ -92,8 +92,22 @@
 			this.output = ctx.createGain();
 			this.output.connect(ctx.destination);
 			// Chrome starts a context made after the page's first gesture ; the others wait for a
-			// resume, retried each second as SDL did (index.html also resumes inside each gesture)
-			const resume = setInterval(() => (ctx.state === 'running' ? clearInterval(resume) : ctx.resume().catch(() => {})), 1000);
+			// resume, retried each second as SDL did (index.html also resumes inside each gesture).
+			// Retried again whenever the context stops : iOS Safari leaves it « interrupted » after the
+			// phone is locked or the page goes to the background, and nothing brought it back
+			// (session 41, measured on an iPhone : no sound after the lock).
+			let retry = 0;
+			const keepRunning = () => {
+				if (retry || ctx.state === 'running' || ctx.state === 'closed') return;
+				ctx.resume().catch(() => {});
+				retry = setInterval(() => {
+					if (ctx.state === 'running' || ctx.state === 'closed') { clearInterval(retry); retry = 0; }
+					else ctx.resume().catch(() => {});
+				}, 1000);
+			};
+			ctx.addEventListener('statechange', keepRunning);
+			document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepRunning(); });
+			keepRunning();
 			start(ctx).catch((e) => {
 				pending = null;
 				console.error('[CTR Web] audio worklet failed:', e);

@@ -3,6 +3,10 @@
 //                  panel's Start, tapped, boots the race with the Bot driving ; the panel samples it
 //                  and Send's report reaches web/test/player/.reports/ with its numbers
 //   PHONE-SERVER   serve.py --phone answers 404 on the tests' snapshots, saves and replays
+//   AUDIO-BACK     the sound comes back after iOS « interrupts » it (a lock, the Home Screen : measured
+//                  on an iPhone, the context stayed `interrupted` for good) — Chrome has no such state :
+//                  the context is suspended and reports `interrupted`, and resumes only inside a
+//                  gesture (navigator.userActivation), as Safari's ; a finger's tap must bring it back
 //
 // RUN
 //   Build : web/dev.sh build debug ; web/pages/assemble.sh build-web-debug build-web-debug-site
@@ -14,13 +18,14 @@
 import { mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PLAYER, phone, tap } from './ctr.mjs'
+import { PLAYER, open, phone, tap } from './ctr.mjs'
 
 export const meta = { url: 'http://localhost:8092/index.html', login: false, player: PLAYER }
 
 export const tags = {
 	'MEASURE-PANEL': ['page', 'race', 'harness'],
 	'PHONE-SERVER': ['harness'],
+	'AUDIO-BACK': ['audio', 'page'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -75,5 +80,33 @@ export default async ctx => {
 		const want = ['404', '404', '404', '200']
 		got.forEach((g, i) => { if (!g.endsWith(want[i])) throw new Error(`${got.join(', ')} : expected ${want.join(', ')}`) })
 		return got.join(' · ')
+	})
+
+	await ctx.scenario('AUDIO-BACK', async () => {
+		await phone(ctx)
+		try {
+			await open(ctx, '?race=crash-cove&char=crash&mode=tt&mute')
+			const state = () => ctx.js('return globalThis.ctrAudio?.context?.state ?? null')
+			for (const end = Date.now() + 15_000; (await state()) !== 'running'; await sleep(250)) if (Date.now() > end) throw new Error(`the sound never started (${await state()})`)
+			// iOS's interruption, as Chrome can play it — once open()'s click no longer counts as a gesture
+			// (a click's activation lasts ~5 s)
+			for (const end = Date.now() + 15_000; await ctx.js('return navigator.userActivation.isActive'); await sleep(250)) if (Date.now() > end) throw new Error('the page stays activated')
+			await ctx.js(`const c = globalThis.ctrAudio.context
+				let fake = 'interrupted'
+				const real = Object.getOwnPropertyDescriptor(BaseAudioContext.prototype, 'state').get
+				Object.defineProperty(c, 'state', { configurable: true, get: () => fake ?? real.call(c) })
+				const resume = AudioContext.prototype.resume
+				c.resume = () => navigator.userActivation.isActive ? (fake = null, resume.call(c)) : Promise.reject(new DOMException('no gesture (test shim)', 'NotAllowedError'))
+				return c.suspend().then(() => true)`)
+			await sleep(2500)
+			const held = await state()
+			if (held !== 'interrupted') throw new Error(`the shim did not hold : ${held} before any tap`)
+			const at = await ctx.js("const r = document.getElementById('canvas').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }")
+			await tap(ctx, at.x, at.y)
+			for (const end = Date.now() + 3000; (await state()) !== 'running'; await sleep(100)) if (Date.now() > end) throw new Error(`no sound after a tap : the context is still ${await state()}`)
+			return 'interrupted for 2.5 s with no gesture, running again after one tap'
+		} finally {
+			await phone(ctx, null)
+		}
 	})
 }

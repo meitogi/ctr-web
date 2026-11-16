@@ -64,11 +64,12 @@
   })();
   // Autoplay : browsers start an AudioContext suspended until the page gets a user gesture.
   // Chrome lets a page that was already activated start one ; Safari and Firefox want the
-  // resume inside the gesture.
+  // resume inside the gesture. iOS Safari's « interrupted » (after a lock, the Home Screen, a call)
+  // wants it too (session 41).
   for (const type of ['pointerdown', 'keydown', 'touchend']) {
     window.addEventListener(type, () => {
       const ctx = window.ctrAudio.context;
-      if (ctx && ctx.state === 'suspended') ctx.resume();
+      if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {});
     }, { capture: true });
   }
   var Module = {
