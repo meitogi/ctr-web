@@ -383,11 +383,13 @@ internal void NativeInput_WebBlockLocalInput(void)
 // clears it too. `state` tells the page what the game is doing : bit 0 a race is being driven (a
 // drivable level ; no menu, pause, loading, cutscene or end of race) — its held accelerator lets go outside one, its
 // controls change for the menus ; bit 1 the first player's kart is in a slide (KS_DRIFTING) — its
-// held slide lets go when the game ends the slide. Returns 0 while the page shows no touch controls
+// held slide lets go when the game ends the slide ; bit 2 the slide's turbo meter is in its red,
+// where a tap of L1 / R1 gives the boost (VehPhysProc_PowerSlide_Update) — the page lights its boost
+// control then, as the game's own exhaust does. Returns 0 while the page shows no touch controls
 // (the slot is left as it is).
 EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int state), {
 	const input = Module['ctrInput'];
-	return input && input.touch ? input.touch(HEAPU8, dst, state & 1, (state & 2) !== 0) : 0;
+	return input && input.touch ? input.touch(HEAPU8, dst, state & 1, (state & 2) !== 0, (state & 4) !== 0) : 0;
 });
 
 internal void NativeInput_WebApplyTouchPad(void)
@@ -400,10 +402,12 @@ internal void NativeInput_WebApplyTouchPad(void)
 		((gGT->gameMode1 & (PAUSE_ALL | MAIN_MENU | END_OF_RACE | GAME_CUTSCENE | LOADING)) == 0);
 	const struct Driver *kart = racing ? gGT->drivers[0] : NULL;
 	const s32 sliding = (kart != NULL) && (kart->kartState == KS_DRIFTING);
+	const s32 red = sliding && (kart->turbo_MeterRoomLeft != 0) &&
+		(kart->turbo_MeterRoomLeft < ((s32)kart->const_turboLowRoomWarning << VEH_PHYS_PROC_FRAME_TIME_SHIFT));
 	u8 packet[NATIVE_INPUT_PAD_PACKET_BYTES];
 	struct PlatformInputPadSnapshot *snapshot = &s_controllers[0].snapshot;
 
-	if (!NativeInput_WebReadTouchPad(packet, racing | (sliding << 1)))
+	if (!NativeInput_WebReadTouchPad(packet, racing | (sliding << 1) | (red << 2)))
 	{
 		return;
 	}

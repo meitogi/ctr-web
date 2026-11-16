@@ -418,3 +418,76 @@ test('the held slide tells its state, a double tap\'s « idle » included', () =
   pad.up(1, 1200)
   assert.deepEqual(seen, ['pressing', 'held', 'idle'])
 })
+
+test('the boost\'s moment (the game\'s red meter) is told once each way', () => {
+  const pad = make('a')
+  const seen = []
+  pad.onWindow = (w) => seen.push(w)
+  const pk = (t, red) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, true, red) }
+  pk(0, false)
+  pk(10, true)
+  pk(20, true)
+  pk(30, false)
+  assert.deepEqual(seen, [true, false])
+})
+
+test('the steering\'s sensitivity : full lock sooner, small moves turn harder', () => {
+  const pad = make('a')
+  const z = at(pad, 'steer')
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(1, ox, oy)
+  pad.move(1, ox + z.reach * 0.2, oy)
+  const plain = read(pad).lx
+  pad.steer = { reach: 0.65, curve: 0.7 }
+  const medium = read(pad).lx
+  assert.ok(medium > plain + 20, `a small move turns harder : ${plain} → ${medium}`)
+  pad.move(1, ox + z.reach * 0.65, oy)
+  assert.equal(read(pad).lx, 255, 'full lock at 0.65 of the reach')
+})
+
+test('the slide from the stick : lift while turning, touch again → R1, the same direction and force', () => {
+  const pad = make('a')
+  pad.retapMs = 250
+  const z = at(pad, 'steer')
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(1, ox, oy, 0)
+  pad.move(1, ox + z.reach * 0.8, oy)
+  const before = read(pad, true, 10)
+  assert.equal(before.bits, 0)
+  pad.up(1, 100)
+  assert.equal(read(pad, true, 150).lx, before.lx, 'lifted : the stick stays where it was')
+  pad.down(1, ox + 30, oy + 20, 200)
+  const slide = read(pad, true, 210)
+  assert.equal(slide.bits, B.r1, 'touched again : the slide (R1)')
+  assert.equal(slide.lx, before.lx, 'the same direction and force, not a new centre')
+  pad.move(1, ox + 30 - z.reach * 0.3, oy + 20)
+  assert.ok(read(pad, true, 260).lx < before.lx, 'and it steers on from there')
+  pad.up(1, 300)
+  assert.equal(read(pad, true, 310).bits, 0, 'lifted : the slide ends')
+})
+
+test('the slide from the stick : not after the window, not from a centred stick ; R tapped meanwhile = the boost', () => {
+  const pad = make('a')
+  pad.retapMs = 250
+  const z = at(pad, 'steer')
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(1, ox, oy, 0)
+  pad.move(1, ox + z.reach * 0.8, oy)
+  read(pad, true, 10)
+  pad.up(1, 100)
+  assert.equal(read(pad, true, 400).lx, 0x80, 'the window over : centred')
+  pad.down(1, ox, oy, 450)
+  assert.equal(read(pad, true, 460).bits, 0, 'a late touch : steering, no slide')
+  pad.up(1, 500)
+  pad.down(1, ox, oy, 550)
+  assert.equal(read(pad, true, 560).bits, 0, 'lifted centred : no slide')
+  pad.move(1, ox - z.reach, oy)
+  read(pad, true, 570)
+  pad.up(1, 600)
+  pad.down(1, ox, oy, 650)
+  assert.equal(read(pad, true, 660).bits, B.r1)
+  pad.down(2, ...centre(at(pad, 'slide')), 700)
+  assert.equal(read(pad, true, 710).bits, B.r1 | B.l1, 'R tapped in the stick\'s slide : the boost')
+  pad.up(2, 760)
+  assert.equal(read(pad, true, 900).bits, B.r1, 'the slide on')
+})

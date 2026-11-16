@@ -58,6 +58,18 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   let slideSince = 0
   let lastRTap = -1e9
   let sliding = false
+  let boostWindow = false
+  // the slide from the stick (the user : « si on untap + tap ça le déclenche, si on est en train
+  // d'être sur une direction ? En gardant la même direction / force ») : a steering thumb lifted
+  // while turning leaves the stick where it was `retapMs` ms ; touching the zone again within it
+  // starts the slide (R1, held while that thumb stays down) and the stick goes on from the same
+  // direction and force — the new touch is not a new centre. Lifting it ends the slide.
+  let stickMemo = null // { raw: [x, y] before the curve, until }
+  const r1Elsewhere = () => {
+    if (slideLock === 'held') return true
+    for (const id in fingers) if (fingers[id].drift) return true
+    return false
+  }
   const rocked = (f, y, w) => (y - f.restY > self.rockPx) || (w > 0 && f.restW > 0 && w > f.restW * 1.5)
   const self = {
     get controls() { return controls },
@@ -83,7 +95,22 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     down(id, x, y, t = 0, w = 0) {
       const start = hit(controls, x, y)
       if (!start) return false
-      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false, noR1: false }
+      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false, noR1: false, drift: false, raw: null }
+      if (start.type === 'stick' && stickMemo && t <= stickMemo.until) {
+        const reach = start.reach * self.steer.reach
+        fingers[id].ox = x - stickMemo.raw[0] * reach
+        fingers[id].oy = y - stickMemo.raw[1] * reach
+        fingers[id].drift = true
+        stickMemo = null
+        return true
+      }
+      stickMemo = null
+      // R tapped while the slide's R1 is held from elsewhere (the stick's slide) : the boost
+      if (start.anchor && slideLock !== 'held' && r1Elsewhere()) {
+        fingers[id].noR1 = true
+        boostPending = true
+        return true
+      }
       if (start.anchor && slideLock === 'held') {
         if (t - lastRTap < 350) {
           // a double tap : the held slide let go, this finger's R1 too
@@ -125,8 +152,13 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       return true
     },
     up(id, t = 0) {
-      if (!fingers[id]) return false
+      const f = fingers[id]
+      if (!f) return false
       const r = self.read(id)
+      // a steering thumb lifted while turning : the stick kept for a re-touch (not after a slide)
+      if (f.start.type === 'stick' && !f.drift && self.retapMs > 0 && racing && f.raw && Math.hypot(f.raw[0], f.raw[1]) >= 0.4) {
+        stickMemo = { raw: f.raw, out: r.stick, until: t + self.retapMs }
+      }
       delete fingers[id]
       if (self.slideMs > 0 && racing && (r.bits & B.r1)) slideUntil = t + self.slideMs
       return true
@@ -139,6 +171,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       boostPending = false
       boostUntil = 0
       slideLock = 'idle'
+      stickMemo = null
       hold.reset()
       cross = false
     },
@@ -159,12 +192,21 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         const s = f.start
         const under = hit(controls, f.x, f.y)
         if (s.type === 'stick') {
-          const dx = (f.x - f.ox) / s.reach
-          const dy = (f.y - f.oy) / s.reach
+          // the steering's sensitivity (the user : « le contrôle de la direction est lent ») : full
+          // lock at a share of the zone's reach, and a curve that turns harder from small moves
+          const reach = s.reach * self.steer.reach
+          const dx = (f.x - f.ox) / reach
+          const dy = (f.y - f.oy) / reach
           const len = Math.hypot(dx, dy)
           const k = len > 1 ? 1 / len : 1
-          stick = [dx * k, dy * k]
-          at = { ox: f.ox, oy: f.oy, x: f.ox + dx * k * s.reach, y: f.oy + dy * k * s.reach }
+          const curved = len > 0 ? Math.min(1, len) ** self.steer.curve / Math.min(1, len) : 0
+          stick = [dx * k * curved, dy * k * curved]
+          f.raw = [dx * k, dy * k]
+          at = { ox: f.ox, oy: f.oy, x: f.ox + dx * k * reach, y: f.oy + dy * k * reach }
+          if (f.drift) {
+            bits |= B.r1
+            ids.push('steer-slide')
+          }
           continue
         }
         let b = 0
@@ -197,17 +239,25 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
      * x y) ; `race` : a race is driven (the game's word). Returns 0 while hidden.
      */
-    packet(dst, at, race, now, slide = false) {
+    packet(dst, at, race, now, slide = false, red = false) {
       if (race !== racing) {
         racing = race
         self.onRacing?.(race)
       }
       sliding = !!slide
+      // the boost's moment, as the game's red exhaust shows it : the boost controls light up
+      if (!!red !== boostWindow) {
+        boostWindow = !!red
+        self.onWindow?.(boostWindow)
+      }
       if (!shown) return 0
       const r = self.read()
       let bits = r.bits | landed
       const go = r.go || landedGo
-      const stick = r.stick
+      let stick = r.stick
+      // between a steering thumb's lift and its re-touch, the stick stays where it was
+      if (stickMemo && now > stickMemo.until) stickMemo = null
+      if (!stick && stickMemo) stick = stickMemo.out
       landed = 0
       landedGo = false
       const brake = (bits & B.square) !== 0
@@ -258,10 +308,16 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     rockPx: 0,
     /** how long R is kept down in a slide before the slide holds itself ; 0 = off */
     slideHoldMs: 0,
+    /** how long a steering thumb's lift waits for a re-touch that starts the slide ; 0 = off */
+    retapMs: 0,
+    /** the stick's sensitivity : full lock at `reach` × the zone's reach, |v| ** `curve` */
+    steer: { reach: 1, curve: 1 },
     /** the held slide's state : idle · pressing · held */
     get slideLock() { return slideLock },
     /** called with the held slide's state when it changes (TouchPad.svelte) */
     onSlide: null,
+    /** called when the slide's boost moment (the turbo meter's red) starts or ends */
+    onWindow: null,
     /** R1 kept by a lift right now (TouchPad.svelte draws it) */
     get sliding() { return slideUntil > 0 },
     /** called with the new value when the game's « racing » changes (TouchPad.svelte) */

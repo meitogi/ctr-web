@@ -2,7 +2,7 @@
   // Settings › Controls › Touch (session 42) : the way to play on a touch screen (a pad / the minimal
   // on-screen pad / the enhanced one), the enhanced one's layout, the held accelerator and its delay,
   // the controls' size. Kept by the browser (lib/settings.js) ; TouchPad.svelte follows at once.
-  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS } from './lib/settings.js'
+  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_RETAP_MS, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS, TOUCH_STEER } from './lib/settings.js'
   import { T } from './lib/strings.js'
   import { live, settings } from './store.js'
 
@@ -43,6 +43,30 @@
         </div>
       </div>
     {/if}
+
+    {#if s.touchLayout !== 'c'}
+      <div class="label">{T.touchSteer}</div>
+      <div class="seg" role="radiogroup" aria-label={T.touchSteer}>
+        {#each Object.keys(TOUCH_STEER) as k}
+          <button type="button" role="radio" data-steer={k} aria-checked={s.touchSteer === k} class:on={s.touchSteer === k} onclick={() => settings.patch({ touchSteer: k })}>{T.touchSteers[k]}</button>
+        {/each}
+      </div>
+    {/if}
+
+    {#if s.touchLayout !== 'c'}
+      <div class="label">{T.touchRetap}</div>
+      <div class="seg" role="radiogroup" aria-label={T.touchRetap}>
+        {#each TOUCH_RETAP_MS as ms}
+          <button type="button" role="radio" data-retap-ms={ms} aria-checked={s.touchRetapMs === ms} class:on={s.touchRetapMs === ms} onclick={() => settings.patch({ touchRetapMs: ms })}>{ms ? `${(ms / 1000).toFixed(ms % 100 ? 2 : 1)} s` : T.off}</button>
+        {/each}
+      </div>
+      <p class="help">{T.touchRetapHelp}</p>
+    {/if}
+
+    <label class="setrow">
+      <span>{T.touchCue}<small>{T.touchCueHelp}</small></span>
+      <input id="ctr-touch-cue" type="checkbox" role="switch" class="switch" checked={s.touchCue} onchange={(e) => settings.patch({ touchCue: e.currentTarget.checked })} />
+    </label>
 
     {#if s.touchLayout !== 'b'}
       <div class="label">{T.touchSlideHold}</div>

@@ -19,8 +19,12 @@
 //   TOUCH-BOOT-INTRO   a real boot (started by itself) : through the Naughty Dog crate and the title
 //                      intro's scenes to the main menu, the menus' pad only — never the race's
 //                      (the user saw it come up during the intro, b.25)
+//   TOUCH-STICK-SLIDE  layout A : turning, the left thumb lifted and put down again at once starts a
+//                      slide the game reports (KS_DRIFTING, read through the touch pull), the stick
+//                      on the same side ; lifting it ends the slide
 //   TOUCH-SLIDE-HOLD   layout D : a slide (R with the stick turned, at speed) held 0.5 s holds
-//                      itself — the game's « sliding » reaches the page —, stays held with the thumb
+//                      itself — the game's « sliding » reaches the page —, R lights up at the boost's
+//                      moment (the game's red meter), stays held with the thumb
 //                      lifted, a double tap on R lets it go
 //
 // RUN : the player harness (CLAUDE.md § Tests) on touch.suite.mjs, --url http://localhost:8093/index.html
@@ -42,6 +46,7 @@ export const tags = {
 	'TOUCH-PAD-HIDES': ['input', 'page'],
 	'TOUCH-SLIDE-HOLD': ['input', 'race'],
 	'TOUCH-BOOT-INTRO': ['input', 'boot'],
+	'TOUCH-STICK-SLIDE': ['input', 'race'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -49,7 +54,7 @@ const TT = { race: 'crash-cove', char: 'crash', mode: 'tt' }
 
 /** The touch settings (lib/settings.js keys) set before the page loads ; null removes one. */
 async function touchSettings(ctx, s) {
-	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms' }
+	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms', touchRetapMs: 'ctr-ui.touch-retap-ms' }
 	const set = {}
 	for (const k in keys) set[keys[k]] = k in s ? s[k] : null
 	await ctx.js(`const s = ${JSON.stringify(set)}; for (const k in s) { if (s[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, String(s[k])) } return true`)
@@ -203,7 +208,8 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('TOUCH-LAP-ENHANCED', async () => {
-		await onPhone(ctx, TT, { touchHold: 0, touchLayout: 'a' }, { kind: 'a' })
+		// the Bot lifts and puts its steering finger back within milliseconds : no slide from the stick
+		await onPhone(ctx, TT, { touchHold: 0, touchLayout: 'a', touchRetapMs: 0 }, { kind: 'a' })
 		return touchLap(ctx, 'a')
 	})
 
@@ -351,6 +357,37 @@ export default async ctx => {
 		return `the boot to the main menu : ${kinds.join(' ')} (kind@level)`
 	})
 
+	await ctx.scenario('TOUCH-STICK-SLIDE', async () => {
+		await onPhone(ctx, TT, { touchLayout: 'a' }, { kind: 'a' })
+		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 30_000 })
+		// what the game says to the page, counted : sliding pulls
+		await ctx.js("const t = Module.ctrInput.touch; window.__sl = { slide: 0, last: 0 }; Module.ctrInput.touch = (h, d, r, s, red) => { if (s) __sl.slide++; __sl.last = s ? 1 : 0; return t(h, d, r, s, red) }; return true")
+		const f = fingers(ctx)
+		await f.on(2, 'go')
+		await sleep(2500)
+		const z = await f.rect('steer')
+		const [x, y] = [z.x + 70, z.y + z.h - 90]
+		await f.down(1, x, y)
+		await f.move(1, x + 60, y)
+		await sleep(300)
+		const lx0 = (await kart(ctx))?.angle
+		await f.up(1)
+		await sleep(60)
+		await f.down(1, x + 10, y + 5)
+		await sleep(1200)
+		const during = await ctx.js('return { ...window.__sl }')
+		await f.up(1)
+		await sleep(150)
+		const atLift = await ctx.js('return window.__sl.slide')
+		await sleep(600)
+		const after = await ctx.js('return { ...window.__sl }')
+		await f.all()
+		void lx0
+		if (during.slide < 10) throw new Error(`no slide from the stick : ${JSON.stringify(during)}`)
+		if (after.last || after.slide > atLift + 2) throw new Error(`the left thumb lifted, the slide went on : ${atLift} → ${JSON.stringify(after)}`)
+		return `lift + touch while turning : the game slides (${during.slide} pulls) · lifted : the slide ends`
+	})
+
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {
 		await onPhone(ctx, TT, { touchLayout: 'd' }, { kind: 'd' })
 		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 30_000 })
@@ -366,6 +403,10 @@ export default async ctx => {
 		let t = null
 		for (const end = Date.now() + 3000; Date.now() < end && (t = await touchState(ctx)) && (t.slide = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")) !== 'held'; ) await sleep(100)
 		if (t?.slide !== 'held') { await f.all(); throw new Error(`R kept in a slide never held : ${t?.slide}`) }
+		// the boost's moment : R lights up red while the game's meter is in its red
+		let red = false
+		for (const end = Date.now() + 3000; Date.now() < end && !red; await sleep(50)) red = (await ctx.js("return document.getElementById('ctr-touch')?.dataset.window ?? null")) === 'red'
+		if (!red) { await f.all(); throw new Error('the boost\'s moment never lit R in a 3 s slide') }
 		await f.off(3)
 		await sleep(400)
 		const lifted = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")
@@ -383,7 +424,7 @@ export default async ctx => {
 		const after = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")
 		await f.all()
 		if (after !== 'idle') throw new Error(`a double tap did not let go : ${after}`)
-		return 'R in a slide 0.5 s : held · thumb lifted : still held · double tap : let go'
+		return 'R in a slide 0.5 s : held · the boost\'s moment lit R · thumb lifted : still held · double tap : let go'
 	})
 
 	await ctx.scenario('TOUCH-PAD-HIDES', async () => {

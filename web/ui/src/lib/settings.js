@@ -38,6 +38,9 @@ export const KEYS = {
   touchSlideMs: 'ctr-ui.touch-slide-ms',
   touchRockPx: 'ctr-ui.touch-rock-px',
   touchSlideHoldMs: 'ctr-ui.touch-slide-hold-ms',
+  touchSteer: 'ctr-ui.touch-steer',
+  touchCue: 'ctr-ui.touch-cue',
+  touchRetapMs: 'ctr-ui.touch-retap-ms',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -63,6 +66,11 @@ const rockPx = (v) => (TOUCH_ROCK_PX.includes(Number(v)) ? Number(v) : 9)
 /** how long R is kept down in a slide before the slide holds itself ; 0 = off */
 export const TOUCH_SLIDE_HOLD_MS = Object.freeze([0, 350, 500, 800])
 const slideHoldMs = (v) => (TOUCH_SLIDE_HOLD_MS.includes(Number(v)) ? Number(v) : 500)
+/** the stick's sensitivity : full lock at `reach` × the zone's reach, |v| ** `curve` (lib/touch/pad.js steer) */
+/** how long a steering thumb's lift waits for the re-touch that starts the slide ; 0 = off */
+export const TOUCH_RETAP_MS = Object.freeze([0, 200, 250, 350])
+const retapMs = (v) => (TOUCH_RETAP_MS.includes(Number(v)) ? Number(v) : 250)
+export const TOUCH_STEER = Object.freeze({ low: { reach: 0.85, curve: 0.9 }, medium: { reach: 0.65, curve: 0.7 }, high: { reach: 0.5, curve: 0.55 } })
 const pick = (v, list) => (list.includes(v) ? v : list[0])
 const holdMs = (v) => {
   const n = Math.round(Number(v))
@@ -121,6 +129,10 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchSlideMs: slideMs(read(storage, KEYS.touchSlideMs) ?? 300),
     touchRockPx: rockPx(read(storage, KEYS.touchRockPx) ?? 9),
     touchSlideHoldMs: slideHoldMs(read(storage, KEYS.touchSlideHoldMs) ?? 500),
+    touchSteer: pick(read(storage, KEYS.touchSteer), ['medium', 'low', 'high']),
+    // the boost controls light up at the boost's moment (the game's red exhaust)
+    touchCue: read(storage, KEYS.touchCue) !== '0',
+    touchRetapMs: retapMs(read(storage, KEYS.touchRetapMs) ?? 250),
   }
 }
 
@@ -144,6 +156,9 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchSlideMs, s.touchSlideMs === 300 ? null : s.touchSlideMs)
   write(storage, KEYS.touchRockPx, s.touchRockPx === 9 ? null : s.touchRockPx)
   write(storage, KEYS.touchSlideHoldMs, s.touchSlideHoldMs === 500 ? null : s.touchSlideHoldMs)
+  write(storage, KEYS.touchSteer, s.touchSteer === 'medium' ? null : s.touchSteer)
+  write(storage, KEYS.touchCue, s.touchCue ? null : '0')
+  write(storage, KEYS.touchRetapMs, s.touchRetapMs === 250 ? null : s.touchRetapMs)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -163,7 +178,7 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
     value = {
       ...next, name: cleanName(next.name), device: cleanDevice(next.device),
       touchMode: pick(next.touchMode, TOUCH_MODES), touchLayout: pick(next.touchLayout, TOUCH_LAYOUTS),
-      touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx), touchSlideHoldMs: slideHoldMs(next.touchSlideHoldMs),
+      touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx), touchSlideHoldMs: slideHoldMs(next.touchSlideHoldMs), touchSteer: pick(next.touchSteer, ['medium', 'low', 'high']), touchRetapMs: retapMs(next.touchRetapMs),
     }
     saveSettings(storage, value, deviceKey)
     for (const fn of subs.slice()) fn(value)

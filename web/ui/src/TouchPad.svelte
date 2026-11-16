@@ -9,6 +9,7 @@
   // Cheap on a phone (session 41 : ~30 fps with little headroom) : the controls' places are
   // computed on a resize only ; a finger's move writes the stick's knob and the pressed classes,
   // nothing else ; the hold's ring is a CSS animation.
+  import { TOUCH_STEER } from './lib/settings.js'
   import { ui } from './state.svelte.js'
   import { live } from './store.js'
 
@@ -18,6 +19,7 @@
   let racing = $state(false)
   let hold = $state('idle')
   let slideLock = $state('idle')
+  let boostWindow = $state(false)
   // a pad connected hides the controls until the screen is touched again
   let padHides = $state(ui.pads.length > 0)
   let touched = $state(false)
@@ -37,7 +39,8 @@
     pad.onRacing = (r) => { racing = r }
     pad.onHold = (h) => { hold = h }
     pad.onSlide = (h) => { slideLock = h }
-    return () => { pad.onRacing = null; pad.onHold = null; pad.onSlide = null }
+    pad.onWindow = (w) => { boostWindow = w }
+    return () => { pad.onRacing = null; pad.onHold = null; pad.onSlide = null; pad.onWindow = null }
   })
 
   let pads = ui.pads.length
@@ -86,6 +89,9 @@
     pad.slideMs = mode === 'enhanced' ? s.touchSlideMs : 0
     pad.rockPx = mode === 'enhanced' ? s.touchRockPx : 0
     pad.slideHoldMs = mode === 'enhanced' ? s.touchSlideHoldMs : 0
+    pad.steer = mode === 'enhanced' ? TOUCH_STEER[s.touchSteer] : { reach: 1, curve: 1 }
+    // the slide from the stick : a stick to re-touch (A, B, D)
+    pad.retapMs = mode === 'enhanced' && s.touchLayout !== 'c' ? s.touchRetapMs : 0
   })
   $effect(() => {
     pad.show(shown)
@@ -112,6 +118,7 @@
       }
     }
     if (r.at && knob && base) {
+      base.classList.toggle('slide', r.ids.includes('steer-slide'))
       base.style.transform = `translate(${r.at.ox}px, ${r.at.oy}px)`
       knob.style.transform = `translate(${r.at.x}px, ${r.at.y}px)`
       base.hidden = false
@@ -150,7 +157,7 @@
 
 <div class="probe" bind:this={probe} aria-hidden="true"></div>
 {#if shown && view}
-  <div id="ctr-touch" class="touch" data-kind={kind} data-hold={hold} data-slide={slideLock} style:--hold-ms={`${s.touchHoldMs}ms`} style:--slide-ms={`${s.touchSlideHoldMs}ms`} role="application" aria-label="Touch controls"
+  <div id="ctr-touch" class="touch" data-kind={kind} data-hold={hold} data-slide={slideLock} data-window={s.touchCue && boostWindow ? 'red' : null} style:--hold-ms={`${s.touchHoldMs}ms`} style:--slide-ms={`${s.touchSlideHoldMs}ms`} role="application" aria-label="Touch controls"
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onlostpointercapture={up}
     oncontextmenu={(e) => e.preventDefault()}>
     {#each controls as c (c.id)}
@@ -161,7 +168,7 @@
           <span class="arm up"></span><span class="arm down"></span><span class="arm left"></span><span class="arm right"></span>
         </div>
       {:else}
-        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} data-id={c.id} style={box(c)} use:register={c.id}>
+        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} class:boosts={c.anchor || c.boost || (c.group && (c.bits & 0x400))} data-id={c.id} style={box(c)} use:register={c.id}>
           {#if c.go && kind !== 'minimal'}<span class="ring"></span>{/if}
           {#if c.anchor}<span class="ring slide-ring"></span>{/if}
           <span class="label">{c.label}</span>
@@ -198,6 +205,8 @@
   [data-hold='pressing'] .ring { opacity: 1; animation: fill var(--hold-ms) linear forwards; }
   @keyframes fill { from { --fill: 0turn; } to { --fill: 1turn; } }
   [data-hold='held'] .go, [data-hold='retouched'] .go { background: rgba(245, 159, 0, 0.75); color: #111; }
+  /* the boost's moment (the game's red exhaust, Settings › Touch) : the controls that boost light up red */
+  [data-window='red'] .boosts { background: rgba(255, 70, 50, 0.8); border-color: #ff4632; box-shadow: 0 0 18px rgba(255, 70, 50, 0.9); }
   /* the held slide (R) : its ring fills while R is kept down in a slide, then R turns blue, HELD */
   [data-hold] .slide-ring { border-color: #4dabf7; }
   [data-hold='pressing'] .slide-ring { opacity: 0; animation: none; }
@@ -207,5 +216,6 @@
   [data-hold='held'] .go::after, [data-hold='retouched'] .go::after { content: 'HELD'; position: absolute; top: -26px; padding: 2px 8px; border-radius: 8px; background: #f59f00; color: #111; font-size: 11px; }
   .stick-base, .stick-knob { left: 0; top: 0; border-radius: 50%; pointer-events: none !important; }
   .stick-base { width: 104px; height: 104px; margin: -52px 0 0 -52px; background: rgba(255, 255, 255, 0.12); border: 2px solid rgba(255, 255, 255, 0.6); }
+  .stick-base:global(.slide) { border-color: #4dabf7; background: rgba(77, 171, 247, 0.3); }
   .stick-knob { width: 50px; height: 50px; margin: -25px 0 0 -25px; background: rgba(255, 255, 255, 0.55); }
 </style>
