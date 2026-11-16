@@ -30,9 +30,9 @@ browser now. nothing gets uploaded. next time you just press the button and send
 
 - **the whole game, in a tab** — menus, races, music, voices, saves kept in your
   browser. clear your site data and that's on you.
-- **everything unlocked** — a box on the home page, ticked by default : every character,
-  track and arena, everywhere but Adventure. your save keeps its own progress : untick it
-  and you're back to what you earned.
+- **everything unlocked** — a box on the home page (and Settings › System), ticked by default :
+  every character, track and arena, everywhere but Adventure. your save keeps its own
+  progress : untick it and you're back to what you earned (mid-game it asks to restart).
 - **controls** — keyboard or any gamepad, remap every button in Settings (Triangle to
   accelerate ? bold. respect.), the right button icons for your pad. pads start in analog
   (ANA), Select + Start flips to digital (DIG), just like the PlayStation's Analog button.
@@ -58,8 +58,25 @@ measured yet.
 - **the app has its own storage.** a disc stored in Safari is not in the Home Screen app : pick it once
   more there. in the app it stays (closed, reopened : kept). in a Safari tab, Safari deletes a site's
   storage after 7 days without a visit — the home page says which one you're in.
-- **no touch controls yet**, they come next (a Bluetooth pad : not checked yet). **no offline yet** :
-  the app needs the network to open (the disc and saves are on the phone).
+- **touch controls.** three ways to play, Settings › Controls › Touch :
+  - **Enhanced** (the default on a touch screen) : made for the game. left thumb anywhere on the
+    left = a stick, right where it lands. GO, the slide (R), the item, the brake under the right
+    thumb, three layouts to try (A : buttons, roll from R onto BOOST for the slide's boosts ;
+    B : one thumb glides GO → GO + R → + BOOST ; C : left / right buttons, no stick).
+    **GO holds itself** once you've kept it pressed 0.8 s in a race (a plain press first : the start
+    boost is yours) — the brake, a tap on GO, the pause or the finish let go. switch it off, or
+    change the delay, in Settings.
+  - **Minimal** : the pad's own buttons on the screen, one for one.
+  - **Pad** : nothing on the screen. a connected pad hides the touch controls anyway ; touch the
+    screen and they're back.
+  in the menus the screen keeps a small pad : D-pad, OK, and BACK (red, always there).
+- **a Bluetooth pad** : iPhone pairs DualSense / DualShock 4, Xbox and Switch Pro pads, and Safari
+  hands them to the page like any pad (Apple's docs ; on a real iPhone : being checked). press a
+  button once for the page to see it. the PS / Xbox / Home button belongs to iOS (it opens Games).
+- **starts by itself.** with the disc stored, the page goes straight into the game (the sound
+  waits for your first touch). want the home page back ? Settings › System › « Start the game by
+  itself ».
+- **no offline yet** : the app needs the network to open (the disc and saves are on the phone).
 
 ## the limits (read this before you report them)
 
@@ -82,8 +99,7 @@ no dates. no versions. trust the process.
 
 | | what | why you care |
 |---|---|---|
-| next | **on your phone** | installed like an app (iOS / Android), if the phone keeps up — measured first |
-| next | **touch controls** | a plain on-screen pad, and one made for the game : steer left, slide / item / brake right |
+| next | **touch, tuned** | the touch layouts tuned in the hand, on real phones ; Android checked |
 | next | **your save, out and back** | export the card from Settings, import it on another browser |
 | trust me bro | **PAL discs** | French version first. 50 Hz and all |
 
