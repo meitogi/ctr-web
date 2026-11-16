@@ -491,3 +491,20 @@ test('the slide from the stick : not after the window, not from a centred stick 
   pad.up(2, 760)
   assert.equal(read(pad, true, 900).bits, B.r1, 'the slide on')
 })
+
+test('the held accelerator lets go while the kart is put back (or about to start) : GO plain there', () => {
+  const pad = make('a')
+  const go = centre(at(pad, 'go'))
+  const pk = (t, revving = false) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, false, false, revving); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  pad.down(1, ...go, 0)
+  pk(0)
+  pk(900)
+  pad.up(1, 950)
+  assert.equal(pk(1000), B.cross, 'locked')
+  assert.equal(pk(1100, true), 0, 'put back after a fall : let go')
+  pad.down(1, ...go, 1500)
+  assert.equal(pk(1500, true), B.cross, 'a plain press, timed by the player')
+  pk(2500, true)
+  pad.up(1, 2550)
+  assert.equal(pk(2600, true), 0, 'never locked while revving')
+})

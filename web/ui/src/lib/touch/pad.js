@@ -199,7 +199,10 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
           const dy = (f.y - f.oy) / reach
           const len = Math.hypot(dx, dy)
           const k = len > 1 ? 1 / len : 1
-          const curved = len > 0 ? Math.min(1, len) ** self.steer.curve / Math.min(1, len) : 0
+          // in a slide the curve is off : the slide's angle is the stick's whole range (into the turn
+          // tight, away wide — the user : « on peut déraper plus ou moins loin ? »)
+          const curve = sliding ? 1 : self.steer.curve
+          const curved = len > 0 ? Math.min(1, len) ** curve / Math.min(1, len) : 0
           stick = [dx * k * curved, dy * k * curved]
           f.raw = [dx * k, dy * k]
           at = { ox: f.ox, oy: f.oy, x: f.ox + dx * k * reach, y: f.oy + dy * k * reach }
@@ -239,7 +242,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
      * x y) ; `race` : a race is driven (the game's word). Returns 0 while hidden.
      */
-    packet(dst, at, race, now, slide = false, red = false) {
+    packet(dst, at, race, now, slide = false, red = false, revving = false) {
       if (race !== racing) {
         racing = race
         self.onRacing?.(race)
@@ -283,7 +286,9 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       if (boostUntil && now < boostUntil) bits |= B.l1
       else boostUntil = 0
-      cross = hold.update(now, { go, brake, racing })
+      // put back after a fall, or the countdown : a timed press boosts there — GO plain, the hold off
+      // (the user : « le auto accelerate se désactive quand on doit redémarrer après une chute »)
+      cross = hold.update(now, { go, brake, racing: racing && !revving })
       if (hold.state !== held) {
         held = hold.state
         self.onHold?.(held)
