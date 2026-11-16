@@ -628,8 +628,9 @@ export async function tap(ctx, x, y) {
 export const IPHONE_MINI = { width: 812, height: 375, deviceScaleFactor: 3, mobile: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1' }
 
 /**
- * Several fingers on the touch screen at once (CDP Input.dispatchTouchEvent : every event carries
- * all the fingers still down ; one missing from the last event is lifted). down / move / up by a
+ * Several fingers on the touch screen at once (CDP Input.dispatchTouchEvent : touchStart and
+ * touchMove carry every finger down ; touchEnd carries the fingers it lifts — measured : a finger
+ * missing from a touchMove stays down, and an empty touchEnd lifts them all). down / move / up by a
  * finger's id ; `on(id, control)` puts it on the centre of a touch control of the page
  * (#ctr-touch [data-id=…], TouchPad.svelte), `off(id)` lifts it, `all()` lifts every finger.
  */
@@ -645,9 +646,10 @@ export function fingers(ctx) {
 		async down(id, x, y) { points[id] = { x, y }; await send('touchStart') },
 		async move(id, x, y) { points[id] = { x, y }; await send('touchMove') },
 		async up(id) {
-			if (!points[id]) return
+			const p = points[id]
+			if (!p) return
 			delete points[id]
-			await send(Object.keys(points).length ? 'touchMove' : 'touchEnd')
+			await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ x: p.x, y: p.y, id: Number(id), radiusX: 8, radiusY: 8, force: 1 }] }, ctx.sid)
 		},
 		async all() {
 			if (!Object.keys(points).length) return

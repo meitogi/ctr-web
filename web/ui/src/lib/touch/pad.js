@@ -49,6 +49,15 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   // few mm (and widens the contact where the browser says so). A finger that started on an
   // `anchor` (R) and moves down `rockPx` from where it rests — or whose contact grows by half — taps
   // L1 (the boost) once ; raised back, it is armed again.
+  // the held slide (the user : « après un temps ça fasse comme le hold, ça reste dessus ») : R
+  // (an `anchor`) kept down `slideHoldMs` while the game says the kart slides locks R1 ; the thumb
+  // can leave it. Locked, a tap on R taps L1 (the boost) ; two taps within 350 ms let it go (the
+  // second one's R1 kept off) ; so do the brake, the menus and the game ending the slide.
+  let slideLock = 'idle' // idle · pressing · held
+  let slideTold = 'idle' // as last told (onSlide) : a double tap changes it between two pulls
+  let slideSince = 0
+  let lastRTap = -1e9
+  let sliding = false
   const rocked = (f, y, w) => (y - f.restY > self.rockPx) || (w > 0 && f.restW > 0 && w > f.restW * 1.5)
   const self = {
     get controls() { return controls },
@@ -74,7 +83,21 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     down(id, x, y, t = 0, w = 0) {
       const start = hit(controls, x, y)
       if (!start) return false
-      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false }
+      fingers[id] = { start, last: start, x, y, ox: x, oy: y, restY: y, restW: w, rock: false, noR1: false }
+      if (start.anchor && slideLock === 'held') {
+        if (t - lastRTap < 350) {
+          // a double tap : the held slide let go, this finger's R1 too
+          slideLock = 'idle'
+          fingers[id].noR1 = true
+          landed &= ~B.r1
+          boostPending = false
+          boostUntil = 0
+          lastRTap = -1e9
+          return true
+        }
+        lastRTap = t
+        boostPending = true
+      }
       const r = self.read(id)
       landed |= r.bits
       landedGo = landedGo || r.go
@@ -115,6 +138,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       slideUntil = 0
       boostPending = false
       boostUntil = 0
+      slideLock = 'idle'
       hold.reset()
       cross = false
     },
@@ -151,7 +175,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
           fromGo = !!f.last.go
           ids.push(f.last.id)
         } else if (s.anchor) {
-          b = s.bits | (under && under.boost ? under.bits : 0)
+          b = (f.noR1 ? s.bits & ~B.r1 : s.bits) | (under && under.boost ? under.bits : 0)
           ids.push(s.id)
           if (under && under.boost) ids.push(under.id)
         } else {
@@ -173,11 +197,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
      * x y) ; `race` : a race is driven (the game's word). Returns 0 while hidden.
      */
-    packet(dst, at, race, now) {
+    packet(dst, at, race, now, slide = false) {
       if (race !== racing) {
         racing = race
         self.onRacing?.(race)
       }
+      sliding = !!slide
       if (!shown) return 0
       const r = self.read()
       let bits = r.bits | landed
@@ -188,6 +213,18 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       const brake = (bits & B.square) !== 0
       // the slide kept through a lift, its boost tapped (see slideUntil)
       if (brake || !racing) slideUntil = 0
+      // the held slide : R down (a finger on an anchor, R1 its own) long enough in a slide → held
+      let rDown = false
+      for (const id in fingers) if (fingers[id].start.anchor && !fingers[id].noR1) rDown = true
+      if (brake || !racing || (slideLock === 'held' && !sliding) || !(self.slideHoldMs > 0)) slideLock = 'idle'
+      else if (slideLock === 'idle' && rDown && sliding) { slideLock = 'pressing'; slideSince = now }
+      else if (slideLock === 'pressing' && (!rDown || !sliding)) slideLock = 'idle'
+      else if (slideLock === 'pressing' && now - slideSince >= self.slideHoldMs) slideLock = 'held'
+      if (slideLock === 'held') { bits |= B.r1; slideUntil = 0 }
+      if (slideLock !== slideTold) {
+        slideTold = slideLock
+        self.onSlide?.(slideLock)
+      }
       if (slideUntil && now > slideUntil) slideUntil = 0
       if (slideUntil) bits |= B.r1
       if (boostPending) {
@@ -202,7 +239,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         self.onHold?.(held)
       }
       const buttons = ~(bits | (cross ? B.cross : 0)) & 0xffff
-      const analog = self.analog || kind === 'a' || kind === 'b'
+      const analog = self.analog || kind === 'a' || kind === 'b' || kind === 'd'
       dst[at] = 0
       dst[at + 1] = analog ? PAD_ANALOG : PAD_DIGITAL
       dst[at + 2] = buttons & 0xff
@@ -219,6 +256,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     slideMs: 0,
     /** how far down (CSS px) a thumb on R rocks to boost ; 0 = off */
     rockPx: 0,
+    /** how long R is kept down in a slide before the slide holds itself ; 0 = off */
+    slideHoldMs: 0,
+    /** the held slide's state : idle · pressing · held */
+    get slideLock() { return slideLock },
+    /** called with the held slide's state when it changes (TouchPad.svelte) */
+    onSlide: null,
     /** R1 kept by a lift right now (TouchPad.svelte draws it) */
     get sliding() { return slideUntil > 0 },
     /** called with the new value when the game's « racing » changes (TouchPad.svelte) */

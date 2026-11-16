@@ -159,11 +159,11 @@ test('« Unlock everything » reaches the game as it was when the game started (
 test('the touch pad is pulled with the game\'s « racing » and the hook\'s clock', async () => {
   const { createInputHook } = await import('../src/lib/input-hook.js')
   const seen = []
-  const touch = { packet: (heap, dst, racing, now) => { seen.push([dst, racing, now]); heap[dst] = 9; return 1 } }
+  const touch = { packet: (heap, dst, racing, now, sliding) => { seen.push([dst, racing, now, sliding]); heap[dst] = 9; return 1 } }
   const hook = createInputHook({ get: () => ({}) }, { blocked: () => false }, { touch, now: () => 42 })
   const heap = new Uint8Array(16)
-  assert.equal(hook.touch(heap, 4, 1), 1)
-  assert.deepEqual(seen, [[4, true, 42]])
+  assert.equal(hook.touch(heap, 4, 1, true), 1)
+  assert.deepEqual(seen, [[4, true, 42, true]])
   assert.equal(heap[4], 9)
   assert.equal(createInputHook({ get: () => ({}) }, { blocked: () => false }).touch(heap, 0, 1), 0, 'no touch pad : nothing')
 })

@@ -17,6 +17,7 @@
   const s = $derived(live.current)
   let racing = $state(false)
   let hold = $state('idle')
+  let slideLock = $state('idle')
   // a pad connected hides the controls until the screen is touched again
   let padHides = $state(ui.pads.length > 0)
   let touched = $state(false)
@@ -35,7 +36,8 @@
     racing = pad.racing
     pad.onRacing = (r) => { racing = r }
     pad.onHold = (h) => { hold = h }
-    return () => { pad.onRacing = null; pad.onHold = null }
+    pad.onSlide = (h) => { slideLock = h }
+    return () => { pad.onRacing = null; pad.onHold = null; pad.onSlide = null }
   })
 
   let pads = ui.pads.length
@@ -83,6 +85,7 @@
     // the slide kept through a lift : the enhanced pad's (the minimal one is the pad, 1:1)
     pad.slideMs = mode === 'enhanced' ? s.touchSlideMs : 0
     pad.rockPx = mode === 'enhanced' ? s.touchRockPx : 0
+    pad.slideHoldMs = mode === 'enhanced' ? s.touchSlideHoldMs : 0
   })
   $effect(() => {
     pad.show(shown)
@@ -147,7 +150,7 @@
 
 <div class="probe" bind:this={probe} aria-hidden="true"></div>
 {#if shown && view}
-  <div id="ctr-touch" class="touch" data-kind={kind} data-hold={hold} style:--hold-ms={`${s.touchHoldMs}ms`} role="application" aria-label="Touch controls"
+  <div id="ctr-touch" class="touch" data-kind={kind} data-hold={hold} data-slide={slideLock} style:--hold-ms={`${s.touchHoldMs}ms`} style:--slide-ms={`${s.touchSlideHoldMs}ms`} role="application" aria-label="Touch controls"
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onlostpointercapture={up}
     oncontextmenu={(e) => e.preventDefault()}>
     {#each controls as c (c.id)}
@@ -160,6 +163,7 @@
       {:else}
         <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} data-id={c.id} style={box(c)} use:register={c.id}>
           {#if c.go && kind !== 'minimal'}<span class="ring"></span>{/if}
+          {#if c.anchor}<span class="ring slide-ring"></span>{/if}
           <span class="label">{c.label}</span>
         </div>
       {/if}
@@ -194,6 +198,12 @@
   [data-hold='pressing'] .ring { opacity: 1; animation: fill var(--hold-ms) linear forwards; }
   @keyframes fill { from { --fill: 0turn; } to { --fill: 1turn; } }
   [data-hold='held'] .go, [data-hold='retouched'] .go { background: rgba(245, 159, 0, 0.75); color: #111; }
+  /* the held slide (R) : its ring fills while R is kept down in a slide, then R turns blue, HELD */
+  [data-hold] .slide-ring { border-color: #4dabf7; }
+  [data-hold='pressing'] .slide-ring { opacity: 0; animation: none; }
+  [data-slide='pressing'] .slide-ring { opacity: 1; animation: fill var(--slide-ms) linear forwards; }
+  [data-slide='held'] .ctl:global([data-id='slide']) { background: rgba(77, 171, 247, 0.75); color: #111; }
+  [data-slide='held'] .ctl:global([data-id='slide'])::after { content: 'HELD'; position: absolute; top: -26px; padding: 2px 8px; border-radius: 8px; background: #4dabf7; color: #111; font-size: 11px; }
   [data-hold='held'] .go::after, [data-hold='retouched'] .go::after { content: 'HELD'; position: absolute; top: -26px; padding: 2px 8px; border-radius: 8px; background: #f59f00; color: #111; font-size: 11px; }
   .stick-base, .stick-knob { left: 0; top: 0; border-radius: 50%; pointer-events: none !important; }
   .stick-base { width: 104px; height: 104px; margin: -52px 0 0 -52px; background: rgba(255, 255, 255, 0.12); border: 2px solid rgba(255, 255, 255, 0.6); }

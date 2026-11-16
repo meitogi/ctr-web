@@ -350,3 +350,71 @@ test('the rock by the contact\'s width (where the browser gives one), and off at
   off.move(1, x, y + 30)
   assert.equal(read(off, true, 10).bits, B.r1)
 })
+
+test('the held slide : R kept 0.5 s in a slide holds R1 ; a tap boosts ; a double tap lets go', () => {
+  const pad = make('d')
+  pad.slideHoldMs = 500
+  const r = centre(at(pad, 'slide'))
+  const pk = (t, slide = true) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  pad.down(1, ...r, 0)
+  pk(0, false)
+  pk(100, true)
+  assert.equal(pad.slideLock, 'pressing')
+  pk(599, true)
+  assert.equal(pad.slideLock, 'pressing')
+  pk(600, true)
+  assert.equal(pad.slideLock, 'held')
+  pad.up(1, 650)
+  assert.equal(pk(700), B.r1, 'lifted : R1 held')
+  pad.down(1, ...r, 1000)
+  assert.equal(pk(1010), B.r1 | B.l1, 'a tap : the boost')
+  pad.up(1, 1080)
+  assert.equal(pk(1200), B.r1, 'still held')
+  pad.down(1, ...r, 1500)
+  pad.up(1, 1560)
+  pad.down(1, ...r, 1700)
+  assert.equal(pk(1710) & B.r1, 0, 'a double tap : R1 let go, even with the finger on R')
+  assert.equal(pad.slideLock, 'idle')
+  pad.up(1, 1760)
+})
+
+test('the held slide ends with the game\'s slide, the brake, and never locks outside a slide', () => {
+  const pad = make('d')
+  pad.slideHoldMs = 500
+  const r = centre(at(pad, 'slide'))
+  const pk = (t, slide = true) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  pad.down(1, ...r, 0)
+  pk(0, false)
+  pk(900, false)
+  assert.equal(pad.slideLock, 'idle', 'no slide (a hop) : never held')
+  pk(1000, true)
+  pk(1600, true)
+  assert.equal(pad.slideLock, 'held')
+  pad.up(1, 1700)
+  assert.equal(pk(1800, false), 0, 'the game ended the slide : R1 let go')
+  pad.down(1, ...r, 2000)
+  pk(2000, true)
+  pk(2600, true)
+  pad.up(1, 2650)
+  pad.down(2, ...centre(at(pad, 'brake')), 2700)
+  assert.equal(pk(2710) & B.r1, 0, 'the brake lets go')
+})
+
+test('the held slide tells its state, a double tap\'s « idle » included', () => {
+  const pad = make('d')
+  pad.slideHoldMs = 500
+  const seen = []
+  pad.onSlide = (s) => seen.push(s)
+  const r = centre(at(pad, 'slide'))
+  const pk = (t) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, true) }
+  pad.down(1, ...r, 0)
+  pk(0)
+  pk(600)
+  pad.up(1, 650)
+  pad.down(1, ...r, 1000)
+  pad.up(1, 1050)
+  pad.down(1, ...r, 1150)
+  pk(1160)
+  pad.up(1, 1200)
+  assert.deepEqual(seen, ['pressing', 'held', 'idle'])
+})

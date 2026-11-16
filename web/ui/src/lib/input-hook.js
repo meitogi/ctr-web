@@ -11,8 +11,9 @@
 //                                    while the game runs waits for a restart (include/platform/
 //                                    native_web_ui.h : the menus open everything but Adventure, the
 //                                    save is never written)
-//   touch(HEAPU8, dst, racing)       the touch pad's 8-byte PSX packet at dst (lib/touch/pad.js),
-//                                    1 while its controls are shown ; `racing` : a race is driven
+//   touch(HEAPU8, dst, racing, sliding)  the touch pad's 8-byte PSX packet at dst (lib/touch/pad.js),
+//                                    1 while its controls are shown ; `racing` : a race is driven,
+//                                    `sliding` : the first player's kart is in a slide
 // watchPads : a rAF poll of navigator.getGamepads for the page's own uses (Settings, the ready
 // screen) — the pad itself is SDL's, this only watches.
 import { parsePadId } from './pads.js'
@@ -64,7 +65,7 @@ export function createInputHook(settings, ui, { players = null, touch = null, no
     players,
     blocked: () => ui.blocked(),
     unlockAll: () => (unlockAtStart ??= !!settings.get().unlockAll),
-    touch: (heapu8, dst, racing) => (touch ? touch.packet(heapu8, dst, !!racing, now()) : 0),
+    touch: (heapu8, dst, racing, sliding = false) => (touch ? touch.packet(heapu8, dst, !!racing, now(), !!sliding) : 0),
   }
 }
 

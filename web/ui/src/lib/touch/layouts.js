@@ -16,10 +16,12 @@
 //   boost    added to an anchor's finger passing over it
 //
 // Kinds : 'minimal' (the pad 1:1), 'a' (floating stick), 'b' (glide), 'c' (left / right buttons),
+// 'd' (one thumb a side : the stick left ; GO and R large side by side, held both, ITEM above,
+// BRAKE below — the user, 2026-11-16 : « le plus pratique à 1 doigt à gauche et 1 doigt à droite »),
 // 'menu' (the reduced pad of the game's menus : D-pad, OK, BACK, pause).
 import { PSX_BIT as B } from '../guest-input.js'
 
-export const KINDS = ['minimal', 'a', 'b', 'c', 'menu']
+export const KINDS = ['minimal', 'a', 'b', 'c', 'd', 'menu']
 export const SIZES = { s: 0.88, m: 1, l: 1.14 }
 
 /**
@@ -93,6 +95,20 @@ export function layout(kind, view, { size = 'm' } = {}) {
       { id: 'boost', type: 'button', cx: ax - 128 * u, cy: ay - 138 * u, r: 32 * u, bits: B.cross | B.r1 | B.l1, label: '+ BOOST', go: true, group: 'glide' },
       { id: 'item', type: 'button', cx: ax + 4 * u, cy: ay - 122 * u, r: 28 * u, bits: B.circle, label: 'ITEM' },
       { id: 'brake', type: 'button', cx: ax - 132 * u, cy: ay + 6 * u, r: 24 * u, bits: B.square, label: 'BRAKE' },
+      look,
+      pause,
+    ]
+  }
+  if (kind === 'd') {
+    const gx = W - R - 58 * u
+    const gy = H - bottom - 104 * u
+    const sx = gx - 104 * u
+    return [
+      zone,
+      { id: 'go', type: 'button', cx: gx, cy: gy, r: 50 * u, bits: B.cross, label: 'GO', go: true },
+      { id: 'slide', type: 'button', cx: sx, cy: gy + 14 * u, r: 46 * u, bits: B.r1, label: 'R', anchor: true },
+      { id: 'item', type: 'button', cx: gx - 30 * u, cy: gy - 86 * u, r: 30 * u, bits: B.circle, label: 'ITEM' },
+      { id: 'brake', type: 'rect', x: sx - 30 * u, y: H - bottom - 38 * u, w: gx + 30 * u - (sx - 30 * u), h: 34 * u, bits: B.square, label: 'BRAKE' },
       look,
       pause,
     ]

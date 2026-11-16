@@ -16,6 +16,9 @@
 //   TOUCH-MENUS-BACK   the menus by touch : the D-pad moves the main menu, OK opens Time Trial's
 //                      screens, BACK (Triangle) comes back, every time
 //   TOUCH-PAD-HIDES    a pad connecting hides the controls ; a touch brings them back
+//   TOUCH-SLIDE-HOLD   layout D : a slide (R with the stick turned, at speed) held 0.5 s holds
+//                      itself — the game's « sliding » reaches the page —, stays held with the thumb
+//                      lifted, a double tap on R lets it go
 //
 // RUN : the player harness (CLAUDE.md § Tests) on touch.suite.mjs, --url http://localhost:8093/index.html
 // Not a node --test file.
@@ -34,6 +37,7 @@ export const tags = {
 	'TOUCH-HOLD': ['input', 'race'],
 	'TOUCH-MENUS-BACK': ['input', 'menu'],
 	'TOUCH-PAD-HIDES': ['input', 'page'],
+	'TOUCH-SLIDE-HOLD': ['input', 'race'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -50,6 +54,8 @@ async function touchSettings(ctx, s) {
 /** The page on the phone, at `at` (startAt's), with these touch settings ; waits for the controls. */
 async function onPhone(ctx, at, s = {}, { kind = null, turbo: fast = false } = {}) {
 	await phone(ctx, IPHONE_MINI)
+	// no finger left down from a scenario before (the browser keeps its touch points across loads)
+	await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, ctx.sid).catch(() => {})
 	await touchSettings(ctx, s)
 	await startAt(ctx, at, { turbo: fast })
 	const end = Date.now() + 10_000
@@ -314,6 +320,41 @@ export default async ctx => {
 			if (after?.label !== JSON.parse(before).label) throw new Error(`BACK did not come back : ${back.join(' | ')}`)
 		}
 		return `down : ${row0} → ${row1} · ${back.join(' | ')}`
+	})
+
+	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {
+		await onPhone(ctx, TT, { touchLayout: 'd' }, { kind: 'd' })
+		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 30_000 })
+		const f = fingers(ctx)
+		await f.on(2, 'go')
+		await sleep(2500)
+		const z = await f.rect('steer')
+		// full lock right at speed on Crash Cove's start (left runs into the wall there, and the game
+		// ends a slide against a wall)
+		await f.down(1, z.x + 70, z.y + z.h - 90)
+		await f.move(1, z.x + 70 + 60, z.y + z.h - 90)
+		await f.on(3, 'slide')
+		let t = null
+		for (const end = Date.now() + 3000; Date.now() < end && (t = await touchState(ctx)) && (t.slide = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")) !== 'held'; ) await sleep(100)
+		if (t?.slide !== 'held') { await f.all(); throw new Error(`R kept in a slide never held : ${t?.slide}`) }
+		await f.off(3)
+		await sleep(400)
+		const lifted = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")
+		if (lifted !== 'held') throw new Error(`the thumb lifted, the slide let go : ${lifted}`)
+		// a double tap : two taps well inside the 350 ms (the box read once, no query between)
+		const r = await f.rect('slide')
+		await f.down(3, r.cx, r.cy)
+		await sleep(50)
+		await f.up(3)
+		await sleep(50)
+		await f.down(3, r.cx, r.cy)
+		await sleep(50)
+		await f.up(3)
+		await sleep(300)
+		const after = await ctx.js("return document.getElementById('ctr-touch')?.dataset.slide")
+		await f.all()
+		if (after !== 'idle') throw new Error(`a double tap did not let go : ${after}`)
+		return 'R in a slide 0.5 s : held · thumb lifted : still held · double tap : let go'
 	})
 
 	await ctx.scenario('TOUCH-PAD-HIDES', async () => {

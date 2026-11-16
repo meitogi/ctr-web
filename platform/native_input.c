@@ -380,12 +380,14 @@ internal void NativeInput_WebBlockLocalInput(void)
 // (status, id, buttons, analog : right x y, left x y), pulled once per input update and played by
 // the first player's slot — its buttons ANDed with that slot's (active low), its left stick taken
 // while moved, the slot made analog when the packet says so. Before the Settings block, which
-// clears it too. `racing` tells the page whether a race is being driven (no menu, pause, loading,
-// cutscene or end of race) : its held accelerator lets go outside one, its controls change for the
-// menus. Returns 0 while the page shows no touch controls (the slot is left as it is).
-EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int racing), {
+// clears it too. `state` tells the page what the game is doing : bit 0 a race is being driven (no
+// menu, pause, loading, cutscene or end of race) — its held accelerator lets go outside one, its
+// controls change for the menus ; bit 1 the first player's kart is in a slide (KS_DRIFTING) — its
+// held slide lets go when the game ends the slide. Returns 0 while the page shows no touch controls
+// (the slot is left as it is).
+EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int state), {
 	const input = Module['ctrInput'];
-	return input && input.touch ? input.touch(HEAPU8, dst, racing) : 0;
+	return input && input.touch ? input.touch(HEAPU8, dst, state & 1, (state & 2) !== 0) : 0;
 });
 
 internal void NativeInput_WebApplyTouchPad(void)
@@ -393,10 +395,12 @@ internal void NativeInput_WebApplyTouchPad(void)
 	const struct GameTracker *gGT = GAME_TRACKER;
 	const s32 racing = (sdata->Loading.stage == LOAD_IDLE) &&
 		((gGT->gameMode1 & (PAUSE_ALL | MAIN_MENU | END_OF_RACE | GAME_CUTSCENE | LOADING)) == 0);
+	const struct Driver *kart = racing ? gGT->drivers[0] : NULL;
+	const s32 sliding = (kart != NULL) && (kart->kartState == KS_DRIFTING);
 	u8 packet[NATIVE_INPUT_PAD_PACKET_BYTES];
 	struct PlatformInputPadSnapshot *snapshot = &s_controllers[0].snapshot;
 
-	if (!NativeInput_WebReadTouchPad(packet, racing))
+	if (!NativeInput_WebReadTouchPad(packet, racing | (sliding << 1)))
 	{
 		return;
 	}
