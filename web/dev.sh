@@ -155,12 +155,12 @@ EOF
 }
 
 # A phone needs HTTPS (OPFS, the AudioWorklet, install) : the page goes out through the
-# developer's frp + Traefik tunnel. The site is the debug build assembled as the published one is,
+# developer's frp + Traefik tunnel, opened on the Mac by web/phone-tunnel.sh. The site is the debug build assembled as the published one is,
 # guarded with --debug (the debug tools let through, no game data) ; serve.py --phone answers 404
 # on the tests' snapshots, saves and replays, and keeps the reports POSTed to /__report.
 cmd_phone() {
   local build="$tree/build-web-debug" site="$tree/build-web-debug-site"
-  local host=${CTR_PHONE_HOST:-ctr-dev.suuuper.app} fport=${CTR_PHONE_FRP_PORT:-8098}
+  local host=${CTR_PHONE_HOST:-ctr-dev.suuuper.app}
   [ $# -eq 0 ] || { usage >&2; exit 2; }
   port_free "$PAGE"
   cmd_build debug
@@ -170,42 +170,15 @@ cmd_phone() {
   python3 "$tree/web/test/player/serve.py" --phone "$site" "$PAGE" 2>/dev/null &
   servers+=($!)
   wait_port "$PAGE" "the page server did not start"
-  local tick='`'
   cat <<EOF
 
 On the phone : https://$host/?measure   ($(sed -n 's/.*__CTR_VERSION = "\(.*\)".*/\1/p' "$site/preload-flag.js"), debug)
 Each report the phone sends is kept in web/test/player/.reports/ (a line below).
 
-The first time only, the tunnel (frp + Traefik : /workspace/docs/frp-traefik-tunnel-guide.md) :
-  1. Mac : forward $PAGE in VS Code's Ports panel (local port $PAGE).
-  2. frpc.toml, a block at the end (frpc in Docker on this Mac ; if it runs on another machine,
-     localIP is this Mac's LAN IP and the forward must listen on the LAN), then
-     docker compose up -d frpc :
-       [[proxies]]
-       name = "ctr-dev"
-       type = "tcp"
-       localIP = "host.docker.internal"
-       localPort = $PAGE
-       remotePort = $fport
-  3. VPS : docker/traefik/dynamic/03-ctr-dev.yml (Traefik watches the folder) :
-       http:
-         routers:
-           ctr-dev:
-             rule: "Host(${tick}$host${tick})"
-             entryPoints:
-               - websecure
-             service: ctr-dev
-             middlewares:
-               - crowdsec@file
-             tls:
-               certResolver: acme-ssl
-         services:
-           ctr-dev:
-             loadBalancer:
-               servers:
-                 - url: "http://frps:$fport"
-  4. DNS : $host  A  <the VPS's IP>, grey cloud (DNS only).
-  5. Check, from the Mac : curl -sI https://$host/ | head -1    → HTTP/1.1 200
+The tunnel (frp + Traefik), in the Mac's Terminal, from the workspace folder :
+  bash apps/ctr-web/web/phone-tunnel.sh
+It checks the frp files it needs, the page on localhost:$PAGE (VS Code forwards it), the DNS
+record and the VPS route, says what is missing, then opens the tunnel until Ctrl-C.
 Ctrl-C here stops the server.
 EOF
   wait
