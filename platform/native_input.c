@@ -376,6 +376,42 @@ internal void NativeInput_WebBlockLocalInput(void)
 	}
 }
 
+// The page's touch pad (web/ui/src/lib/touch/, a phone's on-screen controls) : one PSX pad packet
+// (status, id, buttons, analog : right x y, left x y), pulled once per input update and played by
+// the first player's slot — its buttons ANDed with that slot's (active low), its left stick taken
+// while moved, the slot made analog when the packet says so. Before the Settings block, which
+// clears it too. `racing` tells the page whether a race is being driven (no menu, pause, loading,
+// cutscene or end of race) : its held accelerator lets go outside one, its controls change for the
+// menus. Returns 0 while the page shows no touch controls (the slot is left as it is).
+EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int racing), {
+	const input = Module['ctrInput'];
+	return input && input.touch ? input.touch(HEAPU8, dst, racing) : 0;
+});
+
+internal void NativeInput_WebApplyTouchPad(void)
+{
+	const struct GameTracker *gGT = GAME_TRACKER;
+	const s32 racing = (sdata->Loading.stage == LOAD_IDLE) &&
+		((gGT->gameMode1 & (PAUSE_ALL | MAIN_MENU | END_OF_RACE | GAME_CUTSCENE | LOADING)) == 0);
+	u8 packet[NATIVE_INPUT_PAD_PACKET_BYTES];
+	struct PlatformInputPadSnapshot *snapshot = &s_controllers[0].snapshot;
+
+	if (!NativeInput_WebReadTouchPad(packet, racing))
+	{
+		return;
+	}
+	NativeInput_SetSnapshotButtons(snapshot, NativeInput_GetSnapshotButtons(snapshot) & (u16)(packet[2] | (packet[3] << 8)));
+	if (packet[1] == NATIVE_INPUT_PAD_ANALOG)
+	{
+		snapshot->id = NATIVE_INPUT_PAD_ANALOG;
+		if ((packet[6] != 0x80) || (packet[7] != 0x80))
+		{
+			snapshot->analog[2] = packet[6];
+			snapshot->analog[3] = packet[7];
+		}
+	}
+}
+
 // Couch mode — the page's Settings › Players (web/ui/src/lib/players.js). The native build keeps
 // one keyboard (F4 / F6 move it and the pads, CTR_INTERNAL builds) ; the web build adds :
 //   - a second keyboard key set (s_keyboardMapping2) driving its own slot while the page says
@@ -1215,6 +1251,7 @@ void Platform_InputUpdate(void)
 #endif
 	}
 #if defined(__EMSCRIPTEN__)
+	NativeInput_WebApplyTouchPad();
 	NativeInput_WebReportPlayers();
 	NativeInput_WebBlockLocalInput();
 	NativeInput_ApplyRemotePads();

@@ -1,5 +1,5 @@
-// The page's settings, one place : player name, volume / mute, « Unlock everything », keyboard and gamepad
-// mappings, two players on one keyboard (duo) and its two key sets, who plays on this page
+// The page's settings, one place : player name, volume / mute, « Unlock everything », starting the
+// game by itself, the touch controls, keyboard and gamepad mappings, two players on one keyboard (duo) and its two key sets, who plays on this page
 // (device : auto, keyboard only, gamepad only and which one). Persisted in localStorage ; a missing or blocked storage (private mode) only means
 // nothing is remembered.
 //
@@ -29,6 +29,12 @@ export const KEYS = {
   keyboardLeft: 'ctr-ui.keyboard-left',
   keyboardRight: 'ctr-ui.keyboard-right',
   device: 'ctr-ui.device',
+  autoStart: 'ctr-ui.auto-start',
+  touchMode: 'ctr-ui.touch-mode',
+  touchLayout: 'ctr-ui.touch-layout',
+  touchHold: 'ctr-ui.touch-hold',
+  touchHoldMs: 'ctr-ui.touch-hold-ms',
+  touchSize: 'ctr-ui.touch-size',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -36,6 +42,20 @@ export const DEVICE_MODES = ['auto', 'keyboard', 'gamepad']
 /** Auto : keyboard and gamepads, as before. `pad` : { id, nth } of the chosen gamepad, null = the first. */
 export const DEFAULT_DEVICE = Object.freeze({ mode: 'auto', pad: null })
 export const DEFAULT_VOLUME = 0.8
+/**
+ * The touch controls (lib/touch/, session 42) : `auto` = the enhanced pad on a touch screen, hidden
+ * while a pad is connected ; `pad` = never drawn. The enhanced pad's layout (lib/touch/layouts.js),
+ * its held accelerator (lib/touch/hold.js) and the controls' size.
+ */
+export const TOUCH_MODES = ['auto', 'pad', 'minimal', 'enhanced']
+export const TOUCH_LAYOUTS = ['a', 'b', 'c']
+export const TOUCH_SIZES = ['s', 'm', 'l']
+export const TOUCH_HOLD_MS = Object.freeze({ min: 400, max: 1500, default: 800 })
+const pick = (v, list) => (list.includes(v) ? v : list[0])
+const holdMs = (v) => {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) && n >= TOUCH_HOLD_MS.min && n <= TOUCH_HOLD_MS.max ? n : TOUCH_HOLD_MS.default
+}
 
 /** Printable ASCII only (the game's font), at most NAME_LEN characters. */
 export function cleanName(name) {
@@ -79,6 +99,13 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     keyboardLeft: loadMapping(storage, KEYS.keyboardLeft, DEFAULT_KEYBOARD_LEFT),
     keyboardRight: loadMapping(storage, KEYS.keyboardRight, DEFAULT_KEYBOARD_RIGHT),
     device: loadDevice(storage, deviceKey),
+    // with the game data stored, the page boots the game on load, no boot screen press (on by default)
+    autoStart: read(storage, KEYS.autoStart) !== '0',
+    touchMode: pick(read(storage, KEYS.touchMode), TOUCH_MODES),
+    touchLayout: pick(read(storage, KEYS.touchLayout), TOUCH_LAYOUTS),
+    touchHold: read(storage, KEYS.touchHold) !== '0',
+    touchHoldMs: holdMs(read(storage, KEYS.touchHoldMs) ?? TOUCH_HOLD_MS.default),
+    touchSize: pick(read(storage, KEYS.touchSize), ['m', 's', 'l']),
   }
 }
 
@@ -93,6 +120,12 @@ function saveSettings(storage, s, deviceKey) {
   saveMapping(storage, KEYS.keyboardLeft, s.keyboardLeft, DEFAULT_KEYBOARD_LEFT)
   saveMapping(storage, KEYS.keyboardRight, s.keyboardRight, DEFAULT_KEYBOARD_RIGHT)
   write(storage, deviceKey, s.device.mode === 'auto' ? null : JSON.stringify(s.device))
+  write(storage, KEYS.autoStart, s.autoStart ? null : '0')
+  write(storage, KEYS.touchMode, s.touchMode === 'auto' ? null : s.touchMode)
+  write(storage, KEYS.touchLayout, s.touchLayout === 'a' ? null : s.touchLayout)
+  write(storage, KEYS.touchHold, s.touchHold ? null : '0')
+  write(storage, KEYS.touchHoldMs, s.touchHoldMs === TOUCH_HOLD_MS.default ? null : s.touchHoldMs)
+  write(storage, KEYS.touchSize, s.touchSize === 'm' ? null : s.touchSize)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -109,7 +142,11 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
   let value = loadSettings(storage, { deviceKey })
   const subs = []
   const set = (next) => {
-    value = { ...next, name: cleanName(next.name), device: cleanDevice(next.device) }
+    value = {
+      ...next, name: cleanName(next.name), device: cleanDevice(next.device),
+      touchMode: pick(next.touchMode, TOUCH_MODES), touchLayout: pick(next.touchLayout, TOUCH_LAYOUTS),
+      touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs),
+    }
     saveSettings(storage, value, deviceKey)
     for (const fn of subs.slice()) fn(value)
   }

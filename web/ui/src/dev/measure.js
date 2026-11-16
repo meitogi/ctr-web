@@ -117,8 +117,38 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     lifecycle: [],
     samples: [],
     errors: [],
+    // session 42 : the pads this phone hands the page (id, mapping, buttons, rumble), the buttons
+    // seen pressed (which ones the system keeps for itself), the sound's state at the first press ;
+    // the touch controls as set and drawn, the safe areas
+    pads: { seen: [], pressed: {}, firstPress: null },
+    touch: null,
   }
   storage().then((s) => { report.storage.atLoad = s })
+  const padSeen = (gp, type) => {
+    report.pads.seen.push({ t: now(), type, id: gp.id, index: gp.index, mapping: gp.mapping, buttons: gp.buttons.length, axes: gp.axes.length, rumble: gp.vibrationActuator ? (gp.vibrationActuator.effects ?? gp.vibrationActuator.type ?? true) : null, audio: g.ctrAudio?.context?.state ?? null })
+    render()
+  }
+  addEventListener('gamepadconnected', (e) => padSeen(e.gamepad, 'connected'))
+  addEventListener('gamepaddisconnected', (e) => padSeen(e.gamepad, 'disconnected'))
+  setInterval(() => {
+    for (const gp of navigator.getGamepads?.() ?? []) {
+      if (!gp) continue
+      const seen = (report.pads.pressed[gp.id] ??= [])
+      for (let b = 0; b < gp.buttons.length; b++) {
+        if (!gp.buttons[b].pressed || seen.includes(b)) continue
+        seen.push(b)
+        report.pads.firstPress ??= { t: now(), button: b, audio: g.ctrAudio?.context?.state ?? null }
+      }
+    }
+  }, 100)
+  const touchNow = () => {
+    const probe = document.querySelector('.probe')
+    const cs = probe ? getComputedStyle(probe) : null
+    const el = document.getElementById('ctr-touch')
+    const st = g.ctrUI?.settings?.get?.() ?? {}
+    return { mode: st.touchMode, layout: st.touchLayout, hold: st.touchHold, holdMs: st.touchHoldMs, size: st.touchSize, autoStart: st.autoStart,
+      drawn: el ? el.dataset.kind : null, insets: cs ? [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft] : null }
+  }
   const gaps = []
   const state = { step: 'disc', raceFrom: 0, startTap: 0, discFrom: 0, lastFrame: 0, lastFrameAt: 0 }
 
@@ -235,7 +265,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     render()
   }
 
-  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() }, install: ui.install ? { ...ui.install } : null, bot: (g.__ctrBotTrace ?? []).slice(-60) }, null, 1)
+  const text = () => JSON.stringify({ ...report, memory: { ...report.memory, now: memory() }, audio: { ...report.audio, now: audioNow() }, device: { ...report.device, ...device() }, install: ui.install ? { ...ui.install } : null, touch: touchNow(), bot: (g.__ctrBotTrace ?? []).slice(-60) }, null, 1)
   async function send() {
     state.sent = 'sending…'
     render()

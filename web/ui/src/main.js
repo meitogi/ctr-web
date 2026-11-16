@@ -9,6 +9,8 @@
 //   ctrUI.players              couch mode (lib/players.js) : slots as the game reports them, swap(a, b)
 //   ctrUI.share(state)         Share's state for the page's Share button (web/share/panel.js)
 //   ctrUI.guestInput()         the player's mapping as web/share/protocol.js reads it (guest-input.js)
+//   ctrUI.racing()             a race is driven (the game's word at its last input update) : Share tells
+//                             its guests (their touch pads, session 42)
 // Debug builds (__CTR_DEV__) load src/dev/ : the « Bot » switch and Settings › Dev with its second
 // window ; a window opened as that second one (?dev=<mode>) boots by itself.
 // and Module.ctrInput for the game (lib/input-hook.js, pulled by platform/native_input.c).
@@ -19,6 +21,7 @@ import { findCachedDisc, forgetDisc, probeDisc, storeDiscStream } from '../../di
 import { resolveDisc } from './lib/discsource.js'
 import { guestInput } from './lib/guest-input.js'
 import { createInputHook } from './lib/input-hook.js'
+import { createTouchPad } from './lib/touch/pad.js'
 import { installSupport } from './lib/install.js'
 import { createPlayers } from './lib/players.js'
 import { LANG, T, errorText } from './lib/strings.js'
@@ -50,7 +53,9 @@ const players = createPlayers({
   onChange: (slots) => { ui.players = slots },
   onAnalog: (slot, pad) => toast(pad.analog ? T.analogOn(slot + 1) : T.analogOff(slot + 1), pad.analog ? '' : T.analogOffHelp, pad.family),
 })
-const input = createInputHook(settings, { blocked: () => ui.phase === 'running' && (ui.listening !== null || ui.confirm !== null || (ui.settingsOpen && inPanel() && !ui.bot)) }, { players })
+// a phone's on-screen pad (lib/touch/, TouchPad.svelte) : one more device, P1's
+const touch = createTouchPad()
+const input = createInputHook(settings, { blocked: () => ui.phase === 'running' && (ui.listening !== null || ui.confirm !== null || (ui.settingsOpen && inPanel() && !ui.bot)) }, { players, touch })
 if (Module) Module.ctrInput = input
 
 // ---- a phone's Home Screen (lib/install.js) : the install hint, what is kept, the screen kept awake ----
@@ -144,6 +149,21 @@ export function startGame() {
   if (ui.phase === 'ready') bootGame(ui.disc.serial)
 }
 
+// « Restart now » (Settings › System, a change the running game cannot take : « Unlock everything ») :
+// the page reloads and goes straight into the game, whatever « Start the game by itself » says
+const RESTART_KEY = 'ctr-ui.restart'
+export function restartGame() {
+  try { sessionStorage.setItem(RESTART_KEY, '1') } catch {}
+  location.reload()
+}
+const restarting = (() => {
+  try {
+    const was = sessionStorage.getItem(RESTART_KEY) === '1'
+    sessionStorage.removeItem(RESTART_KEY)
+    return was
+  } catch { return false }
+})()
+
 export function forgetStoredDisc() {
   ui.confirm = {
     text: T.forgetAsk,
@@ -181,7 +201,7 @@ function adopt(id, title, el) {
 
 // Share's panel tells what the page's Share button shows (web/share/panel.js render)
 const share = (s) => { if (JSON.stringify(ui.share) !== JSON.stringify(s)) ui.share = s }
-globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, share, guestInput: () => guestInput(settings.get()) }
+globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, share, guestInput: () => guestInput(settings.get()), racing: () => touch.racing }
 
 // Test-only hook (session 3) : the agent browser runs on another machine than the files, so CDP's
 // DOM.setFileInputFiles cannot point at them ; suites fetch a same-origin fixture into the same
@@ -196,7 +216,7 @@ globalThis.__ctrTestHandleFileFromUrl = async (url) => {
 // is read and the game boots
 const devReady = __CTR_DEV__ ? import('./dev/index.js').then((dev) => dev.install({ toast, start: startGame, handleFile })).catch((e) => console.error('[CTR Dev]', e)) : null
 
-mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFile, forgetStoredDisc, startGame, promptInstall: install.promptInstall } })
+mount(App, { target: document.getElementById('ctr-ui'), props: { input, touch, handleFile, forgetStoredDisc, startGame, restartGame, promptInstall: install.promptInstall } })
 
 ;(async () => {
   if (__CTR_DEV__) await devReady
@@ -241,4 +261,9 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, handleFi
   // ?seed=, ?pause= ; dev/presets.js : ?preset=)
   // — but not ?measure (dev/measure.js) : its Start tap boots, so the sound's first resume is a touch
   if (__CTR_DEV__ && !/[?&]measure\b/.test(location.search) && (role.second || /[?&](race|state|turbo|card|seed|pause|preset)=/.test(location.search))) startGame()
+  // « Start the game by itself » (Settings › System, on by default) : no press, so no gesture — the
+  // sound waits for the first touch or key (index.html resumes the context then) ; the boot screen's
+  // choices are skipped, Settings › System switches it off. A restart asked from Settings too.
+  // Not a bot's page nor ?measure (its Start tap is the sound's first gesture).
+  else if ((settings.get().autoStart || restarting) && !role.bot && !(__CTR_DEV__ && /[?&]measure\b/.test(location.search))) startGame()
 })()

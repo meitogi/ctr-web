@@ -58,6 +58,9 @@
 //                byte v = the LOD index (idpp[v].lodIndex) it was queued with in view v ·
 //                impostor bit v set when view v shows it as the split-screen impostor sprite
 //                (HIDE_MODEL in its idpp[v], set by DecalMP_02)
+//                reserves the turbo's reserves (> 0 while a boost lasts : the start boost, a
+//                slide's) · cross the pad's Cross held this frame (its slot's snapshot) ;
+//                `kart` gets wumpa … cross from karts[0]
 //   pools        { thread, small } : free entries of gGT->JitPools.thread / .smallStack, -1 while a level loads (a
 //                crate's thread is born on first contact, RB_CrateAny_LInC_Birth ; an empty
 //                pool leaves it intact)
@@ -207,13 +210,14 @@ EM_JS(void, WebDebugBridge_PushMoreJS,
 		characters: Array.from({ length: (charSelect >> 4) & 7 }, (_, p) => (charSelect >> (8 + p * 4)) & 0xf) };
 	c.karts = [];
 	for (let i = 0; i < players; i++) {
-		const k = HEAP32.subarray((karts >> 2) + i * 22, (karts >> 2) + (i + 1) * 22);
+		const k = HEAP32.subarray((karts >> 2) + i * 24, (karts >> 2) + (i + 1) * 24);
 		c.karts.push(k[0] ? {
 			lap: k[1], speed: k[2], rank: k[3], finished: !!k[4],
 			pos: { x: k[5], y: k[6], z: k[7] }, angle: k[8],
 			checkpoint: k[9], target: k[9] < 0 ? null : { x: k[10], z: k[11] }, toFinish: k[12] >>> 0,
 			wumpa: k[13], item: k[14], roll: k[15], crates: k[16],
 			invisible: k[17], invincible: k[18], drawn: k[19], lods: k[20], impostor: k[21],
+			reserves: k[22], cross: !!k[23],
 		} : null);
 	}
 	// The kart counter (session 22), with the flicker counter on : per present, for each view
@@ -262,7 +266,7 @@ EM_JS(void, WebDebugBridge_PushMoreJS,
 			}
 		}
 	}
-	if (c.kart && c.karts[0]) Object.assign(c.kart, { wumpa: c.karts[0].wumpa, item: c.karts[0].item, roll: c.karts[0].roll, crates: c.karts[0].crates });
+	if (c.kart && c.karts[0]) Object.assign(c.kart, { wumpa: c.karts[0].wumpa, item: c.karts[0].item, roll: c.karts[0].roll, crates: c.karts[0].crates, reserves: c.karts[0].reserves, cross: c.karts[0].cross });
 });
 
 // prim  { used, guard, cap } : gGT->backBuffer->primMem for the frame just presented —
@@ -1194,7 +1198,7 @@ internal void WebDebugBridge_Publish(void)
 		struct RectMenu *sub = NULL;
 		const char *subTitle = NULL;
 		const char *subLabel = NULL;
-		s32 karts[4 * 22];
+		s32 karts[4 * 24];
 		int players = gGT->numPlyrCurrGame;
 
 		for (struct RectMenu *m = menu; (m != NULL) && (m->state & DRAW_NEXT_MENU_IN_HIERARCHY) && (m->ptrNextBox_InHierarchy != NULL);
@@ -1217,7 +1221,7 @@ internal void WebDebugBridge_Publish(void)
 		for (int i = 0; i < players; i++)
 		{
 			struct Driver *k = gGT->drivers[i];
-			s32 *o = &karts[i * 22];
+			s32 *o = &karts[i * 24];
 			int tx = 0;
 			int tz = 0;
 
@@ -1239,6 +1243,10 @@ internal void WebDebugBridge_Publish(void)
 			o[11] = tz;
 			o[12] = (s32)k->distanceToFinish_curr;
 			o[13] = k->numWumpas;
+			// the turbo's reserves (a start boost, a slide's boost : > 0 while it lasts) and the pad's
+			// Cross held this frame (session 42 : the touch pad's held accelerator, the start boost)
+			o[22] = k->reserves;
+			o[23] = (i < NATIVE_INPUT_MAX_CONTROLLERS) && ((NativeInput_GetSnapshotButtons(&s_controllers[i].snapshot) & 0x4000) == 0);
 			o[14] = (s32)k->heldItemID;
 			o[15] = k->itemRollTimer;
 			o[16] = k->numTimesHitWeaponBox;

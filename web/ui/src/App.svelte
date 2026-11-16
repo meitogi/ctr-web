@@ -16,6 +16,7 @@
   import Settings from './Settings.svelte'
   import ShareButton from './ShareButton.svelte'
   import Toasts from './Toasts.svelte'
+  import TouchPad from './TouchPad.svelte'
   import { scancodeOf } from './lib/keys.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
   import { BUTTONS, STANDARD_TO_SDL } from './lib/mappings.js'
@@ -27,7 +28,7 @@
   import { ui } from './state.svelte.js'
   import { settings } from './store.js'
 
-  let { input, handleFile, forgetStoredDisc, startGame, promptInstall } = $props()
+  let { input, touch, handleFile, forgetStoredDisc, startGame, restartGame, promptInstall } = $props()
 
   const running = $derived(ui.phase === 'running' || ui.phase === 'starting')
   let layout = $state(null)
@@ -258,8 +259,9 @@
     {#snippet extra()}<ShareButton />{/snippet}
   </Hud>
   {#if ui.settingsOpen}
-    <Settings {forgetStoredDisc} {layout} onclose={() => setOpen(false)} />
+    <Settings {forgetStoredDisc} {restartGame} {layout} onclose={() => setOpen(false)} />
   {/if}
+  {#if touch}<TouchPad pad={touch} />{/if}
 {/if}
 
 {#if ui.dragging}
@@ -278,7 +280,7 @@
     <div class="box">
       <p>{ui.confirm.text}</p>
       <div class="actions">
-        <button type="button" class="btn" onclick={() => { ui.confirm = null }}>{T.cancel} <Glyph kind="pad" value={1} family={ui.pads[0]?.family ?? 'other'} size={22} /></button>
+        <button type="button" class="btn" onclick={() => { const c = ui.confirm; ui.confirm = null; c.cancel?.() }}>{ui.confirm.cancelLabel ?? T.cancel} <Glyph kind="pad" value={1} family={ui.pads[0]?.family ?? 'other'} size={22} /></button>
         <!-- svelte-ignore a11y_autofocus -->
         <button type="button" class="btn primary" class:danger={ui.confirm.danger} autofocus onclick={() => { const c = ui.confirm; ui.confirm = null; c.run() }}>{ui.confirm.action}</button>
       </div>

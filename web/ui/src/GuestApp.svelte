@@ -6,6 +6,7 @@
   import Hud from './Hud.svelte'
   import Settings from './Settings.svelte'
   import Toasts from './Toasts.svelte'
+  import TouchPad from './TouchPad.svelte'
   import { bindKey, bindPadButton } from './lib/binding.js'
   import { watchPads } from './lib/input-hook.js'
   import { watchPadConnections } from './lib/pad-events.js'
@@ -14,7 +15,7 @@
   import { settings } from './store.js'
   import { tick } from 'svelte'
 
-  let { actions } = $props()
+  let { actions, touch = null } = $props()
   const g = $derived(ui.guest)
 
   let layout = $state(null)
@@ -112,6 +113,7 @@
   </div>
 {/if}
 
+{#if touch}<TouchPad pad={touch} enabled={ui.guest?.state === 'connected'} />{/if}
 <Toasts />
 
 <style>

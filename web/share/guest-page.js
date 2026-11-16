@@ -15,7 +15,7 @@ import { parseRoomLink } from '../net/link.js';
 import { openRoom } from '../net/room.js';
 import { createShareGuest } from './guest.js';
 import { minimisePlayout } from './media.js';
-import { pickPad, viewOf } from './protocol.js';
+import { mergeTouch, pickPad, viewOf } from './protocol.js';
 
 const $ = (id) => document.getElementById(id);
 const video = $('video');
@@ -43,7 +43,7 @@ function render() {
   video.style.objectViewBox = v && v.w < 1 ? `inset(${v.y * 100}% ${(1 - v.x - v.w) * 100}% ${(1 - v.y - v.h) * 100}% ${v.x * 100}%)` : '';
   const state = nolink ? 'nolink' : g?.state ?? 'connecting';
   const fields = { state, code: g?.code ?? null, message: g?.message ?? '', slot: g?.slot ?? 0, players: g?.players ?? 0, list: g?.list ?? [],
-    host: g?.host ?? null, path: g?.path ?? null, stream: stream.getTracks().length > 0, sound, crop };
+    host: g?.host ?? null, path: g?.path ?? null, stream: stream.getTracks().length > 0, sound, crop, racing: !!g?.racing };
   if (ui) return ui.guest.set(fields);
   // no interface : a line of text, a click anywhere for sound
   fallback ??= document.body.appendChild(Object.assign(document.createElement('p'), { id: 'fallback' }));
@@ -76,8 +76,11 @@ ui?.settings.subscribe((s) => {
 // ---- input ----
 function sendPad() {
   const s = settings();
-  const pad = bot ? pickPad({ mode: 'keyboard' }, held, [])
+  const own = bot ? pickPad({ mode: 'keyboard' }, held, [])
     : ui?.guest.blocked() ? null : pickPad(s?.device, held, navigator.getGamepads?.() ?? [], ui?.guestInput());
+  // the phone's touch pad (ui/src/lib/touch/, session 42) : ANDed in, its stick taken while moved
+  const touch = own && !bot ? ui?.guest.touch?.(!!guest?.racing) : null;
+  const pad = touch ? mergeTouch(touch, own) : own;
   const word = pad ? pad.buttons : 0xffff;
   if (word !== lastButtons) {
     lastButtons = word;

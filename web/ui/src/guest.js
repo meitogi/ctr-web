@@ -11,10 +11,13 @@
 //                         path, stream (tracks arrived), sound (unmuted by a click), crop}
 //   ctrUI.guest.bind({unlock, crop})   what the screens' buttons do
 //   ctrUI.guest.blocked() true while Settings holds the keys : the pad sent is neutral
+//   ctrUI.guest.touch(racing)  the phone's touch pad (lib/touch/pad.js) as { id, buttons, analog },
+//                         null while its controls are hidden ; `racing` : the host says a race is driven
 import { mount } from 'svelte'
 import GuestApp from './GuestApp.svelte'
 import './app.css'
 import { guestInput } from './lib/guest-input.js'
+import { createTouchPad } from './lib/touch/pad.js'
 import { LANG, T } from './lib/strings.js'
 import { ui } from './state.svelte.js'
 import { settings } from './store.js'
@@ -29,10 +32,15 @@ function toast(title, detail = '', family = '') {
   return id
 }
 
+const touch = createTouchPad()
+const packet = new Uint8Array(8)
+
 let mapped = null
 let mappedFrom = null
 const actions = { unlock: () => {}, crop: () => {} }
 
+// a touch screen (lib/install.js's test) : the touch controls are drawn without waiting for a touch
+ui.install = { touch: globalThis.matchMedia?.('(pointer: coarse)').matches ?? false }
 ui.guest = { state: 'connecting', code: null, message: '', slot: 0, players: 0, list: [], host: null, path: null, stream: false, sound: false, crop: false }
 
 globalThis.ctrUI = {
@@ -54,10 +62,14 @@ globalThis.ctrUI = {
     },
     bind(fns) { Object.assign(actions, fns) },
     blocked: () => ui.settingsOpen && !!document.activeElement?.closest?.('#ctr-settings'),
+    touch(racing) {
+      if (!touch.packet(packet, 0, racing, performance.now())) return null
+      return { id: packet[1], buttons: packet[2] | (packet[3] << 8), analog: [packet[4], packet[5], packet[6], packet[7]] }
+    },
   },
 }
 
 // debug builds : the « Bot » switch (on by itself in Settings › Dev's second window), Settings › Dev
 if (__CTR_DEV__) import('./dev/index.js').then((dev) => dev.install({ toast }))
 
-mount(GuestApp, { target: document.getElementById('ctr-ui'), props: { actions } })
+mount(GuestApp, { target: document.getElementById('ctr-ui'), props: { actions, touch } })

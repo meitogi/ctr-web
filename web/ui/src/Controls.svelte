@@ -5,6 +5,7 @@
   // shown on both buttons ; reset per device. Saved at once (settings store → localStorage), the
   // game reads it at its next input update (Module.ctrInput.pull).
   import Glyph from './Glyph.svelte'
+  import TouchSettings from './TouchSettings.svelte'
   import { BUTTONS, DEFAULT_GAMEPAD, DEFAULT_KEYBOARD, DEFAULT_KEYBOARD_LEFT, DEFAULT_KEYBOARD_RIGHT, DISPLAY_ORDER, conflicts } from './lib/mappings.js'
   import { codeOf } from './lib/keys.js'
   import { T } from './lib/strings.js'
@@ -19,7 +20,8 @@
   // none picked yet : the gamepad's when one is plugged
   const TAB_KEY = 'ctr-ui.controls-tab'
   const picked = (() => { try { return localStorage.getItem(TAB_KEY) } catch { return null } })()
-  let device = $state(['keyboard', 'keyboard2', 'gamepad'].includes(picked) ? picked : ui.pads.length ? 'gamepad' : 'keyboard')
+  // a touch screen with no pad : Touch first (session 42)
+  let device = $state(['keyboard', 'keyboard2', 'gamepad', 'touch'].includes(picked) ? picked : ui.pads.length ? 'gamepad' : ui.install?.touch ? 'touch' : 'keyboard')
   const pick = (d) => {
     device = d
     ui.listening = null
@@ -31,7 +33,7 @@
   const FIELD = { keyboard: () => (s.duo ? 'keyboardLeft' : 'keyboard'), keyboard2: () => 'keyboardRight', gamepad: () => 'gamepad' }
   const DEFAULTS = { keyboard: DEFAULT_KEYBOARD, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, gamepad: DEFAULT_GAMEPAD }
   $effect(() => { if (device === 'keyboard2' && !s.duo) device = 'keyboard' })
-  const map = $derived(s[FIELD[device]()])
+  const map = $derived(s[(FIELD[device] ?? FIELD.keyboard)()])
   const clash = $derived(conflicts(map))
 
   const listen = (button) => {
@@ -67,7 +69,14 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 6h10c3 0 4.5 2 5 5l.5 4c.3 2.5-2 4-4 2l-2.5-2.5h-8L5.5 17c-2 2-4.3.5-4-2L2 11c.5-3 2-5 5-5z" /></svg>
       {pad ? T.families[family] : T.gamepad}
     </button>
+    <button role="tab" data-device="touch" aria-selected={device === 'touch'} class:on={device === 'touch'} onclick={() => pick('touch')}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3" /><circle cx="7.5" cy="12" r="2.2" /><circle cx="16.5" cy="12" r="2.2" /></svg>
+      {T.touch}
+    </button>
   </div>
+  {#if device === 'touch'}
+    <TouchSettings />
+  {:else}
   <p class="help">{device === 'gamepad' && !pad ? T.noPad : T.remapHelp}</p>
 
   <div class="rows" data-device={device}>
@@ -103,6 +112,7 @@
     <button type="button" class="btn" onclick={reset}>{T.reset}</button>
     <span class="dim">{T.savedAuto}</span>
   </div>
+  {/if}
 </div>
 
 <style>

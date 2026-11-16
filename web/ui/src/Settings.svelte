@@ -27,7 +27,7 @@
     import('./dev/BotSwitch.svelte').then((m) => { BotSwitch = m.default })
   }
 
-  let { forgetStoredDisc = () => {}, layout = null, onclose, profile = 'host' } = $props()
+  let { forgetStoredDisc = () => {}, restartGame = () => location.reload(), layout = null, onclose, profile = 'host' } = $props()
   const guest = $derived(profile === 'guest')
 
   const s = $derived(live.current)
@@ -65,6 +65,15 @@
     e.currentTarget.href = issueUrl({ version: globalThis.__CTR_VERSION ?? 'dev', browser: browserOf(navigator.userAgent), mode, lang: LANG })
   }
   const pickAnother = () => document.getElementById('disc-input')?.click()
+  // « Unlock everything » changed while the game runs : the game keeps the value it started with
+  // (lib/input-hook.js unlockAll) — Restart now, or Later (kept for the next start)
+  function setUnlock(on) {
+    settings.patch({ unlockAll: on })
+    const started = globalThis.Module?.ctrInput?.unlockAll?.()
+    if (ui.phase === 'running' && started !== undefined && started !== on) {
+      ui.confirm = { text: T.unlockRestart(on), action: T.restartNow, cancelLabel: T.later, run: restartGame }
+    }
+  }
 </script>
 
 <aside id="ctr-settings" aria-label={T.settings}>
@@ -125,6 +134,15 @@
         <span class="count">{s.muted ? 0 : Math.round(s.volume * 100)}</span>
       </div>
       {#if !guest}
+        <div class="label">{T.game}</div>
+        <label class="setrow">
+          <span>{T.autoStart}<small>{T.autoStartHelp}</small></span>
+          <input id="ctr-auto-start" type="checkbox" role="switch" class="switch" checked={s.autoStart} onchange={(e) => settings.patch({ autoStart: e.currentTarget.checked })} />
+        </label>
+        <label class="setrow">
+          <span>{T.unlockAll}<small>{T.unlockHelpSettings}</small></span>
+          <input id="ctr-unlock-all" type="checkbox" role="switch" class="switch" checked={s.unlockAll} onchange={(e) => setUnlock(e.currentTarget.checked)} />
+        </label>
         <div class="label">{T.gameData}</div>
         <div class="setrow">
           <span>{ui.disc ? T.found(ui.disc.serial.replace('_', '-').replace('.', '')) : T.discNone}{#if ui.disc?.size}<small>{T.discSize(mb(ui.disc.size))}</small>{/if}</span>
@@ -174,6 +192,11 @@
   .mute { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, 0.08); display: grid; place-items: center; cursor: pointer; flex: none; }
   input[type=range] { flex: 1; accent-color: #fff; }
   .gap { height: 14px; }
+  label.setrow { margin-bottom: 8px; cursor: pointer; }
+  .switch { appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.18); position: relative; cursor: pointer; transition: background 150ms; margin: 0; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 150ms; }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { left: 21px; }
   .seg { display: flex; padding: 4px; border-radius: 12px; gap: 4px; background: rgba(255, 255, 255, 0.06); margin-bottom: 8px; }
   .seg button { flex: 1; padding: 8px 10px; border: 0; border-radius: 9px; background: none; font-weight: 600; font-size: 13px; cursor: pointer; color: var(--ink-dim); }
   .seg button.on { background: #fff; color: #111; }

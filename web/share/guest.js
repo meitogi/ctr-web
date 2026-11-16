@@ -91,7 +91,7 @@ export function createShareGuest(room, { onTrack = () => {}, name = '', bot = fa
       else if (msg?.tag === TAG.lobby) set({ lobby: msg.body });
       else if (msg?.tag === TAG.players) {
         const list = Array.isArray(msg.body.list) ? msg.body.list.map((p) => ({ slot: Number(p?.slot) || 0, name: cleanName(p?.name) })) : [];
-        set({ players: Number(msg.body.players) || 0, list });
+        set({ players: Number(msg.body.players) || 0, list, racing: !!msg.body.racing });
       }
       else if (msg?.tag === TAG.refuse) refuse(String(msg.body.code), String(msg.body.message));
     });

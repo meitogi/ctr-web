@@ -92,6 +92,7 @@ Module.ctrShare = {
   /** Returns the mask of the slots guests hold ; writes their pads at `dst` (slots.js read). */
   readPads(heap, dst) {
     const mask = slots.read(heap, dst);
+    host?.setRacing(globalThis.ctrUI?.racing?.());
     for (let s = 1; s < 4; s++) {
       if (!(mask & (1 << s))) { seen[s] = null; continue; }
       const o = dst + (s - 1) * 8;

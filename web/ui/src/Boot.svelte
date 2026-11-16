@@ -52,13 +52,18 @@
         </svg>
         <div class="disp big">{T.readyTitle}</div>
         <div id="disc-kept" class="dim">{T.found(ui.disc?.serial?.replace('_', '-').replace('.', ''))} · {ui.install?.kept === 'device' ? T.keptDevice : ui.install?.kept === 'may-go' ? T.keptMayGo : T.readyKept}</div>
-        <p class="press" aria-live="polite">
-          {T.pressTo}
-          {#if ui.pads.length}<Glyph kind="pad" value={padCross} family={ui.pads[0].family} size={34} /> {T.or}{/if}
-          <Glyph kind="key" value={startKey} {layout} />
-          {T.toPlay}
-        </p>
-        <button id="start-game" type="button" class="primary" onclick={startGame}>{T.play}</button>
+        {#if ui.install?.touch && !ui.pads.length}
+          <!-- a phone : no keyboard to press (session 42) — the button is the press -->
+          <button id="start-game" type="button" class="primary tap" onclick={startGame}>{T.tapToPlay}</button>
+        {:else}
+          <p class="press" aria-live="polite">
+            {T.pressTo}
+            {#if ui.pads.length}<Glyph kind="pad" value={padCross} family={ui.pads[0].family} size={34} /> {T.or}{/if}
+            <Glyph kind="key" value={startKey} {layout} />
+            {T.toPlay}
+          </p>
+          <button id="start-game" type="button" class="primary" onclick={startGame}>{T.play}</button>
+        {/if}
       </section>
       <p class="dim small other">{T.otherDisc} <button id="pick-disc" type="button" class="link" onclick={() => input.click()}>{T.chooseFile}</button></p>
       <input id="disc-input" type="file" accept=".bin,.zip,application/zip" hidden bind:this={input} onchange={pick} />
@@ -123,6 +128,7 @@
   .small { font-size: 13px; }
   .primary { margin-top: 16px; padding: 11px 22px; border: 0; border-radius: 12px; background: #fff; color: #111; font-weight: 700; cursor: pointer; }
   .primary:hover { background: #e8ecff; }
+  .primary.tap { padding: 16px 40px; font-size: 20px; border-radius: 16px; }
   .needs { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 6px; font-size: 13px; color: var(--ink-dim); text-align: left; width: 100%; }
   .needs li { padding-left: 22px; position: relative; }
   .needs li::before { content: ''; position: absolute; left: 4px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }

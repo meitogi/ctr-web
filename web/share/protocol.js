@@ -187,6 +187,21 @@ export function mergePads(a, b) {
 }
 
 /**
+ * A touch pad over the page's own pad (keys, gamepad) : buttons ANDed (active low), analog when
+ * either is, the touch stick's bytes while it is moved (platform/native_input.c does the same for
+ * the host's own touch pad).
+ */
+export function mergeTouch(touch, pad) {
+  const moved = touch.analog[2] !== 0x80 || touch.analog[3] !== 0x80;
+  const analog = touch.id === PAD_ID.analog || pad.id === PAD_ID.analog;
+  return {
+    id: analog ? PAD_ID.analog : PAD_ID.digital,
+    buttons: touch.buttons & pad.buttons,
+    analog: moved ? [pad.analog[0], pad.analog[1], touch.analog[2], touch.analog[3]] : pad.analog,
+  };
+}
+
+/**
  * The gamepad this page plays with, from navigator.getGamepads() : the chosen one ({id, nth} : the
  * nth connected pad with that id), else the first with the standard mapping, else the first.
  */

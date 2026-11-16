@@ -50,9 +50,12 @@ export function createShareHost({ room, stream, maxBitrate = BITRATE.default, sc
     for (const id in host.guests) list.push({ slot: host.guests[id].slot, name: nameOf(host.guests[id].slot, host.guests[id].name) });
     return list.sort((a, b) => a.slot - b.slot);
   };
+  // racing : a race is driven on the host (the game's word, platform/native_input.c) — a guest's
+  // touch pad lets its held accelerator go and shows the menus' pad outside one (session 42)
+  host.racing = false;
   const playersBody = () => {
     const list = host.players();
-    return { players: list.length, list };
+    return { players: list.length, list, racing: host.racing };
   };
   const change = () => {
     const body = playersBody();
@@ -176,6 +179,11 @@ export function createShareHost({ room, stream, maxBitrate = BITRATE.default, sc
       if (video) jobs.push(tuneVideo(video, { maxBitrate: host.maxBitrate, scale: currentScale }));
     }
     await Promise.all(jobs);
+  };
+  host.setRacing = (racing) => {
+    if (!!racing === host.racing) return;
+    host.racing = !!racing;
+    change();
   };
   host.setBitrate = (bps) => {
     host.maxBitrate = Math.round(Math.min(BITRATE.max, Math.max(BITRATE.min, bps)));
