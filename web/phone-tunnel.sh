@@ -7,7 +7,8 @@
 #   bash web/phone-tunnel.sh            check everything, then open the tunnel (foreground)
 #   bash web/phone-tunnel.sh --check    check only : the files, the page on 8090, the DNS, https
 #
-# What it needs once, in ~/.config/ctr-phone-tunnel/ (CTR_TUNNEL_DIR) — the home frpc's own files,
+# What it needs once, in web/.phone-tunnel/ of the main clone (gitignored, never in a site : the
+# same as web/.relay-key ; CTR_TUNNEL_DIR elsewhere) — the home frpc's own files,
 # copied from the machine where frpc already runs (the script says how when one is missing) :
 #   frpc.toml   that frpc's config : serverAddr, auth.token, transport.tls.serverName are read
 #               from it (its proxies are not)
@@ -16,7 +17,11 @@
 # 8096-8199 : free on the VPS as of 2026-11-16), CTR_PAGE_PORT (8090).
 set -euo pipefail
 
-DIR=${CTR_TUNNEL_DIR:-$HOME/.config/ctr-phone-tunnel}
+here=$(cd "$(dirname "$0")" && pwd)
+# the main clone's web/ even when this runs from a worktree (its .git is a file pointing there)
+main=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+DIR=${CTR_TUNNEL_DIR:-${main:+$(dirname "$main")/web/.phone-tunnel}}
+DIR=${DIR:-$here/.phone-tunnel}
 HOST=${CTR_PHONE_HOST:-ctr-dev.suuuper.app}
 FPORT=${CTR_PHONE_FRP_PORT:-8098}
 PAGE=${CTR_PAGE_PORT:-8090}

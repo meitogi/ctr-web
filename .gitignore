@@ -8,6 +8,8 @@
 /debug/
 # The VPS relay's key, for web/dev.sh's ready link (never committed).
 /web/.relay-key
+# The Mac's frp client files for the phone tunnel (web/phone-tunnel.sh) : a token, a client key.
+/web/.phone-tunnel/
 # web/pages/assemble.sh's output — rebuilt by the Pages workflow every run.
 /site/
 
