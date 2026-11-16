@@ -61,12 +61,22 @@
     const px = (v) => Number.parseFloat(v) || 0
     view = { W: window.innerWidth, H: window.innerHeight, left: px(cs.paddingLeft), right: px(cs.paddingRight), top: px(cs.paddingTop), bottom: px(cs.paddingBottom) }
   }
+  // an iPhone opened straight in landscape gives its safe areas a moment after the first layout,
+  // without always a resize : measured again a little later, and on the visual viewport's resize
   $effect(() => {
     if (!probe) return
     measure()
+    const vv = window.visualViewport
+    const later = [setTimeout(measure, 400), setTimeout(measure, 1500)]
     window.addEventListener('resize', measure)
     window.addEventListener('orientationchange', measure)
-    return () => { window.removeEventListener('resize', measure); window.removeEventListener('orientationchange', measure) }
+    vv?.addEventListener('resize', measure)
+    return () => {
+      for (const t of later) clearTimeout(t)
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('orientationchange', measure)
+      vv?.removeEventListener('resize', measure)
+    }
   })
   $effect(() => {
     pad.hold.configure({ enabled: s.touchHold, delay: s.touchHoldMs })

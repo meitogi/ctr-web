@@ -2,8 +2,9 @@
 // A panel over the page leads the player through one measured race and keeps a report :
 //   1. the disc picked (the boot screen's own picker, or « any file » : a picker with no type filter,
 //      for a phone whose picker greys a .bin out) — the time it took to store it ;
-//   2. Start (a tap : the sound's first resume happens inside it) boots the direct start of
-//      fast.js (Crash Cove, Arcade, 3 laps), the Bot driving ; the panel samples __ctr every second ;
+//   2. Drive or Bot (a tap : the sound's first resume happens inside it) boots the direct start of
+//      fast.js (Crash Cove, Arcade, 3 laps), the player or the Bot driving (the wheel can change
+//      hands mid-race) ; the panel samples __ctr every second ; No panel : the page itself ;
 //   3. after the race : lock the phone, unlock ; another app, back — the lifecycle log says what the
 //      page and the game did meanwhile ;
 //   Send (POST /__report : serve.py --phone keeps it in web/test/player/.reports/) or Copy.
@@ -89,8 +90,8 @@ const css = `
   max-width: min(440px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   max-height: calc(100vh - 16px); overflow: auto; padding: 10px 12px; border-radius: 10px;
   background: rgba(10, 12, 20, 0.9); color: #f2f2f2; font: 14px/1.4 system-ui, sans-serif; -webkit-user-select: none; user-select: none }
-#ctr-measure.small { max-width: 220px }
-#ctr-measure.small .more { display: none }
+#ctr-measure.small { left: 50%; transform: translateX(-50%); padding: 4px; border-radius: 0 0 10px 10px; top: env(safe-area-inset-top, 0px) }
+#ctr-measure.small button { min-height: 32px; padding: 0 12px; font-size: 13px }
 #ctr-measure b { color: #ffd34d }
 #ctr-measure .line { margin: 4px 0 }
 #ctr-measure .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px }
@@ -205,8 +206,10 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
           const p = ui.progress
           line = `Storing the disc : <b>${mb(p?.written) ?? 0} / ${mb(p?.total) ?? '?'} MB</b> · ${Math.round((now() - state.discFrom) / 1000)} s. Keep this page in front.`
         } else if (ui.phase === 'ready') {
-          line = '<b>2 ·</b> Sound on (the side switch too). Tap <b>Start</b> : the Bot drives one Arcade race of Crash Cove, about 2 min. Do not touch the screen until it ends.'
-          button('Start', onStart)
+          line = '<b>2 ·</b> Sound on (the side switch too). One Arcade race of Crash Cove, measured : <b>Drive</b> it yourself (the touch controls, or your pad), or let the <b>Bot</b> drive (do not touch the screen then). <b>No panel</b> : the game as it opens, menus and all, nothing measured.'
+          button('Drive', () => onStart({ bot: false }))
+          button('Bot', () => onStart({ bot: true }), true)
+          button('No panel', () => { location.href = './' }, true)
         } else if (ui.phase === 'checking') line = 'Looking for the disc in this browser…'
         else {
           line = `<b>1 ·</b> Pick the disc (<code>ctr-u.bin</code> or its .zip) with the button of this screen. If the picker greys the file out, use « Any file ».${ui.error ? `<br><b>Error :</b> ${ui.error}` : ''}`
@@ -217,7 +220,9 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
         line = `Loading the race… ${Math.round((now() - state.startTap) / 1000)} s · sound <b>${g.ctrAudio?.context?.state ?? 'not yet'}</b>`
         break
       case 'racing':
-        line = `Racing <b>${Math.round((now() - state.raceFrom) / 1000)} s</b> · <b>${c?.fps ?? '?'} fps</b> · lap ${(c?.kart?.lap ?? 0) + 1} / 3 · sound ${g.ctrAudio?.context?.state ?? '?'}`
+        line = `Racing <b>${Math.round((now() - state.raceFrom) / 1000)} s</b> · <b>${c?.fps ?? '?'} fps</b> · lap ${(c?.kart?.lap ?? 0) + 1} / 3 · sound ${g.ctrAudio?.context?.state ?? '?'} · ${ui.bot ? 'the Bot drives' : 'you drive'}`
+        // the wheel taken or given back mid-race
+        button(ui.bot ? 'Take the wheel' : 'Bot drives', () => { g.ctrDev?.bot(!ui.bot); report.race.bot = [...(report.race.bot ?? []), { t: now(), on: ui.bot }]; render() }, true)
         break
       case 'after': {
         const hides = report.lifecycle.filter((e) => e.type === 'visibility' && e.visible === 'hidden' && e.t > state.raceEnd).length
@@ -232,12 +237,16 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
       button('Copy', copy, true)
       if (navigator.storage?.persist) button('Keep storage', persist, true)
     }
-    button(el.classList.contains('small') ? 'More' : 'Less', () => { el.classList.toggle('small'); render() }, true)
-    more = `<div class="more line" style="opacity:.75;font-size:12px">${report.version ?? ''} · ${report.device.platform} · ${report.device.standalone ? 'installed' : 'in the browser'} · storage ${report.storage.atLoad ? `${report.storage.atLoad.usageMB} / ${report.storage.atLoad.quotaMB} MB, ${report.storage.atLoad.persisted ? 'persistent' : 'may be evicted'}` : '…'}</div>`
+    // Less : the panel folds to one small button at the top's middle, out of the controls' way
+    if (el.classList.contains('small')) buttons.length = 0
+    button(el.classList.contains('small') ? 'Measure' : 'Less', () => { el.classList.toggle('small'); render() }, true)
+    const tn = touchNow()
+    more = `<div class="more line" style="opacity:.75;font-size:12px">${report.version ?? ''} · ${report.device.platform} · ${report.device.standalone ? 'installed' : 'in the browser'} · ${innerWidth} × ${innerHeight}${tn.insets ? ` · safe areas ${tn.insets.map((v) => Number.parseFloat(v) || 0).join(' ')}` : ''} · storage ${report.storage.atLoad ? `${report.storage.atLoad.usageMB} / ${report.storage.atLoad.quotaMB} MB, ${report.storage.atLoad.persisted ? 'persistent' : 'may be evicted'}` : '…'}</div>`
     // what Send / Copy did, in the small panel too (on the iPhone, « Less » hid it : Send tapped 4 times)
     const sent = state.sent ? `<div class="line"><b>Report ${state.sent}</b></div>` : ''
     // the same panel again is left as it is : a tap on a button rebuilt under the finger is lost
-    const html = `${killed}<div class="line">${line}</div>${more}${sent}<div class="row"></div>${state.text ? `<textarea readonly>${state.text}</textarea>` : ''}`
+    const html = el.classList.contains('small') ? '<div class="row" style="margin:0"></div>'
+      : `${killed}<div class="line">${line}</div>${more}${sent}<div class="row"></div>${state.text ? `<textarea readonly>${state.text}</textarea>` : ''}`
     const key = html + buttons.map((b) => b.label).join()
     if (key === state.html) return
     state.html = key
@@ -250,11 +259,13 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     }
   }
 
-  function onStart({ started = false } = {}) {
+  function onStart({ started = false, bot = false } = {}) {
     state.step = 'loading'
     state.startTap = now()
     session.set({ step: 'loading', at: new Date().toISOString() })
-    g.ctrDev?.bot(true)
+    // who drives : the player (the touch controls, a pad) unless the Bot was asked for
+    report.driver = bot ? 'bot' : 'player'
+    g.ctrDev?.bot(bot)
     if (!started) start()
     render()
   }

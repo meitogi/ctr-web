@@ -69,8 +69,13 @@
       if (!scaling && records.some((r) => r.oldValue === '1') && canvas.width > 1) { scaling = true; rescale() }
     })
     mo.observe(canvas, { attributes: true, attributeOldValue: true, attributeFilter: ['width', 'height'] })
+    // an iPhone opened straight in landscape settles its viewport after the first layout, without
+    // always a window resize (session 42) : its visual viewport and the rotation are heard too
+    const vv = window.visualViewport
     window.addEventListener('resize', rescale)
-    return () => { mo.disconnect(); window.removeEventListener('resize', rescale) }
+    window.addEventListener('orientationchange', rescale)
+    vv?.addEventListener('resize', rescale)
+    return () => { mo.disconnect(); window.removeEventListener('resize', rescale); window.removeEventListener('orientationchange', rescale); vv?.removeEventListener('resize', rescale) }
   })
   $effect(() => { void ui.settingsOpen; void running; rescale() })
   if (new URLSearchParams(location.search).has('log')) document.body.classList.add('ctr-log')

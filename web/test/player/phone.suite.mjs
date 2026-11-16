@@ -1,6 +1,7 @@
 // Player suite : the page on a phone (session 41), seen from a desktop browser at a phone's size.
 //   MEASURE-PANEL  ?measure (web/ui/src/dev/measure.js) on the phone server (serve.py --phone) : the
-//                  panel's Start, tapped, boots the race with the Bot driving ; the panel samples it
+//                  panel's Bot, tapped, boots the race with the Bot driving (Drive : the player's) ;
+//                  the wheel taken and given back mid-race ; Less folds it to one button ; the panel samples it
 //                  and Send's report reaches web/test/player/.reports/ with its numbers
 //   PHONE-SERVER   serve.py --phone answers 404 on the tests' snapshots, saves and replays
 //   AUDIO-BACK     the sound comes back after iOS « interrupts » it (a lock, the Home Screen : measured
@@ -62,14 +63,23 @@ export default async ctx => {
 			const base = await ctx.js('return location.origin + location.pathname')
 			await ctx.conn.send('Page.navigate', { url: `${base}?measure&mute&race=crash-cove&char=crash&mode=arcade&laps=1` }, ctx.sid)
 			await sleep(500)
-			await panel(ctx, /Tap Start/, 'its Start step (is the disc stored on this origin ?)')
+			await panel(ctx, /Drive it yourself/, 'its start step (is the disc stored on this origin ?)')
 			mkdirSync(REPORTS, { recursive: true })
 			const before = new Set(readdirSync(REPORTS))
-			await tapButton(ctx, 'Start')
-			await panel(ctx, /Racing \d+ s/, 'the race being measured', 120_000)
+			await tapButton(ctx, 'Bot')
+			await panel(ctx, /Racing \d+ s.*the Bot drives/, 'the race being measured', 120_000)
+			// the wheel taken mid-race, then given back (session 42 : « je peux pas tester en mode manuel ? »)
+			await tapButton(ctx, 'Take the wheel')
+			await panel(ctx, /you drive/, 'the player driving', 5000)
+			await tapButton(ctx, 'Bot drives')
+			await panel(ctx, /the Bot drives/, 'the Bot back', 5000)
 			await panel(ctx, /Race measured/, 'the end of the race', 240_000)
-			// the small panel (« Less ») still says what Send did : on the iPhone it did not, Send was tapped 4 times
+			// « Less » : one small button left (the panel hid a big corner of the game, session 42) ;
+			// « Measure » unfolds it again
 			await tapButton(ctx, 'Less')
+			const small = await ctx.js("const r = document.getElementById('ctr-measure').getBoundingClientRect(); return { w: r.width, h: r.height, text: document.getElementById('ctr-measure').innerText.trim() }")
+			if (small.w > 140 || small.h > 50 || small.text !== 'Measure') throw new Error(`the folded panel : ${JSON.stringify(small)}`)
+			await tapButton(ctx, 'Measure')
 			await tapButton(ctx, 'Send')
 			const sent = await panel(ctx, /sent as/, 'the report sent', 20_000)
 			const name = readdirSync(REPORTS).find(n => !before.has(n))
@@ -143,6 +153,8 @@ export default async ctx => {
 		let insets = 'not emulated (this Chrome has no Emulation.setSafeAreaInsetsOverride)'
 		try { await send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, left: 47, right: 47, bottom: 21 } }); insets = 'left 47, right 47, bottom 21' } catch { /* an older Chrome */ }
 		try {
+			// the home page with its disc line : « Start the game by itself » (on by default) off for it
+			await ctx.js("localStorage.setItem('ctr-ui.auto-start', '0'); return true")
 			await send('Page.navigate', { url: base })
 			let page = null
 			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
