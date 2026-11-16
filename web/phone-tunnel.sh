@@ -131,10 +131,26 @@ EOF
 https_check() {
   curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST/index.html" || true
 }
+# why https://$HOST does not answer 200, in one line : what to fix
+https_why() {
+  local strict=$1 loose
+  if [ -z "$(dig +short "$HOST" A 2>/dev/null | tail -1)" ]; then
+    echo "$HOST does not resolve : the Cloudflare record (step 4), A to the VPS, grey cloud ; a new record can take a few minutes"
+    return
+  fi
+  loose=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST/index.html" || true)
+  case "$strict/$loose" in
+    000/000) echo "nothing answers on https at $(dig +short "$HOST" A | tail -1) : is it the VPS ? (step 4)" ;;
+    000/404) echo "Traefik answers with its default certificate and no route for $HOST : docker/traefik/dynamic/03-ctr-dev.yml is not on the VPS (step 4)" ;;
+    000/200 | 000/502) echo "the route is there, its certificate is not issued yet (acme-ssl : a minute or two after the first request) : run --check again in a minute" ;;
+    502/* | 000/*) echo "Traefik routes $HOST but frps:$FPORT does not answer ($strict, $loose without the certificate check) : the tunnel is not open, or frpc is not on remotePort $FPORT" ;;
+    *) echo "HTTP $strict (without the certificate check : $loose)" ;;
+  esac
+}
 if [ "$check_only" = 1 ]; then
   step 5/5 "https://$HOST (the tunnel is not opened by --check)"
   c=$(https_check)
-  if [ "$c" = 200 ]; then ok "https://$HOST answers 200 (a tunnel is already open)"; else bad "https://$HOST : ${c:-no answer} (502 / 404 : no tunnel open, or no route yet)"; fi
+  if [ "$c" = 200 ]; then ok "https://$HOST answers 200 (a tunnel is already open)"; else bad "https://$HOST : ${c:-no answer} — $(https_why "$c")"; fi
   exit 0
 fi
 
@@ -180,7 +196,7 @@ done
 echo "$logs" | grep -q 'start proxy success' || { echo; bad "no « start proxy success » in 30 s :"; docker logs "$NAME" 2>&1 | tail -5 | sed 's/^/    /'; exit 1; }
 c=$(https_check)
 if [ "$c" = 200 ]; then ok "https://$HOST answers 200"
-else bad "https://$HOST : ${c:-no answer} — the tunnel is up ; the route (step 4) or the certificate (a minute after the first request) is not yet"; fi
+else bad "https://$HOST : ${c:-no answer} — $(https_why "$c")"; fi
 
 cat <<EOF
 
