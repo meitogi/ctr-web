@@ -9,7 +9,7 @@
 //                  gesture (navigator.userActivation), as Safari's ; a finger's tap must bring it back
 //   INSTALL        what a phone's Home Screen reads : Chrome's own parse of the manifest (no error, name,
 //                  display, orientation, icons), each icon loaded at its size, Safari's tags ; as an
-//                  iPhone's Safari in a tab (its user agent, touch), the boot screen's iOS hint and the
+//                  iPhone's Safari in a tab (its user agent, touch), the install bar's iOS words and the
 //                  line saying the disc may go ; with a notch's safe areas (Emulation, when Chrome has
 //                  it), the speaker / Settings buttons and the version inside them
 //
@@ -23,7 +23,7 @@
 import { mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PLAYER, open, phone, tap } from './ctr.mjs'
+import { PLAYER, open, phone, shot, tap } from './ctr.mjs'
 
 export const meta = { url: 'http://localhost:8092/index.html', login: false, player: PLAYER }
 
@@ -147,11 +147,15 @@ export default async ctx => {
 			let page = null
 			for (const end = Date.now() + 30_000; Date.now() < end; await sleep(500)) {
 				page = await ctx.js(`const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(innerWidth - b.right), bottom: Math.round(innerHeight - b.bottom), text: e.innerText } }
-					return { hint: r('#install-hint'), kept: r('#disc-kept'), version: r('#boot-version'), w: innerWidth }`)
+					return { hint: r('#install-bar'), kept: r('#disc-kept'), version: r('#boot-version'), w: innerWidth }`)
 				if (page.hint && page.kept) break
 			}
-			if (!/Add to Home Screen/.test(page?.hint?.text ?? '')) throw new Error(`no iOS install hint (safe areas ${insets}) : ${JSON.stringify(page)}`)
+			if (!/Add to Home Screen/.test(page?.hint?.text ?? '') || page.hint.left < 0 || page.hint.right < 0) throw new Error(`no iOS install hint (safe areas ${insets}) : ${JSON.stringify(page)}`)
 			if (!/7 days/.test(page?.kept?.text ?? '')) throw new Error(`the disc line does not say it may go : ${JSON.stringify(page?.kept)}`)
+			await shot(ctx, 'install-bar-iphone-landscape')
+			await phone(ctx, { userAgent: IPHONE, portrait: true, width: 812, height: 375 })
+			await sleep(800)
+			await shot(ctx, 'install-bar-iphone-portrait')
 			if (insets.startsWith('left') && (page.version.right < 47 || page.version.bottom < 21)) throw new Error(`the version sits under the notch / home bar : ${JSON.stringify(page.version)}`)
 			return `manifest « ${man.name} » ${man.display} ${man.orientation}, ${man.icons.length} icons · ${icons.join(', ')} · Safari tags ok · guest : ${guest} · as an iPhone : « ${page.hint.text.slice(0, 60)}… », « ${page.kept.text.split('·').pop().trim().slice(0, 50)}… » · safe areas ${insets}, version ${page.version.right} px from the right, ${page.version.bottom} from the bottom`
 		} finally {

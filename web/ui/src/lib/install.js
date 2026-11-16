@@ -1,7 +1,9 @@
 // A phone's Home Screen (session 41) : what the page knows about being installed, what it keeps,
-// and the screen kept awake. Sets ui.install = { ios, touch, standalone, canPrompt, persisted, kept } :
-//   ios, touch     an iPhone / iPad's Safari (no install prompt there : Share › Add to Home Screen) ;
-//                  a touch screen (the install hint is for phones and tablets only)
+// and the screen kept awake. Sets ui.install = { ios, android, touch, standalone, canPrompt, persisted, kept } :
+//   ios, touch     an iPhone / iPad (no install prompt on iOS, whatever the browser : Share › Add to Home
+//                  Screen) ; a touch screen (the install bar is for phones and tablets only)
+//   android        an Android phone : with no prompt (Firefox, Chrome before it offers one), the bar
+//                  points at the browser's ⋮ menu
 //   standalone     opened from the Home Screen (the manifest's display, or iOS's navigator.standalone)
 //   canPrompt      Chromium's beforeinstallprompt came : promptInstall() shows its dialog
 //   persisted      navigator.storage.persisted() : the browser promised not to evict this site's storage
@@ -17,7 +19,8 @@ export function installSupport(ui, { g = globalThis } = {}) {
   const nav = g.navigator
   const ios = /iPhone|iPad|iPod/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)
   const standalone = () => g.matchMedia?.('(display-mode: standalone)').matches || g.matchMedia?.('(display-mode: fullscreen)').matches || nav.standalone === true
-  const state = { ios, touch: !!g.matchMedia?.('(pointer: coarse)').matches, standalone: standalone(), canPrompt: false, persisted: null, kept: null }
+  const android = /Android/.test(nav.userAgent)
+  const state = { ios, android, touch: !!g.matchMedia?.('(pointer: coarse)').matches, standalone: standalone(), canPrompt: false, persisted: null, kept: null }
   const publish = () => {
     state.kept = state.persisted || (ios && state.standalone) ? 'device' : ios ? 'may-go' : null
     ui.install = { ...state }

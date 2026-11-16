@@ -6,9 +6,10 @@
   // With a stored disc (phase 'ready'), #press-start : the disc, and the real button that starts
   // the game — the connected pad's Cross in its family's look, the keyboard's Start key.
   // #boot-version : the build's version (preload-flag.js), bottom right as on the game's title.
-  // #install-hint (session 41, a touch screen not opened from its Home Screen) : Chromium's install
-  // button, or iOS's Share › Add to Home Screen ; #disc-kept : what the browser promised for the disc.
+  // #install-bar (InstallBar.svelte, session 41) : on a phone, how to put the game on its Home Screen ;
+  // #disc-kept : what the browser promised for the disc.
   import Glyph from './Glyph.svelte'
+  import InstallBar from './InstallBar.svelte'
   import Logo from './Logo.svelte'
   import { codeOf } from './lib/keys.js'
   import { BUTTONS } from './lib/mappings.js'
@@ -18,6 +19,7 @@
 
   let { handleFile, startGame, layout = null, promptInstall = async () => false } = $props()
   let input = $state()
+  let barShown = $state(false)
 
   const mb = (n) => Math.round(n / (1024 * 1024))
   const pct = $derived(ui.progress?.total ? Math.min(100, (ui.progress.written / ui.progress.total) * 100) : 0)
@@ -26,7 +28,7 @@
   const startKey = $derived(codeOf((live.current.duo ? live.current.keyboardLeft : live.current.keyboard)[BUTTONS.indexOf('start')]))
 </script>
 
-<div class="screen">
+<div class="screen" class:withbar={barShown}>
   <div class="glow"></div>
   <div class="col">
     <Logo width={440} />
@@ -82,19 +84,10 @@
       </label>
     {/if}
 
-    {#if ui.install?.touch && !ui.install.standalone && !ui.progress && (ui.install.canPrompt || ui.install.ios)}
-      <p id="install-hint" class="dim small install">
-        {#if ui.install.ios}
-          {T.installIos}
-        {:else}
-          <button id="install-app" type="button" class="link" onclick={promptInstall}>{T.installApp}</button> {T.installWhy}
-        {/if}
-      </p>
-    {/if}
-
     <p id="boot-status" class="dim small" aria-live="polite">{ui.status}</p>
     <div id="drop-error" class="error" role="alert" hidden={!ui.error}>{ui.error}</div>
   </div>
+  {#if !ui.progress}<InstallBar {promptInstall} bind:shown={barShown} />{/if}
   <p id="boot-version" class="version dim small">{T.version} {globalThis.__CTR_VERSION ?? 'dev'}</p>
 </div>
 
@@ -117,7 +110,8 @@
   .press { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 22px 0 4px; font-size: 18px; animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: 0.55; } }
   .other { margin: 16px 0 0; }
-  .install { margin: 12px auto 0; max-width: 440px; text-align: center; }
+  /* the install bar (InstallBar.svelte) : the boot screen scrolls clear of it */
+  .screen.withbar { padding-bottom: calc(env(safe-area-inset-bottom) + 140px); }
   .unlock { display: flex; align-items: center; gap: 12px; margin-top: 18px; text-align: left; cursor: pointer; }
   .unlock input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; cursor: pointer; }
   .unlock small { display: block; color: var(--ink-dim); font-size: 12px; }
