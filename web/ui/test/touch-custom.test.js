@@ -140,6 +140,9 @@ test('settings : « mine » only while a pad is kept ; the traits of the layout 
   st.patch({ touchCustom: spec, touchLayout: 'mine' })
   assert.equal(st.get().touchLayout, 'mine')
   assert.deepEqual(touchTraits(st.get()), { stick: true, gesture: false, retap: true, slideHold: true, slide: true, rock: true })
+  const kept = st.get().touchCustom
+  st.patch({ muted: true })
+  assert.equal(st.get().touchCustom, kept, 'another setting changed : the same pad, the same object (the fingers are not let go)')
   const again = createSettings(storage, { random: () => 0 })
   assert.equal(again.get().touchLayout, 'mine', 'kept by the browser')
   assert.equal(again.get().touchCustom.controls.length, spec.controls.length)

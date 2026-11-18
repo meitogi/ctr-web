@@ -34,7 +34,7 @@
 // Not a node --test file.
 
 import { drive } from '../../ui/src/lib/autopilot.js'
-import { IPHONE_MINI, PLAYER, onMainMenu, fingers, phone, say, shot, startAt, state, touchState, turbo, until } from './ctr.mjs'
+import { IPHONE_MINI, PLAYER, onMainMenu, fingers, open, phone, say, shot, startAt, state, touchState, turbo, until } from './ctr.mjs'
 
 export const meta = { url: 'http://localhost:8093/index.html', login: false, player: PLAYER }
 
@@ -54,6 +54,7 @@ export const tags = {
 	'TOUCH-E-ACTIONS': ['input', 'race'],
 	'TOUCH-E-BOOSTS': ['input', 'race'],
 	'TOUCH-EDITOR': ['input', 'page'],
+	'TOUCH-TUTORIAL': ['input', 'page'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -61,7 +62,7 @@ const TT = { race: 'crash-cove', char: 'crash', mode: 'tt' }
 
 /** The touch settings (lib/settings.js keys) set before the page loads ; null removes one. */
 async function touchSettings(ctx, s) {
-	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms', touchRetapMs: 'ctr-ui.touch-retap-ms' }
+	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms', touchRetapMs: 'ctr-ui.touch-retap-ms', touchTutorial: 'ctr-ui.touch-tutorial' }
 	const set = {}
 	for (const k in keys) set[keys[k]] = k in s ? s[k] : null
 	await ctx.js(`const s = ${JSON.stringify(set)}; for (const k in s) { if (s[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, String(s[k])) } return true`)
@@ -673,6 +674,73 @@ export default async ctx => {
 		if (stored[0] !== null || stored[1] !== null || stored[2]) throw new Error(`Reset my pad : ${JSON.stringify(stored)}`)
 		await click('#ctr-gear')
 		return `the editor pauses the race · GO dragged (kept inside the margin), × 1.4 · ITEM v added, BRAKE removed, pause not removable · no accelerator : « ${warn} » · Reset · Done : « ${mine ? 'mine' : ''} », GO at ${Math.round(placed.cx)}, ITEM v = Circle + Down · kept across a reload · 3 fingers : ${three.join(' ')} · Reset my pad : the default again`
+	})
+
+	// 42b : the first-race tutorial — shown once at the first race by touch, the game paused under
+	// it, one card an action for the pad in use, Back, Play, Skip, « Show the tutorial again ».
+	// (Under the harness it never opens by itself : the scenario asks for it, stored « 0 ».)
+	await ctx.scenario('TOUCH-TUTORIAL', async () => {
+		await phone(ctx, IPHONE_MINI)
+		await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, ctx.sid).catch(() => {})
+		await touchSettings(ctx, {})
+		await ctx.js("localStorage.removeItem('ctr-ui.touch-custom'); localStorage.setItem('ctr-ui.touch-tutorial', '0'); return true")
+		// a race started as the menus would (no snapshot : startAt waits for a countdown the pause holds)
+		await open(ctx, '?race=crash-cove&char=crash&mode=tt')
+		const click = sel => ctx.js(`const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; e.click(); return true`)
+		const wait = async (what, expr, ms = 15_000) => {
+			for (const end = Date.now() + ms; Date.now() < end; await sleep(120)) { const v = await ctx.js(`return (${expr})`); if (v) return v }
+			throw new Error(`no ${what}`)
+		}
+		const card = () => ctx.js("const t = document.getElementById('ctr-touch-tutorial'); return t ? { id: t.dataset.card, lit: [...t.querySelectorAll('[data-lit]')].map(e => e.dataset.lit), title: t.querySelector('h3').textContent, text: t.querySelector('p').textContent, back: !!document.getElementById('ctr-tutorial-back'), next: document.getElementById('ctr-tutorial-next').textContent } : null")
+		await wait('the tutorial at the first race', "!!document.getElementById('ctr-touch-tutorial')", 90_000)
+		const opened = (await state(ctx)).screen
+		await until(ctx, 'the pause under the cards', st => st.screen === 'paused', { timeout: 15_000 })
+		if (await touchState(ctx)) throw new Error('the touch controls stay under the cards')
+		const seen = []
+		const first = await card()
+		await shot(ctx, 'tutorial-1')
+		for (let i = 0; i < 6; i++) {
+			const c = await card()
+			seen.push(c)
+			if (i === 2) await shot(ctx, 'tutorial-3')
+			if (i < 5) await click('#ctr-tutorial-next')
+		}
+		const order = seen.map(c => c.id).join(' ')
+		if (order !== 'go start slide items brake look') throw new Error(`the cards : ${order}`)
+		if (first.back || first.lit.join() !== 'steer,right') throw new Error(`card 1 : ${JSON.stringify(first)}`)
+		if (seen[4].lit.join() !== 'steer' || seen[5].lit.join() !== 'look' || seen[5].next !== 'Play') throw new Error(`cards 5 / 6 : ${JSON.stringify(seen.slice(4))}`)
+		// Back, then a tap on the card = Next
+		await click('#ctr-tutorial-back')
+		if ((await card()).id !== 'brake') throw new Error('Back')
+		await click('#ctr-tutorial-card')
+		if ((await card()).id !== 'look') throw new Error('a tap on the card')
+		// Play : closed, seen, the game goes on, the controls are back
+		await click('#ctr-tutorial-next')
+		await wait('the cards closed', "!document.getElementById('ctr-touch-tutorial')")
+		await until(ctx, 'the game again', st => st.screen !== 'paused', { timeout: 6000 })
+		const after = (await state(ctx)).screen
+		await wait('the touch controls', "document.querySelector('#ctr-touch')?.dataset.kind === 'e'")
+		if (await ctx.js("return localStorage.getItem('ctr-ui.touch-tutorial')") !== '1') throw new Error('not marked seen')
+		// seen : the next race has none
+		await startAt(ctx, TT)
+		await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+		await sleep(1500)
+		if (await ctx.js("return !!document.getElementById('ctr-touch-tutorial')")) throw new Error('shown twice')
+		// the way back : Settings › Controls › Touch › Show the tutorial again ; Skip
+		await click('#ctr-gear')
+		await wait('Settings', "!!document.getElementById('ctr-settings')")
+		await click('#ctr-settings [data-tab=controls]')
+		await wait('Controls', "!!document.querySelector('#ctr-settings [data-device=touch]')")
+		await click('#ctr-settings [data-device=touch]')
+		await wait('Show the tutorial again', "!!document.getElementById('ctr-touch-tutorial-again')")
+		await click('#ctr-touch-tutorial-again')
+		await wait('the tutorial again', "!!document.getElementById('ctr-touch-tutorial') && !document.getElementById('ctr-settings')")
+		await until(ctx, 'the pause again', st => st.screen === 'paused', { timeout: 6000 })
+		await click('#ctr-tutorial-skip')
+		await wait('skipped', "!document.getElementById('ctr-touch-tutorial')")
+		await until(ctx, 'the race after Skip', st => st.screen === 'race', { timeout: 6000 })
+		if (await ctx.js("return localStorage.getItem('ctr-ui.touch-tutorial')") !== '1') throw new Error('Skip did not mark it seen')
+		return `opened at « ${opened} », the game paused · the cards : ${seen.map(c => c.title).join(' / ')} · card 1 lights ${first.lit.join(' + ')} · Back, a tap = Next · Play : « ${after} », seen · the next race : none · « Show the tutorial again » : shown, Skip, the race goes on`
 	})
 
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {
