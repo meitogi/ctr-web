@@ -18,6 +18,7 @@
   import Toasts from './Toasts.svelte'
   import TouchEditor from './TouchEditor.svelte'
   import TouchPad from './TouchPad.svelte'
+  import TouchTutorial from './TouchTutorial.svelte'
   import { scancodeOf } from './lib/keys.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
   import { BUTTONS, STANDARD_TO_SDL } from './lib/mappings.js'
@@ -270,7 +271,8 @@
   {#if ui.settingsOpen}
     <Settings {forgetStoredDisc} {restartGame} {layout} onclose={() => setOpen(false)} />
   {/if}
-  {#if touch}<TouchPad pad={touch} />{/if}
+  {#if touch}<TouchPad pad={touch} tutorial />{/if}
+  {#if touch && ui.touchTutorial}<TouchTutorial pad={touch} />{/if}
   {#if touch && ui.touchEditor}<TouchEditor pad={touch} />{/if}
 {/if}
 

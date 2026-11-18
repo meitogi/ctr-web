@@ -166,6 +166,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
           fingers[id].noR1 = true
           landed &= ~B.r1
           boostPending = false
+          boostWait = 0
           boostUntil = 0
           lastRTap = -1e9
           return true
@@ -435,6 +436,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     tap(bits) {
       pulse = bits
       pulseUntil = -1
+    },
+    /** A tap the game has not been given yet is dropped ; true when there was one. */
+    untap() {
+      if (pulseUntil !== -1) return false
+      pulse = pulseUntil = 0
+      return true
     },
     /** the viewport and its safe areas, as last placed */
     get view() { return view },

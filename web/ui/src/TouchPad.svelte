@@ -14,7 +14,9 @@
   import { ui } from './state.svelte.js'
   import { live } from './store.js'
 
-  let { pad, enabled = true } = $props()
+  // `tutorial` : this page shows the first-race tutorial (the game's own page ; not Share's guest
+  // page, whose Start would pause the host's game)
+  let { pad, enabled = true, tutorial = false } = $props()
 
   const s = $derived(live.current)
   let racing = $state(false)
@@ -37,7 +39,7 @@
 
   const mode = $derived(s.touchMode === 'auto' ? 'enhanced' : s.touchMode)
   const touchScreen = $derived(!!ui.install?.touch || touched)
-  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm && !ui.touchEditor)
+  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm && !ui.touchEditor && !ui.touchTutorial)
   const has = $derived(touchTraits(s))
   const kind = $derived(mode === 'minimal' ? 'minimal' : racing ? s.touchLayout : 'menu')
 
@@ -50,10 +52,10 @@
       boostWindow = w
       if (!w) return
       place()
-      if (live.current.touchSound && pad.shown) cue.red()
+      if (live.current.touchSound && pad.shown && mode === 'enhanced') cue.red()
     }
     pad.onBoosts = (n) => {
-      if (n > made && live.current.touchSound && pad.shown) cue.made(n)
+      if (n > made && live.current.touchSound && pad.shown && mode === 'enhanced') cue.made(n)
       if (n) place()
       made = n
     }
@@ -68,6 +70,14 @@
     if (!at && !c) return
     pipsAt = { x: Math.max(60, Math.min(window.innerWidth - 60, x)), y: Math.max(24, y - 64) }
   }
+
+  // the first race played with the touch controls : the tutorial, once (asked for again in
+  // Settings : 'new') ; never by itself under the tests' harness
+  $effect(() => {
+    const fresh = s.touchTutorial === 'new' || (s.touchTutorial === null && !globalThis.__player)
+    // (not with a pad connected : its player does not need the cards, and they would close at once)
+    if (tutorial && racing && shown && fresh && !ui.pads.length) ui.touchTutorial = true
+  })
 
   let pads = ui.pads.length
   $effect(() => {
@@ -204,7 +214,7 @@
         </div>
       {/if}
     {/each}
-    {#if s.touchCue && pipsAt && (made > 0 || boostWindow)}
+    {#if s.touchCue && mode === 'enhanced' && pipsAt && (made > 0 || boostWindow)}
       <div class="pips" data-made={made} style={`left:${pipsAt.x}px;top:${pipsAt.y}px`} aria-hidden="true">
         {#each [1, 2, 3] as n}<span class:made={n <= made} class:now={boostWindow && n === made + 1}>{n}</span>{/each}
       </div>

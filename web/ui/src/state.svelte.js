@@ -16,6 +16,8 @@ export const ui = $state({
   settingsOpen: false,
   // the touch layout's editor (TouchEditor.svelte) over the game
   touchEditor: false,
+  // the first-race tutorial's cards (TouchTutorial.svelte) over the page
+  touchTutorial: false,
   tab: 'players',
   // the Multiplayer tab's panel (an adopted id : 'share')
   multi: null,

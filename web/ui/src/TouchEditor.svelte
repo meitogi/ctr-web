@@ -7,8 +7,8 @@
   // another layout or the 3-finger preset ; Reset goes back to what the editor opened on ; Done
   // keeps it as the layout « Mine » (lib/settings.js touchCustom). Pause cannot be removed ; a pad
   // that cannot accelerate or steer is told, not refused.
-  import { PSX_BIT as B } from './lib/guest-input.js'
   import { T } from './lib/strings.js'
+  import { pauseGame } from './lib/touch/pause.js'
   import { OPACITY, PALETTE, SCALE, STARTS, centre, fromPalette, fromSpec, missing, moveTo, scaleTo, startFrom, toSpec } from './lib/touch/custom.js'
   import { ui } from './state.svelte.js'
   import { live, settings } from './store.js'
@@ -27,10 +27,10 @@
   const sel = $derived(controls.find((c) => c.id === picked) ?? null)
 
   // the game paused while the pad is edited (the page's own Start, as the II button), resumed after
-  let paused = false
   $effect(() => {
-    if (pause && pad.racing) { pad.tap(B.start); paused = true }
-    return () => { if (paused && !pad.racing) pad.tap(B.start) }
+    if (!pause) return
+    const held = pauseGame(pad)
+    return () => held.release()
   })
 
   const box = (c) => (c.type === 'button' || c.type === 'dpad'

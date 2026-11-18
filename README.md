@@ -59,13 +59,19 @@ measured yet.
   more there. in the app it stays (closed, reopened : kept). in a Safari tab, Safari deletes a site's
   storage after 7 days without a visit — the home page says which one you're in.
 - **touch controls.** three ways to play, Settings › Controls › Touch :
-  - **Enhanced** (the default on a touch screen) : made for the game. left thumb anywhere on the
-    left = a stick, right where it lands. GO, the slide (R), the item, the brake under the right
-    thumb, three layouts to try (A : buttons, roll from R onto BOOST for the slide's boosts ;
-    B : one thumb glides GO → GO + R → + BOOST ; C : left / right buttons, no stick).
-    **GO holds itself** once you've kept it pressed 0.8 s in a race (a plain press first : the start
-    boost is yours) — the brake, a tap on GO, the pause or the finish let go. switch it off, or
-    change the delay, in Settings.
+  - **Enhanced** (the default on a touch screen) : made for the game, two thumbs and no button to
+    aim at. left thumb anywhere on the left = a stick, right where it lands ; pulled straight down
+    it brakes, then backs up. the right half of the screen is one gesture : hold = GO, a tap = a
+    hop, a tap while turning = a slide, a tap in a slide = its boost (the side turns red at the
+    moment, « 1 · 2 · 3 » counts them ; the first is made for you, the other two are yours).
+    swipe up or down there = your item, forward or behind (a bomb rolls backward, a potion is
+    thrown ahead). **GO holds itself** once you've kept it pressed 0.8 s in a race (a plain press
+    first : the start boost is yours) — the brake, the pause or the finish let go.
+    four more layouts to try (A to D : buttons, a glide, left / right, one thumb a side), and
+    **your own** : « Edit my pad » moves, resizes, adds and removes controls — the super buttons
+    (a GO that holds itself, a slide that is kept, a boost lit at its moment…) or the pad's plain
+    ones. your first race by touch opens with six short cards ; « Show the tutorial again » brings
+    them back.
   - **Minimal** : the pad's own buttons on the screen, one for one.
   - **Pad** : nothing on the screen. a connected pad hides the touch controls anyway ; touch the
     screen and they're back.

@@ -696,3 +696,33 @@ test('the cue : a tick at the red, a chime on a boost, a buzz where there is one
   assert.equal(played.length, 3)
   assert.equal(createCue({ context: () => null, vibrate: null }).made(1), false, 'no sound, no buzz (iOS before the first touch)')
 })
+
+test('a double tap on a held slide forgets a boost that was waiting for the red', () => {
+  const pad = make('a')
+  pad.slideHoldMs = 500
+  pad.bufferMs = 80
+  const r = at(pad, 'slide')
+  const pk = (t, slide, red = false) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide, red); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  pad.down(1, r.cx, r.cy, 0)
+  pk(10, true)
+  pk(600, true)
+  assert.equal(pad.slideLock, 'held')
+  pad.up(1, 610)
+  pk(1000, true)
+  pad.down(1, r.cx, r.cy, 1100) // a tap before the red : it waits
+  assert.equal(pk(1110, true) & B.l1, 0)
+  pad.up(1, 1120)
+  pad.down(1, r.cx, r.cy, 1150) // the double tap : the slide let go, the wait with it
+  pk(1160, true)
+  pad.up(1, 1170)
+  pk(1400, false)
+  // a later slide : an early tap waits its own 80 ms
+  pad.down(1, r.cx, r.cy, 2000)
+  pk(2010, true)
+  pk(2600, true)
+  pad.up(1, 2610)
+  pk(2700, true)
+  pad.down(1, r.cx, r.cy, 3000)
+  assert.equal(pk(3010, true) & B.l1, 0, 'kept for the red')
+  assert.equal(pk(3040, true, true) & B.l1, B.l1, 'sent at the red')
+})

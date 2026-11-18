@@ -138,6 +138,12 @@
     </div>
   {/if}
   <p class="help">{T.touchPadHides}</p>
+  {#if way !== 'pad'}
+    <div class="row">
+      <button type="button" id="ctr-touch-tutorial-again" class="act" onclick={() => { settings.patch({ touchTutorial: 'new' }); ui.settingsOpen = false }}>{T.tutorial.again}</button>
+    </div>
+    <p class="help">{T.tutorial.againHelp}</p>
+  {/if}
 </div>
 
 <style>

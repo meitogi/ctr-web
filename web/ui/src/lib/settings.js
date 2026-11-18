@@ -46,6 +46,7 @@ export const KEYS = {
   touchBuffer: 'ctr-ui.touch-buffer',
   touchSound: 'ctr-ui.touch-sound',
   touchCustom: 'ctr-ui.touch-custom',
+  touchTutorial: 'ctr-ui.touch-tutorial',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -81,6 +82,7 @@ export const TOUCH_RETAP_MS = Object.freeze([0, 200, 250, 350])
 const retapMs = (v) => (TOUCH_RETAP_MS.includes(Number(v)) ? Number(v) : 250)
 export const TOUCH_STEER = Object.freeze({ low: { reach: 0.85, curve: 0.9 }, medium: { reach: 0.65, curve: 0.7 }, high: { reach: 0.5, curve: 0.55 } })
 const pick = (v, list) => (list.includes(v) ? v : list[0])
+const tutorialOf = (v) => (v === '1' || v === 'seen' ? 'seen' : v === '0' || v === 'new' ? 'new' : null)
 // « mine » only while there is one
 const layoutOf = (s) => { const l = pick(s.touchLayout, TOUCH_LAYOUTS); return l === 'mine' && !cleanSpec(s.touchCustom) ? TOUCH_LAYOUTS[0] : l }
 /**
@@ -164,6 +166,9 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchSound: read(storage, KEYS.touchSound) !== '0',
     // « my pad » : the layout built in the editor, null until then
     touchCustom: cleanSpec(read(storage, KEYS.touchCustom)),
+    // the first-race tutorial : 'seen' (stored 1), 'new' (stored 0 : asked for again), null (never
+    // shown : TouchPad.svelte shows it at the first race, but not to the tests' harness)
+    touchTutorial: tutorialOf(read(storage, KEYS.touchTutorial)),
   }
 }
 
@@ -194,6 +199,7 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchBuffer, s.touchBuffer ? null : '0')
   write(storage, KEYS.touchSound, s.touchSound ? null : '0')
   write(storage, KEYS.touchCustom, s.touchCustom ? JSON.stringify(s.touchCustom) : null)
+  write(storage, KEYS.touchTutorial, s.touchTutorial === 'seen' ? '1' : s.touchTutorial === 'new' ? '0' : null)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -212,7 +218,8 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
   const set = (next) => {
     value = {
       ...next, name: cleanName(next.name), device: cleanDevice(next.device),
-      touchMode: pick(next.touchMode, TOUCH_MODES), touchCustom: cleanSpec(next.touchCustom), touchLayout: layoutOf(next),
+      touchMode: pick(next.touchMode, TOUCH_MODES), // (the same pad is the same object : TouchPad.svelte places a layout again when it changes)
+      touchCustom: next.touchCustom === value.touchCustom ? value.touchCustom : cleanSpec(next.touchCustom), touchLayout: layoutOf(next), touchTutorial: tutorialOf(next.touchTutorial),
       touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx), touchSlideHoldMs: slideHoldMs(next.touchSlideHoldMs), touchSteer: pick(next.touchSteer, ['medium', 'low', 'high']), touchRetapMs: retapMs(next.touchRetapMs),
     }
     saveSettings(storage, value, deviceKey)
