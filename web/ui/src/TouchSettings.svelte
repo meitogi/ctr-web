@@ -2,13 +2,20 @@
   // Settings › Controls › Touch (session 42) : the way to play on a touch screen (a pad / the minimal
   // on-screen pad / the enhanced one), the enhanced one's layout, the held accelerator and its delay,
   // the controls' size. Kept by the browser (lib/settings.js) ; TouchPad.svelte follows at once.
-  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_RETAP_MS, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS, TOUCH_STEER } from './lib/settings.js'
+  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_RETAP_MS, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS, TOUCH_STEER, touchTraits } from './lib/settings.js'
+  import { ui } from './state.svelte.js'
   import { T } from './lib/strings.js'
   import { live, settings } from './store.js'
 
   const s = $derived(live.current)
   const way = $derived(s.touchMode === 'auto' ? 'enhanced' : s.touchMode)
   const DELAYS = [500, TOUCH_HOLD_MS.default, 1200]
+  // what the layout in use has : the settings that only make sense with it
+  const has = $derived(touchTraits(s))
+  // « mine » is offered once it exists
+  const layouts = $derived(TOUCH_LAYOUTS.filter((l) => l !== 'mine' || s.touchCustom))
+  // the editor works over the game : Settings closes
+  const edit = () => { ui.settingsOpen = false; ui.touchEditor = true }
 </script>
 
 <div class="touch-settings">
@@ -23,11 +30,16 @@
   {#if way === 'enhanced'}
     <div class="label">{T.touchLayout}</div>
     <div class="seg" role="radiogroup" aria-label={T.touchLayout}>
-      {#each TOUCH_LAYOUTS as l}
+      {#each layouts as l}
         <button type="button" role="radio" data-touch-layout={l} aria-checked={s.touchLayout === l} class:on={s.touchLayout === l} onclick={() => settings.patch({ touchLayout: l })}>{T.touchLayouts[l]}</button>
       {/each}
     </div>
     <p class="help">{T.touchLayoutHelp[s.touchLayout]}</p>
+    <div class="row">
+      <button type="button" id="ctr-touch-edit" class="act" onclick={edit}>{T.touchEdit}</button>
+      {#if s.touchCustom}<button type="button" id="ctr-touch-edit-clear" class="act back" onclick={() => settings.patch({ touchCustom: null })}>{T.touchEditClear}</button>{/if}
+    </div>
+    <p class="help">{T.touchEditHelp}</p>
 
     <label class="setrow">
       <span>{T.touchHold}<small>{T.touchHoldHelp((s.touchHoldMs / 1000).toFixed(1))}</small></span>
@@ -44,7 +56,7 @@
       </div>
     {/if}
 
-    {#if s.touchLayout !== 'c'}
+    {#if has.stick}
       <div class="label">{T.touchSteer}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchSteer}>
         {#each Object.keys(TOUCH_STEER) as k}
@@ -53,14 +65,14 @@
       </div>
     {/if}
 
-    {#if s.touchLayout === 'e'}
+    {#if has.gesture}
       <label class="setrow">
         <span>{T.touchAutoBoost}<small>{T.touchAutoBoostHelp}</small></span>
         <input id="ctr-touch-auto-boost" type="checkbox" role="switch" class="switch" checked={s.touchAutoBoost} onchange={(e) => settings.patch({ touchAutoBoost: e.currentTarget.checked })} />
       </label>
     {/if}
 
-    {#if s.touchLayout !== 'c' && s.touchLayout !== 'e'}
+    {#if has.retap}
       <div class="label">{T.touchRetap}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchRetap}>
         {#each TOUCH_RETAP_MS as ms}
@@ -83,7 +95,7 @@
       <input id="ctr-touch-buffer" type="checkbox" role="switch" class="switch" checked={s.touchBuffer} onchange={(e) => settings.patch({ touchBuffer: e.currentTarget.checked })} />
     </label>
 
-    {#if s.touchLayout !== 'b' && s.touchLayout !== 'e'}
+    {#if has.slideHold}
       <div class="label">{T.touchSlideHold}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchSlideHold}>
         {#each TOUCH_SLIDE_HOLD_MS as ms}
@@ -93,7 +105,7 @@
       <p class="help">{T.touchSlideHoldHelp}</p>
     {/if}
 
-    {#if s.touchLayout !== 'e'}
+    {#if has.slide}
     <div class="label">{T.touchSlide}</div>
     <div class="seg" role="radiogroup" aria-label={T.touchSlide}>
       {#each TOUCH_SLIDE_MS as ms}
@@ -104,7 +116,7 @@
 
     {/if}
 
-    {#if s.touchLayout !== 'b' && s.touchLayout !== 'e'}
+    {#if has.rock}
       <div class="label">{T.touchRock}</div>
       <div class="seg" role="radiogroup" aria-label={T.touchRock}>
         {#each TOUCH_ROCK_PX as px}
@@ -137,6 +149,8 @@
   .help { font-size: 12.5px; color: var(--ink-dim); margin: 8px 2px 0; }
   .row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
   .dim { color: var(--ink-dim); font-size: 13px; min-width: 52px; }
+  .act { min-height: 40px; padding: 8px 16px; border-radius: 10px; border: 0; background: #fff; color: #111; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .act.back { background: none; border: 1px solid #e03131; color: #ff8787; }
   .setrow { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.04); margin-top: 14px; cursor: pointer; }
   .setrow small { display: block; color: var(--ink-dim); font-size: 12.5px; margin-top: 2px; }
   .switch { appearance: none; flex: none; width: 44px; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, 0.18); position: relative; cursor: pointer; transition: background 150ms; margin: 0; }

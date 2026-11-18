@@ -6,6 +6,7 @@
   import Hud from './Hud.svelte'
   import Settings from './Settings.svelte'
   import Toasts from './Toasts.svelte'
+  import TouchEditor from './TouchEditor.svelte'
   import TouchPad from './TouchPad.svelte'
   import { noZoom } from './lib/no-zoom.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
@@ -117,6 +118,7 @@
 {/if}
 
 {#if touch}<TouchPad pad={touch} enabled={ui.guest?.state === 'connected'} />{/if}
+{#if touch && ui.touchEditor}<TouchEditor pad={touch} pause={false} />{/if}
 <Toasts />
 
 <style>

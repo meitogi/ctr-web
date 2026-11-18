@@ -14,6 +14,8 @@ export const ui = $state({
   // the replace-disc / forget-disc confirmation : { text, action, run }
   confirm: null,
   settingsOpen: false,
+  // the touch layout's editor (TouchEditor.svelte) over the game
+  touchEditor: false,
   tab: 'players',
   // the Multiplayer tab's panel (an adopted id : 'share')
   multi: null,

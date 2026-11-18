@@ -11,6 +11,7 @@
 // GO (`go`) passes through the held accelerator (hold.js) on the race layouts.
 import { PSX_BIT as B } from '../guest-input.js'
 import { createHold } from './hold.js'
+import { fromSpec } from './custom.js'
 import { dpadBits, hit, layout } from './layouts.js'
 
 export const PAD_DIGITAL = 0x41
@@ -26,6 +27,11 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   let kind = null
   let view = null
   let size = 'm'
+  let custom = null // the spec of the layout « mine » (custom.js)
+  let hasStick = false
+  // a button tapped by the page itself (tap()) : Start, to pause the game under its own screens
+  let pulse = 0
+  let pulseUntil = 0
   const fingers = {} // pointerId → { start, last, x, y, ox, oy }
   const hold = createHold(holdOpts)
   let shown = false
@@ -115,12 +121,14 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       if (!shown) self.release()
     },
     /** The layout for `kind` at this viewport (layouts.js) ; the fingers are let go. */
-    place(k, v, s = size) {
-      if (k === kind && s === size && v && view && v.W === view.W && v.H === view.H && v.left === view.left && v.right === view.right && v.bottom === view.bottom && v.top === view.top) return false
+    place(k, v, s = size, spec = null) {
+      if (k === kind && s === size && spec === custom && v && view && v.W === view.W && v.H === view.H && v.left === view.left && v.right === view.right && v.bottom === view.bottom && v.top === view.top) return false
       kind = k
       view = v
       size = s
-      controls = layout(k, v, { size: s })
+      custom = spec
+      controls = k === 'mine' ? fromSpec(spec, v, s) : layout(k, v, { size: s })
+      hasStick = controls.some((c) => c.type === 'stick')
       self.release()
       return true
     },
@@ -327,9 +335,22 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         boosts = n
         self.onBoosts?.(n)
       }
-      if (!shown) return 0
+      if (pulseUntil === -1) pulseUntil = now + 100
+      if (pulseUntil && now >= pulseUntil) pulseUntil = pulse = 0
+      const analog = self.analog || kind === 'a' || kind === 'b' || kind === 'd' || kind === 'e' || (kind === 'mine' && hasStick)
+      if (!shown) {
+        // hidden, the slot is left alone — but for the page's own tap
+        if (!pulse) return 0
+        const tapped = ~pulse & 0xffff
+        dst[at] = 0
+        dst[at + 1] = analog ? PAD_ANALOG : PAD_DIGITAL
+        dst[at + 2] = tapped & 0xff
+        dst[at + 3] = tapped >> 8
+        dst[at + 4] = dst[at + 5] = dst[at + 6] = dst[at + 7] = 0x80
+        return 1
+      }
       const r = self.read()
-      let bits = r.bits | landed
+      let bits = r.bits | landed | pulse
       const go = r.go || landedGo
       let stick = r.stick
       lastStick = stick
@@ -400,7 +421,6 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         self.onHold?.(held)
       }
       const buttons = ~(bits | (cross ? B.cross : 0)) & 0xffff
-      const analog = self.analog || kind === 'a' || kind === 'b' || kind === 'd' || kind === 'e'
       dst[at] = 0
       dst[at + 1] = analog ? PAD_ANALOG : PAD_DIGITAL
       dst[at + 2] = buttons & 0xff
@@ -411,6 +431,13 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       dst[at + 7] = stick ? byte(stick[1]) : 0x80
       return 1
     },
+    /** The page taps these buttons itself, 100 ms from the next pull — shown or not (Start : the pause). */
+    tap(bits) {
+      pulse = bits
+      pulseUntil = -1
+    },
+    /** the viewport and its safe areas, as last placed */
+    get view() { return view },
     /** the packet says analog whatever the layout (TouchPad.svelte : the enhanced A / B mode) */
     analog: false,
     /** how long R1 outlives a lift in a race (the slide kept, a re-touch = a boost) ; 0 = off */

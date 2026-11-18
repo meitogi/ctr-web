@@ -16,6 +16,7 @@
 // JS too — test/settings.test.js drives it with an in-memory storage.
 import { DEFAULT_GAMEPAD, DEFAULT_KEYBOARD, DEFAULT_KEYBOARD_LEFT, DEFAULT_KEYBOARD_RIGHT, loadMapping, saveMapping } from './mappings.js'
 import { randomName } from './names.js'
+import { cleanSpec } from './touch/custom.js'
 
 export const NAME_LEN = 9 // game/OnlineCTR/global.h
 export const KEYS = {
@@ -44,6 +45,7 @@ export const KEYS = {
   touchAutoBoost: 'ctr-ui.touch-auto-boost',
   touchBuffer: 'ctr-ui.touch-buffer',
   touchSound: 'ctr-ui.touch-sound',
+  touchCustom: 'ctr-ui.touch-custom',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
@@ -58,7 +60,8 @@ export const DEFAULT_VOLUME = 0.8
  */
 export const TOUCH_MODES = ['auto', 'pad', 'minimal', 'enhanced']
 // the first one is the default : E, the one a new player gets (the user, 2026-11-18)
-export const TOUCH_LAYOUTS = ['e', 'a', 'b', 'c', 'd']
+// ; the last one is the player's own (touchCustom, lib/touch/custom.js), offered once it exists
+export const TOUCH_LAYOUTS = ['e', 'a', 'b', 'c', 'd', 'mine']
 /** how long a boost tapped before the meter's red waits for it (lib/touch/pad.js bufferMs) */
 export const TOUCH_BUFFER_MS = 80
 export const TOUCH_SIZES = ['s', 'm', 'l']
@@ -78,6 +81,20 @@ export const TOUCH_RETAP_MS = Object.freeze([0, 200, 250, 350])
 const retapMs = (v) => (TOUCH_RETAP_MS.includes(Number(v)) ? Number(v) : 250)
 export const TOUCH_STEER = Object.freeze({ low: { reach: 0.85, curve: 0.9 }, medium: { reach: 0.65, curve: 0.7 }, high: { reach: 0.5, curve: 0.55 } })
 const pick = (v, list) => (list.includes(v) ? v : list[0])
+// « mine » only while there is one
+const layoutOf = (s) => { const l = pick(s.touchLayout, TOUCH_LAYOUTS); return l === 'mine' && !cleanSpec(s.touchCustom) ? TOUCH_LAYOUTS[0] : l }
+/**
+ * What the layout in use has, for the settings that only make sense with it (TouchSettings.svelte)
+ * and the pad's own switches (TouchPad.svelte) : the built-in layouts by their letter, « mine » by
+ * what its controls are.
+ */
+export function touchTraits(s) {
+  const l = s.touchLayout
+  if (l !== 'mine' || !s.touchCustom) return { stick: l !== 'c', gesture: l === 'e', retap: l !== 'c' && l !== 'e', slideHold: l !== 'b' && l !== 'e', slide: l !== 'e', rock: l !== 'b' && l !== 'e' }
+  const has = (f) => s.touchCustom.controls.some((c) => c[f] === true || c.type === f)
+  const anchor = has('anchor')
+  return { stick: has('stick'), gesture: has('gesture'), retap: has('stick') && !has('gesture'), slideHold: anchor, slide: anchor || !has('gesture'), rock: anchor }
+}
 const holdMs = (v) => {
   const n = Math.round(Number(v))
   return Number.isFinite(n) && n >= TOUCH_HOLD_MS.min && n <= TOUCH_HOLD_MS.max ? n : TOUCH_HOLD_MS.default
@@ -128,7 +145,7 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     // with the game data stored, the page boots the game on load, no boot screen press (on by default)
     autoStart: read(storage, KEYS.autoStart) !== '0',
     touchMode: pick(read(storage, KEYS.touchMode), TOUCH_MODES),
-    touchLayout: pick(read(storage, KEYS.touchLayout), TOUCH_LAYOUTS),
+    touchLayout: layoutOf({ touchLayout: read(storage, KEYS.touchLayout), touchCustom: read(storage, KEYS.touchCustom) }),
     touchHold: read(storage, KEYS.touchHold) !== '0',
     touchHoldMs: holdMs(read(storage, KEYS.touchHoldMs) ?? TOUCH_HOLD_MS.default),
     touchSize: pick(read(storage, KEYS.touchSize), ['m', 's', 'l']),
@@ -145,6 +162,8 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchBuffer: read(storage, KEYS.touchBuffer) !== '0',
     // the page's own sounds : a tick at the red, a chime on a boost made
     touchSound: read(storage, KEYS.touchSound) !== '0',
+    // « my pad » : the layout built in the editor, null until then
+    touchCustom: cleanSpec(read(storage, KEYS.touchCustom)),
   }
 }
 
@@ -174,6 +193,7 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchAutoBoost, s.touchAutoBoost ? null : '0')
   write(storage, KEYS.touchBuffer, s.touchBuffer ? null : '0')
   write(storage, KEYS.touchSound, s.touchSound ? null : '0')
+  write(storage, KEYS.touchCustom, s.touchCustom ? JSON.stringify(s.touchCustom) : null)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -192,7 +212,7 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
   const set = (next) => {
     value = {
       ...next, name: cleanName(next.name), device: cleanDevice(next.device),
-      touchMode: pick(next.touchMode, TOUCH_MODES), touchLayout: pick(next.touchLayout, TOUCH_LAYOUTS),
+      touchMode: pick(next.touchMode, TOUCH_MODES), touchCustom: cleanSpec(next.touchCustom), touchLayout: layoutOf(next),
       touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx), touchSlideHoldMs: slideHoldMs(next.touchSlideHoldMs), touchSteer: pick(next.touchSteer, ['medium', 'low', 'high']), touchRetapMs: retapMs(next.touchRetapMs),
     }
     saveSettings(storage, value, deviceKey)

@@ -9,7 +9,7 @@
   // Cheap on a phone (session 41 : ~30 fps with little headroom) : the controls' places are
   // computed on a resize only ; a finger's move writes the stick's knob and the pressed classes,
   // nothing else ; the hold's ring is a CSS animation.
-  import { TOUCH_BUFFER_MS, TOUCH_STEER } from './lib/settings.js'
+  import { TOUCH_BUFFER_MS, TOUCH_STEER, touchTraits } from './lib/settings.js'
   import { createCue } from './lib/touch/cue.js'
   import { ui } from './state.svelte.js'
   import { live } from './store.js'
@@ -37,7 +37,8 @@
 
   const mode = $derived(s.touchMode === 'auto' ? 'enhanced' : s.touchMode)
   const touchScreen = $derived(!!ui.install?.touch || touched)
-  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm)
+  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm && !ui.touchEditor)
+  const has = $derived(touchTraits(s))
   const kind = $derived(mode === 'minimal' ? 'minimal' : racing ? s.touchLayout : 'menu')
 
   $effect(() => {
@@ -116,17 +117,17 @@
     pad.slideHoldMs = mode === 'enhanced' ? s.touchSlideHoldMs : 0
     pad.steer = mode === 'enhanced' ? TOUCH_STEER[s.touchSteer] : { reach: 1, curve: 1 }
     // the slide from the stick : a stick to re-touch (A, B, D)
-    pad.retapMs = mode === 'enhanced' && s.touchLayout !== 'c' && s.touchLayout !== 'e' ? s.touchRetapMs : 0
-    pad.autoBoost = mode === 'enhanced' && s.touchLayout === 'e' && s.touchAutoBoost
+    pad.retapMs = mode === 'enhanced' && has.retap ? s.touchRetapMs : 0
+    pad.autoBoost = mode === 'enhanced' && has.gesture && s.touchAutoBoost
     pad.bufferMs = mode === 'enhanced' && s.touchBuffer ? TOUCH_BUFFER_MS : 0
   })
   $effect(() => {
     pad.show(shown)
     // the stick's analog id kept for the whole mode (A, B), menus included : the game never sees
     // the pad switch between analog and digital at a race's start or end
-    pad.analog = mode === 'enhanced' && s.touchLayout !== 'c'
+    pad.analog = mode === 'enhanced' && has.stick
     if (!shown || !view) return
-    pad.place(kind, view, s.touchSize)
+    pad.place(kind, view, s.touchSize, kind === 'mine' ? s.touchCustom : null)
     if (controls !== pad.controls) controls = pad.controls
   })
 
@@ -196,7 +197,7 @@
           <span class="arm up"></span><span class="arm down"></span><span class="arm left"></span><span class="arm right"></span>
         </div>
       {:else}
-        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} class:boosts={c.boosts || c.anchor || c.boost || (c.group && (c.bits & 0x400))} data-id={c.id} style={box(c)} use:register={c.id}>
+        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} class:boosts={c.boosts || c.anchor || c.boost || (c.group && (c.bits & 0x400))} data-id={c.id} style={`${box(c)}${c.opacity < 1 ? `;opacity:${c.opacity}` : ''}`} use:register={c.id}>
           {#if c.go && kind !== 'minimal'}<span class="ring"></span>{/if}
           {#if c.anchor}<span class="ring slide-ring"></span>{/if}
           <span class="label">{c.label}</span>

@@ -16,6 +16,7 @@
   import Settings from './Settings.svelte'
   import ShareButton from './ShareButton.svelte'
   import Toasts from './Toasts.svelte'
+  import TouchEditor from './TouchEditor.svelte'
   import TouchPad from './TouchPad.svelte'
   import { scancodeOf } from './lib/keys.js'
   import { bindKey, bindPadButton } from './lib/binding.js'
@@ -270,6 +271,7 @@
     <Settings {forgetStoredDisc} {restartGame} {layout} onclose={() => setOpen(false)} />
   {/if}
   {#if touch}<TouchPad pad={touch} />{/if}
+  {#if touch && ui.touchEditor}<TouchEditor pad={touch} />{/if}
 {/if}
 
 {#if ui.dragging}
