@@ -53,6 +53,7 @@ export const tags = {
 	'TOUCH-E': ['input', 'race'],
 	'TOUCH-E-ACTIONS': ['input', 'race'],
 	'TOUCH-E-BOOSTS': ['input', 'race'],
+	'TOUCH-EDITOR': ['input', 'page'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -553,6 +554,125 @@ export default async ctx => {
 		if (!hand.some(p => p[0] & 0x400)) throw new Error(`the player's tap at the third red : no L1 (${JSON.stringify(await touchState(ctx))} ${hand.slice(0, 12).map(p => p[0].toString(16) + '/' + p[1] + p[2] + p[3]).join(' ')})`)
 		if (!drawn || drawn.made !== 2 || drawn.now !== 3) throw new Error(`« 1 · 2 · 3 » at the third red : ${JSON.stringify(drawn)}`)
 		return `in the race : the first red tapped by the page (L1 in ${first} pulls), the game counts ${made}, the zone red (${seen.bg}), the pips at ${seen.made} · the second and third reds (${reds} pulls, said to the page) : no L1 by the page, the player's tap gives it, the pips show 2 made and 3 now`
+	})
+
+	// 42b : « my pad » — the editor over the paused race, a control moved, resized, added, removed,
+	// kept as the layout « mine », played, kept across a reload ; its ways back
+	await ctx.scenario('TOUCH-EDITOR', async () => {
+		await ctx.js("localStorage.removeItem('ctr-ui.touch-custom'); return true")
+		await onPhone(ctx, TT, { touchLayout: 'a' }, { kind: 'a' })
+		await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+		const click = sel => ctx.js(`const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return false; e.click(); return true`)
+		const wait = async (what, expr, ms = 8000) => {
+			for (const end = Date.now() + ms; Date.now() < end; await sleep(120)) { const v = await ctx.js(`return (${expr})`); if (v) return v }
+			throw new Error(`no ${what}`)
+		}
+		const box = id => ctx.js(`const r = document.querySelector('#ctr-touch-editor [data-id=${id}]')?.getBoundingClientRect(); return r ? { cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width } : null`)
+		// Settings › Controls › Touch, until `id` is there
+		const touchTab = async id => {
+			await click('#ctr-settings [data-tab=controls]')
+			await wait('Controls', "!!document.querySelector('#ctr-settings [data-device=touch]')")
+			await click('#ctr-settings [data-device=touch]')
+			await wait(id, `!!document.getElementById('${id}')`)
+		}
+		const openEditor = async () => {
+			await click('#ctr-gear')
+			await wait('Settings', "!!document.getElementById('ctr-settings')")
+			await touchTab('ctr-touch-edit')
+			await click('#ctr-touch-edit')
+			await wait('the editor', "!!document.getElementById('ctr-touch-editor') && !document.getElementById('ctr-settings')")
+		}
+		await openEditor()
+		await until(ctx, 'the pause', st => st.screen === 'paused', { timeout: 5000 })
+		if (await touchState(ctx)) throw new Error('the touch controls stay under the editor')
+		const f = fingers(ctx)
+		// move GO
+		const go0 = await box('go')
+		await f.down(1, go0.cx, go0.cy)
+		await f.move(1, go0.cx - 150, go0.cy - 80)
+		await f.up(1)
+		const go1 = await box('go')
+		if (Math.abs(go1.cx - (go0.cx - 150)) > 2 || Math.abs(go1.cy - (go0.cy - 80)) > 2) throw new Error(`GO dragged : ${JSON.stringify(go0)} → ${JSON.stringify(go1)}`)
+		// dragged off the screen's edge : it stays inside the margin (Chrome has no iOS safe areas :
+		// the notch's band is node --test's, touch-custom.test.js)
+		await f.down(1, go1.cx, go1.cy)
+		await f.move(1, 2, go1.cy)
+		await f.up(1)
+		const edge = await box('go')
+		if (edge.cx < 8) throw new Error(`GO off the margin : ${edge.cx}`)
+		await f.down(1, edge.cx, edge.cy)
+		await f.move(1, go1.cx, go1.cy)
+		await f.up(1)
+		// its size (the picked control's slider)
+		await ctx.js("const i = document.getElementById('ctr-edit-size'); i.value = '1.4'; i.dispatchEvent(new Event('input', { bubbles: true })); return true")
+		await shot(ctx, 'editor-picked')
+		const go2 = await box('go')
+		if (!(Math.abs(go2.w / go1.w - 1.4) < 0.02) || Math.abs(go2.cx - go1.cx) > 1) throw new Error(`GO × 1.4 : ${go1.w} → ${go2.w}`)
+		// add a super button, remove BRAKE ; pause cannot go
+		await click('#ctr-edit-add')
+		await wait('the palette', "document.querySelectorAll('#ctr-edit-tray [data-add]').length")
+		await shot(ctx, 'editor-palette')
+		await click('#ctr-edit-tray [data-add=itemDown]')
+		const added = await box('itemDown')
+		if (!added) throw new Error('ITEM v not added')
+		const brake = await box('brake')
+		await f.down(1, brake.cx, brake.cy)
+		await f.up(1)
+		await click('#ctr-edit-remove')
+		if (await box('brake')) throw new Error('BRAKE not removed')
+		const start = await box('start')
+		await f.down(1, start.cx, start.cy)
+		await f.up(1)
+		if (await ctx.js("return !!document.getElementById('ctr-edit-remove')")) throw new Error('pause can be removed')
+		// no accelerator : told, not refused
+		await f.down(1, go2.cx, go2.cy)
+		await f.up(1)
+		await click('#ctr-edit-remove')
+		const warn = await ctx.js("return document.getElementById('ctr-edit-warn').textContent.trim()")
+		if (!warn) throw new Error('no warning without an accelerator')
+		// Reset : back to what the editor opened on ; then the same edits again, shorter
+		await click('#ctr-edit-reset')
+		const back = await box('go')
+		if (Math.abs(back.cx - go0.cx) > 1 || !(await box('brake')) || (await box('itemDown'))) throw new Error('Reset did not bring the layout back')
+		await f.down(1, go0.cx, go0.cy)
+		await f.move(1, go0.cx - 150, go0.cy - 80)
+		await f.up(1)
+		await click('#ctr-edit-add')
+		await click('#ctr-edit-tray [data-add=itemDown]')
+		const item = await box('itemDown')
+		// Done : kept as « mine », the race resumes, the pad is played
+		await click('#ctr-edit-done')
+		await until(ctx, 'the race again', st => st.screen === 'race', { timeout: 5000 })
+		const mine = await wait('the layout « mine »', "document.querySelector('#ctr-touch')?.dataset.kind === 'mine'")
+		const placed = await f.rect('go')
+		if (Math.abs(placed.cx - (go0.cx - 150)) > 2) throw new Error(`GO in the race : ${placed.cx}, wanted ${go0.cx - 150}`)
+		await spy(ctx)
+		await f.down(1, item.cx, item.cy)
+		await sleep(200)
+		await f.up(1)
+		const list = await pulls(ctx)
+		if (!list.some(p => (p[0] & 0x2040) === 0x2040)) throw new Error('ITEM v : no pull with Circle and Down')
+		// kept across a reload
+		await onPhone(ctx, TT, { touchLayout: 'mine' }, { kind: 'mine' })
+		const again = await f.rect('go')
+		if (Math.abs(again.cx - placed.cx) > 2) throw new Error(`after a reload : GO at ${again.cx}`)
+		// « Start from… 3 fingers », then the way back : Settings › Reset my pad → the default
+		await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+		await openEditor()
+		await click('#ctr-edit-from')
+		await click('#ctr-edit-starts [data-start=three]')
+		const three = await ctx.js("return [...document.querySelectorAll('#ctr-touch-editor [data-id]')].map(e => e.dataset.id)")
+		for (const id of ['steer', 'go', 'slide', 'boost', 'item', 'look', 'start']) if (!three.includes(id)) throw new Error(`3 fingers lacks ${id} : ${three}`)
+		await click('#ctr-edit-reset')
+		await click('#ctr-edit-done')
+		await click('#ctr-gear')
+		await wait('Settings', "!!document.getElementById('ctr-settings')")
+		await touchTab('ctr-touch-edit-clear')
+		await click('#ctr-touch-edit-clear')
+		const stored = await ctx.js("return [localStorage.getItem('ctr-ui.touch-custom'), localStorage.getItem('ctr-ui.touch-layout'), !!document.querySelector('[data-touch-layout=mine]')]")
+		if (stored[0] !== null || stored[1] !== null || stored[2]) throw new Error(`Reset my pad : ${JSON.stringify(stored)}`)
+		await click('#ctr-gear')
+		return `the editor pauses the race · GO dragged (kept inside the margin), × 1.4 · ITEM v added, BRAKE removed, pause not removable · no accelerator : « ${warn} » · Reset · Done : « ${mine ? 'mine' : ''} », GO at ${Math.round(placed.cx)}, ITEM v = Circle + Down · kept across a reload · 3 fingers : ${three.join(' ')} · Reset my pad : the default again`
 	})
 
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {
