@@ -72,14 +72,29 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   }
   // E's right half (`gesture`, the user, 2026-11-16 : « le plus simple de jouer avec les 2 pouces
   // en étant concentré sur l'écran ») : a touch while GO is not held is GO (the hold) ; GO held,
-  // a touch is a gesture — moved up = the item, down = the brake (held), a tap or 200 ms still =
-  // a hop (the stick centred) or a hop and a slide (turning), the slide kept by the page while the
-  // game says it slides, ended by the stick 0.3 s at the centre ; in a slide a touch = the boost.
-  // `autoBoost` : the page taps the boost itself as the meter turns red.
+  // a touch is a gesture — moved up = the item used forward (Up held with Circle : a potion is
+  // thrown ahead), down = the item used behind (Down with Circle : a bomb rolls backward ; the game
+  // reads the direction for those two only, VehPickupItem.c), a tap or 200 ms still = a hop (the
+  // stick centred) or a hop and a slide (turning), the slide kept by the page while the game says
+  // it slides, ended by the stick 0.3 s at the centre ; in a slide a touch = the boost.
+  // `autoBoost` : the page taps the slide's first boost itself as the meter turns red ; the second
+  // and third are the player's (the user, 2026-11-18 : « qu'une maîtrise du tactile puisse le
+  // permettre aussi »).
+  // The brake is the stick (a `brake` stick) pulled straight down : past 0.8 of its reach inside
+  // 35° of the vertical, until it comes back above 0.6 or leaves 45° — a turn never brakes, nor
+  // does a slide, where the stick is the slide's angle. The stick itself being down, Square then
+  // reverses once stopped (the game's Down + Square).
+  // A boost tapped before the red is a failed boost in the game (the meter is emptied) : with
+  // `bufferMs`, a tap in a slide outside the red waits that long for the red and is sent as it
+  // starts — or as it was, when the red does not come.
   let eSlide = null // { since, seen, centreSince }
   let r1Until = 0
   let circleUntil = 0
+  let itemDir = 0 // Up or Down, held with the item's Circle
   let wasRed = false
+  let boostWait = 0
+  let boosts = 0
+  let boostAt = null
   let lastStick = null
   const goLatched = () => hold.state === 'held' || hold.state === 'retouched'
   const hopOrSlide = (t) => {
@@ -117,6 +132,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         if (!goLatched() || !racing) fingers[id].mode = 'go'
         else if (sliding || eSlide) { fingers[id].mode = 'done'; boostPending = true }
         else fingers[id].mode = 'pending'
+        boostAt = { x, y }
         return true
       }
       if (start.type === 'stick' && stickMemo && t <= stickMemo.until) {
@@ -129,6 +145,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       stickMemo = null
       // R tapped while the slide's R1 is held from elsewhere (the stick's slide) : the boost
+      if (start.anchor || start.boost) boostAt = { x, y }
       if (start.anchor && slideLock !== 'held' && r1Elsewhere()) {
         fingers[id].noR1 = true
         boostPending = true
@@ -163,8 +180,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       f.x = x
       f.y = y
       if (f.start.gesture && f.mode === 'pending') {
-        if (y - f.oy < -30) { f.mode = 'done'; circleUntil = -1 }
-        else if (y - f.oy > 30) f.mode = 'brake'
+        const dy = y - f.oy
+        if (dy < -30 || dy > 30) {
+          f.mode = 'done'
+          circleUntil = -1
+          itemDir = dy < 0 ? B.up : B.down
+        }
       }
       if (f.start.anchor && self.rockPx > 0) {
         if (!f.rock && rocked(f, y, w)) {
@@ -203,6 +224,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       eSlide = null
       r1Until = 0
       circleUntil = 0
+      boostWait = 0
       hold.reset()
       cross = false
     },
@@ -241,13 +263,23 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
             bits |= B.r1
             ids.push('steer-slide')
           }
+          if (s.brake) {
+            const down = dy * k
+            const side = Math.abs(dx * k)
+            if (sliding || eSlide) f.braking = false
+            else if (f.braking) f.braking = down >= 0.6 && side <= down
+            else f.braking = down >= 0.8 && side <= down * 0.7
+            if (f.braking) {
+              bits |= B.square
+              ids.push('brake')
+            }
+          }
           continue
         }
         let b = 0
         let fromGo = false
         if (s.gesture) {
           if (f.mode === 'go') { go = true; ids.push(s.id) }
-          else if (f.mode === 'brake') { bits |= B.square; ids.push(s.id) }
           continue
         }
         if (s.group) {
@@ -278,7 +310,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
      * x y) ; `race` : a race is driven (the game's word). Returns 0 while hidden.
      */
-    packet(dst, at, race, now, slide = false, red = false, revving = false) {
+    packet(dst, at, race, now, slide = false, red = false, revving = false, made = 0) {
       if (race !== racing) {
         racing = race
         self.onRacing?.(race)
@@ -288,6 +320,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       if (!!red !== boostWindow) {
         boostWindow = !!red
         self.onWindow?.(boostWindow)
+      }
+      // the slide's boosts made (the game's count, 0 outside a slide) : « 1 · 2 · 3 »
+      const n = sliding ? made : 0
+      if (n !== boosts) {
+        boosts = n
+        self.onBoosts?.(n)
       }
       if (!shown) return 0
       const r = self.read()
@@ -323,26 +361,34 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       if (slideUntil && now > slideUntil) slideUntil = 0
       if (slideUntil) bits |= B.r1
       // E's slide : R1 while the game slides ; ended by the game, the stick 0.3 s centred, the brake
+      // (the slide starts when the hop lands : 16 to 22 of the game's input reads after the tap as
+      // measured in a race, 42b — R1 waits 0.7 s for it, 0.4 s left that no margin)
       if (eSlide) {
         const v = stick ? Math.hypot(stick[0], stick[1]) : 0
         if (sliding) eSlide.seen = true
         if (v < 0.2) eSlide.centreSince ||= now
         else eSlide.centreSince = 0
-        if ((bits & B.square) || !racing || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 400) || (eSlide.centreSince && now - eSlide.centreSince >= 300)) eSlide = null
+        if ((bits & B.square) || !racing || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 700) || (eSlide.centreSince && now - eSlide.centreSince >= 300)) eSlide = null
         else bits |= B.r1
       }
       if (r1Until === -1) r1Until = now + 100
       if (r1Until && now < r1Until) bits |= B.r1
       else r1Until = 0
       if (circleUntil === -1) circleUntil = now + 100
-      if (circleUntil && now < circleUntil) bits |= B.circle
-      else circleUntil = 0
-      // the auto boost : the page taps the boost as the meter turns red
-      if (self.autoBoost && red && !wasRed && sliding) boostPending = true
+      if (circleUntil && now < circleUntil) bits |= B.circle | itemDir
+      else circleUntil = itemDir = 0
+      // the auto boost : the page taps the slide's first boost as the meter turns red
+      if (self.autoBoost && red && !wasRed && sliding && boosts === 0) boostPending = true
       wasRed = !!red
       if (boostPending) {
-        boostPending = false
-        boostUntil = now + 100
+        // tapped in a slide before the red : kept `bufferMs` for the red to start
+        if (self.bufferMs > 0 && sliding && !red && now < (boostWait ||= now + self.bufferMs)) {
+          // waits
+        } else {
+          boostPending = false
+          boostWait = 0
+          boostUntil = now + 100
+        }
       }
       if (boostUntil && now < boostUntil) bits |= B.l1
       else boostUntil = 0
@@ -375,6 +421,14 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     slideHoldMs: 0,
     /** the page taps the slide's boost itself at the meter's red (E's « turbo auto ») */
     autoBoost: false,
+    /** how long a boost tapped before the red waits for it ; 0 = off */
+    bufferMs: 0,
+    /** the slide's boosts made, as the game counts them (0 outside a slide) */
+    get boosts() { return boosts },
+    /** called with that count when it changes */
+    onBoosts: null,
+    /** where the last finger landed on a boost control, in px (TouchPad.svelte draws « 1 · 2 · 3 » there) */
+    get boostAt() { return boostAt },
     /** E's slide kept by the page right now */
     get eSliding() { return !!eSlide },
     /** how long a steering thumb's lift waits for a re-touch that starts the slide ; 0 = off */

@@ -105,7 +105,7 @@ export function layout(kind, view, { size = 'm' } = {}) {
     const x = W / 2 + 10
     const y = top + 100 * u
     return [
-      zone,
+      { ...zone, brake: true },
       { id: 'right', type: 'rect', x, y, w: W - R - x, h: H - bottom - y, bits: 0, label: '', gesture: true, go: true, boosts: true },
       look,
       pause,

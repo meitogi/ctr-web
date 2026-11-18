@@ -9,7 +9,8 @@
   // Cheap on a phone (session 41 : ~30 fps with little headroom) : the controls' places are
   // computed on a resize only ; a finger's move writes the stick's knob and the pressed classes,
   // nothing else ; the hold's ring is a CSS animation.
-  import { TOUCH_STEER } from './lib/settings.js'
+  import { TOUCH_BUFFER_MS, TOUCH_STEER } from './lib/settings.js'
+  import { createCue } from './lib/touch/cue.js'
   import { ui } from './state.svelte.js'
   import { live } from './store.js'
 
@@ -20,6 +21,11 @@
   let hold = $state('idle')
   let slideLock = $state('idle')
   let boostWindow = $state(false)
+  // the slide's boosts made, as the game counts them, and where « 1 · 2 · 3 » is drawn : above the
+  // thumb that last touched a boost control, else above the first of them
+  let made = $state(0)
+  let pipsAt = $state.raw(null)
+  const cue = createCue()
   // a pad connected hides the controls until the screen is touched again
   let padHides = $state(ui.pads.length > 0)
   let touched = $state(false)
@@ -39,9 +45,28 @@
     pad.onRacing = (r) => { racing = r }
     pad.onHold = (h) => { hold = h }
     pad.onSlide = (h) => { slideLock = h }
-    pad.onWindow = (w) => { boostWindow = w }
-    return () => { pad.onRacing = null; pad.onHold = null; pad.onSlide = null; pad.onWindow = null }
+    pad.onWindow = (w) => {
+      boostWindow = w
+      if (!w) return
+      place()
+      if (live.current.touchSound && pad.shown) cue.red()
+    }
+    pad.onBoosts = (n) => {
+      if (n > made && live.current.touchSound && pad.shown) cue.made(n)
+      if (n) place()
+      made = n
+    }
+    return () => { pad.onRacing = null; pad.onHold = null; pad.onSlide = null; pad.onWindow = null; pad.onBoosts = null }
   })
+
+  function place() {
+    const at = pad.boostAt
+    const c = at ? null : pad.controls.find((k) => k.boosts || k.anchor || k.boost)
+    const x = at ? at.x : c ? (c.cx ?? c.x + c.w / 2) : 0
+    const y = at ? at.y : c ? (c.cy ?? c.y + c.h / 2) : 0
+    if (!at && !c) return
+    pipsAt = { x: Math.max(60, Math.min(window.innerWidth - 60, x)), y: Math.max(24, y - 64) }
+  }
 
   let pads = ui.pads.length
   $effect(() => {
@@ -93,6 +118,7 @@
     // the slide from the stick : a stick to re-touch (A, B, D)
     pad.retapMs = mode === 'enhanced' && s.touchLayout !== 'c' && s.touchLayout !== 'e' ? s.touchRetapMs : 0
     pad.autoBoost = mode === 'enhanced' && s.touchLayout === 'e' && s.touchAutoBoost
+    pad.bufferMs = mode === 'enhanced' && s.touchBuffer ? TOUCH_BUFFER_MS : 0
   })
   $effect(() => {
     pad.show(shown)
@@ -120,6 +146,7 @@
     }
     if (r.at && knob && base) {
       base.classList.toggle('slide', r.ids.includes('steer-slide'))
+      base.classList.toggle('brake', r.ids.includes('brake'))
       base.style.transform = `translate(${r.at.ox}px, ${r.at.oy}px)`
       knob.style.transform = `translate(${r.at.x}px, ${r.at.y}px)`
       base.hidden = false
@@ -169,13 +196,18 @@
           <span class="arm up"></span><span class="arm down"></span><span class="arm left"></span><span class="arm right"></span>
         </div>
       {:else}
-        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} class:boosts={c.anchor || c.boost || (c.group && (c.bits & 0x400))} data-id={c.id} style={box(c)} use:register={c.id}>
+        <div class={`ctl ${c.type}`} class:go={c.go} class:back={c.back} class:boosts={c.boosts || c.anchor || c.boost || (c.group && (c.bits & 0x400))} data-id={c.id} style={box(c)} use:register={c.id}>
           {#if c.go && kind !== 'minimal'}<span class="ring"></span>{/if}
           {#if c.anchor}<span class="ring slide-ring"></span>{/if}
           <span class="label">{c.label}</span>
         </div>
       {/if}
     {/each}
+    {#if s.touchCue && pipsAt && (made > 0 || boostWindow)}
+      <div class="pips" data-made={made} style={`left:${pipsAt.x}px;top:${pipsAt.y}px`} aria-hidden="true">
+        {#each [1, 2, 3] as n}<span class:made={n <= made} class:now={boostWindow && n === made + 1}>{n}</span>{/each}
+      </div>
+    {/if}
     <div class="stick-base" bind:this={base} hidden></div>
     <div class="stick-knob" bind:this={knob} hidden></div>
   </div>
@@ -210,7 +242,15 @@
   @keyframes fill { from { --fill: 0turn; } to { --fill: 1turn; } }
   [data-hold='held'] .go, [data-hold='retouched'] .go { background: rgba(245, 159, 0, 0.75); color: #111; }
   /* the boost's moment (the game's red exhaust, Settings › Touch) : the controls that boost light up red */
-  [data-window='red'] .boosts { background: rgba(255, 70, 50, 0.8); border-color: #ff4632; box-shadow: 0 0 18px rgba(255, 70, 50, 0.9); }
+  [data-window='red'] .ctl.boosts { background: rgba(255, 70, 50, 0.8); border-color: #ff4632; box-shadow: 0 0 18px rgba(255, 70, 50, 0.9); }
+  /* E's right half is the boost control : the whole zone, fainter (the race shows through) */
+  [data-window='red'] .ctl.rect.go.boosts { background: rgba(255, 70, 50, 0.3); border: 2px solid #ff4632; box-shadow: none; }
+  /* « 1 · 2 · 3 » : gold = made, red = tap now, hollow = to come */
+  .pips { display: flex; gap: 8px; transform: translateX(-50%); pointer-events: none !important; }
+  .pips span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box; font: 700 13px var(--text);
+    color: #fff; border: 2px solid rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.25); }
+  .pips span.made { background: #f59f00; border-color: #f59f00; color: #111; }
+  .pips span.now { background: #ff4632; border-color: #fff; }
   /* the held slide (R) : its ring fills while R is kept down in a slide, then R turns blue, HELD */
   [data-hold] .slide-ring { border-color: #4dabf7; }
   [data-hold='pressing'] .slide-ring { opacity: 0; animation: none; }
@@ -221,5 +261,7 @@
   .stick-base, .stick-knob { left: 0; top: 0; border-radius: 50%; pointer-events: none !important; }
   .stick-base { width: 104px; height: 104px; margin: -52px 0 0 -52px; background: rgba(255, 255, 255, 0.12); border: 2px solid rgba(255, 255, 255, 0.6); }
   .stick-base:global(.slide) { border-color: #4dabf7; background: rgba(77, 171, 247, 0.3); }
+  /* the stick pulled straight down : the brake */
+  .stick-base:global(.brake) { border-color: #ff4632; background: rgba(255, 70, 50, 0.35); }
   .stick-knob { width: 50px; height: 50px; margin: -25px 0 0 -25px; background: rgba(255, 255, 255, 0.55); }
 </style>

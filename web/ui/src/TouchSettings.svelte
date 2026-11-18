@@ -74,6 +74,14 @@
       <span>{T.touchCue}<small>{T.touchCueHelp}</small></span>
       <input id="ctr-touch-cue" type="checkbox" role="switch" class="switch" checked={s.touchCue} onchange={(e) => settings.patch({ touchCue: e.currentTarget.checked })} />
     </label>
+    <label class="setrow">
+      <span>{T.touchSound}<small>{T.touchSoundHelp}</small></span>
+      <input id="ctr-touch-sound" type="checkbox" role="switch" class="switch" checked={s.touchSound} onchange={(e) => settings.patch({ touchSound: e.currentTarget.checked })} />
+    </label>
+    <label class="setrow">
+      <span>{T.touchBuffer}<small>{T.touchBufferHelp}</small></span>
+      <input id="ctr-touch-buffer" type="checkbox" role="switch" class="switch" checked={s.touchBuffer} onchange={(e) => settings.patch({ touchBuffer: e.currentTarget.checked })} />
+    </label>
 
     {#if s.touchLayout !== 'b' && s.touchLayout !== 'e'}
       <div class="label">{T.touchSlideHold}</div>

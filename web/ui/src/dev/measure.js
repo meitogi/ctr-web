@@ -124,7 +124,10 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     pads: { seen: [], pressed: {}, firstPress: null },
     touch: null,
     // each touch (the last 40) : the control it started on, how far it travelled down and up, and
-    // the contact's size and pressure as this browser reports them (the rock on R reads them)
+    // the contact's size and pressure as this browser reports them (the rock on R reads them) ;
+    // `late` : ms between the event's own time and its handler (the browser's delivery), `pull` :
+    // ms from the handler to the game's next read of the touch pad — the page's share of the touch
+    // latency (the screen's own, before the event's time, cannot be read from a page)
     touches: [],
   }
   storage().then((s) => { report.storage.atLoad = s })
@@ -134,9 +137,29 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
   }
   const live = {}
   const r1 = (v) => Math.round(v * 10) / 10
+  // the touches the game has not read yet : stamped at its next pull of the touch pad
+  const unpulled = []
+  let pullsWatched = false
+  const watchPulls = () => {
+    const input = g.Module?.ctrInput
+    if (pullsWatched || !input?.touch) return
+    pullsWatched = true
+    const touch = input.touch
+    input.touch = (...a) => {
+      const ok = touch(...a)
+      if (ok && unpulled.length) {
+        const t = performance.now()
+        for (const [l, t0] of unpulled) l.pull = r1(t - t0)
+        unpulled.length = 0
+      }
+      return ok
+    }
+  }
   addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return
-    live[e.pointerId] = { t: now(), on: e.target?.closest?.('[data-id]')?.dataset.id ?? null, x0: Math.round(e.clientX), y0: e.clientY, dyMin: 0, dyMax: 0, w: [e.width, e.width], h: [e.height, e.height], p: [e.pressure, e.pressure] }
+    watchPulls()
+    const l = live[e.pointerId] = { t: now(), late: r1(performance.now() - e.timeStamp), pull: null, on: e.target?.closest?.('[data-id]')?.dataset.id ?? null, x0: Math.round(e.clientX), y0: e.clientY, dyMin: 0, dyMax: 0, w: [e.width, e.width], h: [e.height, e.height], p: [e.pressure, e.pressure] }
+    unpulled.push([l, performance.now()])
   }, true)
   addEventListener('pointermove', (e) => {
     const l = live[e.pointerId]
@@ -151,7 +174,8 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     const l = live[e.pointerId]
     if (!l) return
     delete live[e.pointerId]
-    report.touches.push({ ...l, ms: now() - l.t, dyMin: r1(l.dyMin), dyMax: r1(l.dyMax), w: l.w.map(r1), h: l.h.map(r1), p: l.p.map((v) => r1(v * 100) / 100) })
+    // the same object : a tap shorter than the game's input update gets its `pull` after it ended
+    report.touches.push(Object.assign(l, { ms: now() - l.t, dyMin: r1(l.dyMin), dyMax: r1(l.dyMax), w: l.w.map(r1), h: l.h.map(r1), p: l.p.map((v) => r1(v * 100) / 100) }))
     if (report.touches.length > 40) report.touches.shift()
   }
   addEventListener('pointerup', touchEnd, true)

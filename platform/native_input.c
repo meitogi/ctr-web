@@ -387,11 +387,12 @@ internal void NativeInput_WebBlockLocalInput(void)
 // where a tap of L1 / R1 gives the boost (VehPhysProc_PowerSlide_Update) — the page lights its boost
 // control then, as the game's own exhaust does ; bit 3 the kart is put back or about to start
 // (KS_MASK_GRABBED, KS_ENGINE_REVVING : the countdown, after a fall) — a well-timed press boosts
-// there, so the held accelerator lets go and GO is a plain press again. Returns 0 while the page shows no touch controls
-// (the slot is left as it is).
+// there, so the held accelerator lets go and GO is a plain press again ; bits 4-5 the boosts this
+// slide has made (numBoostsSuccess, 0 to 3) — the page shows « 1 · 2 · 3 » and taps only the first
+// one itself. Returns 0 while the page shows no touch controls (the slot is left as it is).
 EM_JS(int, NativeInput_WebReadTouchPad, (u8 *dst, int state), {
 	const input = Module['ctrInput'];
-	return input && input.touch ? input.touch(HEAPU8, dst, state & 1, (state & 2) !== 0, (state & 4) !== 0, (state & 8) !== 0) : 0;
+	return input && input.touch ? input.touch(HEAPU8, dst, state & 1, (state & 2) !== 0, (state & 4) !== 0, (state & 8) !== 0, (state >> 4) & 3) : 0;
 });
 
 internal void NativeInput_WebApplyTouchPad(void)
@@ -411,7 +412,9 @@ internal void NativeInput_WebApplyTouchPad(void)
 
 	const s32 revving = (kart != NULL) && ((kart->kartState == KS_ENGINE_REVVING) || (kart->kartState == KS_MASK_GRABBED));
 
-	if (!NativeInput_WebReadTouchPad(packet, racing | (sliding << 1) | (red << 2) | (revving << 3)))
+	const s32 boosts = sliding ? (kart->KartStates.Drifting.numBoostsSuccess & 3) : 0;
+
+	if (!NativeInput_WebReadTouchPad(packet, racing | (sliding << 1) | (red << 2) | (revving << 3) | (boosts << 4)))
 	{
 		return;
 	}
