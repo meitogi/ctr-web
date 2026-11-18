@@ -12,6 +12,11 @@
 
 export const DISC_FILE_NAME = 'ctr-u.bin';
 export const EXPECTED_SERIAL = 'SCUS_944.26';
+export const PAL_SERIAL = 'SCES_021.05';
+// The two releases the game reads (platform/web_disc_view.c presents the PAL one in the US
+// layout) and the OPFS file each is kept in : a player may keep both.
+export const REGIONS = { [EXPECTED_SERIAL]: 'us', [PAL_SERIAL]: 'pal' };
+export const DISC_FILES = { us: DISC_FILE_NAME, pal: 'ctr-pal.bin' };
 
 const RAW_SECTOR_SIZE = 2352;
 const FORM1_DATA_OFFSET = 24;
@@ -141,37 +146,39 @@ export async function probeDisc(file) {
   const cnfText = readAscii(cnfBytes, 0, cnfBytes.length);
   const match = /BOOT\s*=\s*cdrom:\\?([A-Za-z0-9_.]+);1/i.exec(cnfText);
   const serial = match ? match[1].toUpperCase() : null;
-  if (serial !== EXPECTED_SERIAL) {
-    return { ok: false, reason: 'region', message: serial ? `This disc's serial is ${serial} — only the NTSC-U release (${EXPECTED_SERIAL}) is supported.` : `Could not find a disc serial in SYSTEM.CNF — only the NTSC-U release (${EXPECTED_SERIAL}) is supported.` };
+  const region = REGIONS[serial];
+  if (!region) {
+    return { ok: false, reason: 'region', serial, message: serial ? `This disc's serial is ${serial} — only the NTSC-U (${EXPECTED_SERIAL}) and PAL (${PAL_SERIAL}) releases are supported.` : `Could not find a disc serial in SYSTEM.CNF — only the NTSC-U (${EXPECTED_SERIAL}) and PAL (${PAL_SERIAL}) releases are supported.` };
   }
 
-  return { ok: true, serial };
+  return { ok: true, serial, region };
 }
 
 async function opfsRoot() {
   return navigator.storage.getDirectory();
 }
 
-export async function findCachedDisc() {
+export async function findCachedDisc(region = 'us') {
   try {
     const root = await opfsRoot();
-    const handle = await root.getFileHandle(DISC_FILE_NAME);
+    const handle = await root.getFileHandle(DISC_FILES[region]);
     return await handle.getFile();
   } catch {
     return null;
   }
 }
 
-export async function storeDisc(file, onProgress) {
-  return storeDiscStream(file.stream(), file.size, onProgress);
+export async function storeDisc(file, onProgress, region = 'us') {
+  return storeDiscStream(file.stream(), file.size, onProgress, region);
 }
 
 // Streams `stream` (a dropped .bin, or the .bin inside a .zip decompressed on the fly) into OPFS,
 // never the whole image in memory. createWritable() writes to a swap file : on an error the
 // write is aborted and whatever was stored before stays as it was.
-export async function storeDiscStream(stream, size, onProgress) {
+export async function storeDiscStream(stream, size, onProgress, region = 'us') {
+  const name = DISC_FILES[region];
   const root = await opfsRoot();
-  const handle = await root.getFileHandle(DISC_FILE_NAME, { create: true });
+  const handle = await root.getFileHandle(name, { create: true });
   const writable = await handle.createWritable();
   const reader = stream.getReader();
   let written = 0;
@@ -186,14 +193,15 @@ export async function storeDiscStream(stream, size, onProgress) {
   } catch (e) {
     await writable.abort(String(e)).catch(() => {});
     // nothing stored before : do not leave the empty file create:true made
-    if ((await handle.getFile()).size === 0) await root.removeEntry(DISC_FILE_NAME).catch(() => {});
+    if ((await handle.getFile()).size === 0) await root.removeEntry(name).catch(() => {});
     throw e;
   }
   await writable.close();
   return handle.getFile();
 }
 
-export async function forgetDisc() {
+// Without a region : every disc kept.
+export async function forgetDisc(region) {
   const root = await opfsRoot();
-  await root.removeEntry(DISC_FILE_NAME).catch(() => {});
+  for (const r of region ? [region] : Object.keys(DISC_FILES)) await root.removeEntry(DISC_FILES[r]).catch(() => {});
 }

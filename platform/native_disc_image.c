@@ -102,6 +102,13 @@ internal int CTRWeb_ReadRawSector(u32 lba, u8 *dst)
 	memcpy(dst, &s_ctrWebDiscWindow[(lba - s_ctrWebDiscWindowLba) * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE], NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE);
 	return 1;
 }
+
+// The US view of the disc (web_disc_view.c, included at the end of this file).
+#define WEB_DISC_VIEW_LBA_FIRST 0x01000000u
+internal int WebDiscView_ReadDataSector(u32 lba, u8 *payload);
+internal u32 WebDiscView_RawLba(u32 lba);
+internal int WebDiscView_FindFile(const char *path, struct NativeDiscImageFile *fileOut, char *alias, size_t aliasSize);
+internal void WebDiscView_Init(void);
 #endif
 
 internal int NativeDiscImage_FindHostImagePath(char *dst, size_t dstSize, NativeStr8 assetsDir)
@@ -167,6 +174,17 @@ internal int NativeDiscImage_CheckRawSectorHeader(const u8 *sector)
 
 internal int NativeDiscImage_ReadRawSector(u32 lba, u8 *sector)
 {
+#ifdef __EMSCRIPTEN__
+	if (lba >= WEB_DISC_VIEW_LBA_FIRST)
+	{
+		lba = WebDiscView_RawLba(lba);
+		if (lba == 0xffffffffu)
+		{
+			return 0;
+		}
+	}
+#endif
+
 	if (s_nativeDiscImageFile != NULL)
 	{
 		u64 offset = (u64)lba * NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE;
@@ -201,6 +219,13 @@ internal int NativeDiscImage_ReadRawSector(u32 lba, u8 *sector)
 internal int NativeDiscImage_ReadDataSector(u32 lba, u8 *payload)
 {
 	u8 sector[NATIVE_DISC_IMAGE_RAW_SECTOR_SIZE];
+
+#ifdef __EMSCRIPTEN__
+	if (lba >= WEB_DISC_VIEW_LBA_FIRST)
+	{
+		return WebDiscView_ReadDataSector(lba, payload);
+	}
+#endif
 
 	if (!NativeDiscImage_ReadRawSector(lba, sector))
 	{
@@ -488,6 +513,9 @@ int NativeDiscImage_Init(const char *assetsDir)
 	}
 
 	s_nativeDiscImageAvailable = 1;
+#ifdef __EMSCRIPTEN__
+	WebDiscView_Init();
+#endif
 	return 1;
 }
 
@@ -501,6 +529,19 @@ int NativeDiscImage_FindFile(const char *path, struct NativeDiscImageFile *fileO
 	{
 		return 0;
 	}
+
+#ifdef __EMSCRIPTEN__
+	char viewAlias[64];
+	int view = WebDiscView_FindFile(path, fileOut, viewAlias, sizeof(viewAlias));
+	if (view > 0)
+	{
+		return 1;
+	}
+	if (view < 0)
+	{
+		remaining = NativeStr8_FromCString(viewAlias);
+	}
+#endif
 
 	while (remaining.len != 0)
 	{
@@ -675,3 +716,7 @@ int NativeDiscImage_ReadFileBytes(const char *path, int rawSectors, u8 **dataOut
 	*sizeOut = (int)size;
 	return 1;
 }
+
+#ifdef __EMSCRIPTEN__
+#include "web_disc_view.c"
+#endif

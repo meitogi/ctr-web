@@ -63,12 +63,20 @@ test('several .bin : the one that probes NTSC-U is chosen, whatever its size', a
   assert.equal(sha(await drain(await r.open())), sha(ntsc));
 });
 
-test('only a PAL disc in the zip : refused with the region reason and its serial', async () => {
+test('only a PAL disc in the zip : taken, region pal', async () => {
   const pal = await discBytes({ serial: 'SCES_021.05' });
   const r = await resolveDisc(new File([makeZip([{ name: 'ctr-pal.bin', data: pal }])], 'pal.zip'), probeDisc);
+  assert.equal(r.ok, true, r.message);
+  assert.equal(r.region, 'pal');
+  assert.equal(sha(await drain(await r.open())), sha(pal));
+});
+
+test('only another release in the zip : refused with the region reason and its serial', async () => {
+  const other = await discBytes({ serial: 'SLES_123.45' });
+  const r = await resolveDisc(new File([makeZip([{ name: 'other.bin', data: other }])], 'other.zip'), probeDisc);
   assert.equal(r.ok, false);
   assert.equal(r.reason, 'region');
-  assert.match(r.message, /SCES_021\.05/);
+  assert.match(r.message, /SLES_123\.45/);
 });
 
 test('no .bin in the zip (only a .cue and an .iso) : zip-no-bin', async () => {

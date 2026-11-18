@@ -18,7 +18,7 @@
 //   harness the tests' own tools (the fast and precise starts, the snapshots, saves, replays, ctr.mjs)
 
 /** The suites a level can run, in the order they run. */
-export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio', 'bot', 'touch']
+export const SUITES = ['fast', 'precise', 'menu', 'time-trial', 'bare', 'couch', 'split', 'ux', 'share', 'audio', 'bot', 'touch', 'region']
 
 /** The tag level : one scenario per area, ~5 min. */
 export const SMOKE = [
@@ -54,6 +54,7 @@ export const PATHS = [
 	[/^platform\/native_memcard/, ['card']],
 	[/^platform\/native_(input|libpad)/, ['input']],
 	[/^platform\/native_(cd|disc_image)/, ['boot', 'race']],
+	[/^platform\/web_disc_view/, ['boot', 'audio']],
 	// the page
 	[/^web\/audio\//, ['audio']],
 	[/^web\/(share|net)\/|^relay\//, ['share']],

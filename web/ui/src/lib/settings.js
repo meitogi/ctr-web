@@ -14,6 +14,7 @@
 //
 // createSettings() returns a Svelte-compatible store (subscribe / set / update) usable from plain
 // JS too — test/settings.test.js drives it with an in-memory storage.
+import { GAME_LANGUAGES } from './language.js'
 import { DEFAULT_GAMEPAD, DEFAULT_KEYBOARD, DEFAULT_KEYBOARD_LEFT, DEFAULT_KEYBOARD_RIGHT, loadMapping, saveMapping } from './mappings.js'
 import { randomName } from './names.js'
 
@@ -44,10 +45,13 @@ export const KEYS = {
   touchAutoBoost: 'ctr-ui.touch-auto-boost',
   touchBuffer: 'ctr-ui.touch-buffer',
   touchSound: 'ctr-ui.touch-sound',
+  gameLanguage: 'ctr-ui.game-language',
 }
 /** The device key of Share's guest page. */
 export const GUEST_DEVICE_KEY = 'ctr-share.guest-device'
 export const DEVICE_MODES = ['auto', 'keyboard', 'gamepad']
+/** The game's language (lib/language.js) : `auto`, or one the discs give ; applies at the next start. */
+export const LANGUAGE_CHOICES = ['auto', ...GAME_LANGUAGES]
 /** Auto : keyboard and gamepads, as before. `pad` : { id, nth } of the chosen gamepad, null = the first. */
 export const DEFAULT_DEVICE = Object.freeze({ mode: 'auto', pad: null })
 export const DEFAULT_VOLUME = 0.8
@@ -145,6 +149,7 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchBuffer: read(storage, KEYS.touchBuffer) !== '0',
     // the page's own sounds : a tick at the red, a chime on a boost made
     touchSound: read(storage, KEYS.touchSound) !== '0',
+    gameLanguage: pick(read(storage, KEYS.gameLanguage), LANGUAGE_CHOICES),
   }
 }
 
@@ -174,6 +179,7 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchAutoBoost, s.touchAutoBoost ? null : '0')
   write(storage, KEYS.touchBuffer, s.touchBuffer ? null : '0')
   write(storage, KEYS.touchSound, s.touchSound ? null : '0')
+  write(storage, KEYS.gameLanguage, s.gameLanguage === 'auto' ? null : s.gameLanguage)
 }
 
 /** The key sets the game gets : [first keyboard, second keyboard] — the two halves in duo. */
@@ -194,6 +200,7 @@ export function createSettings(storage, { deviceKey = KEYS.device, random } = {}
       ...next, name: cleanName(next.name), device: cleanDevice(next.device),
       touchMode: pick(next.touchMode, TOUCH_MODES), touchLayout: pick(next.touchLayout, TOUCH_LAYOUTS),
       touchSize: pick(next.touchSize, ['m', 's', 'l']), touchHoldMs: holdMs(next.touchHoldMs), touchSlideMs: slideMs(next.touchSlideMs), touchRockPx: rockPx(next.touchRockPx), touchSlideHoldMs: slideHoldMs(next.touchSlideHoldMs), touchSteer: pick(next.touchSteer, ['medium', 'low', 'high']), touchRetapMs: retapMs(next.touchRetapMs),
+      gameLanguage: pick(next.gameLanguage, LANGUAGE_CHOICES),
     }
     saveSettings(storage, value, deviceKey)
     for (const fn of subs.slice()) fn(value)
