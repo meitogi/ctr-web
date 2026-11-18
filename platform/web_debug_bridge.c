@@ -60,6 +60,8 @@
 //                (HIDE_MODEL in its idpp[v], set by DecalMP_02)
 //                reserves the turbo's reserves (> 0 while a boost lasts : the start boost, a
 //                slide's) · cross the pad's Cross held this frame (its slot's snapshot) ;
+//                state kartState (KS_* : 1 crashing, 2 drifting) · slideFrames a slide's frame
+//                counter (signed) · actions actionsFlagSet — why a slide ended (session 42b)
 //                `kart` gets wumpa … cross from karts[0]
 //   pools        { thread, small } : free entries of gGT->JitPools.thread / .smallStack, -1 while a level loads (a
 //                crate's thread is born on first contact, RB_CrateAny_LInC_Birth ; an empty
@@ -210,7 +212,7 @@ EM_JS(void, WebDebugBridge_PushMoreJS,
 		characters: Array.from({ length: (charSelect >> 4) & 7 }, (_, p) => (charSelect >> (8 + p * 4)) & 0xf) };
 	c.karts = [];
 	for (let i = 0; i < players; i++) {
-		const k = HEAP32.subarray((karts >> 2) + i * 24, (karts >> 2) + (i + 1) * 24);
+		const k = HEAP32.subarray((karts >> 2) + i * 27, (karts >> 2) + (i + 1) * 27);
 		c.karts.push(k[0] ? {
 			lap: k[1], speed: k[2], rank: k[3], finished: !!k[4],
 			pos: { x: k[5], y: k[6], z: k[7] }, angle: k[8],
@@ -218,6 +220,7 @@ EM_JS(void, WebDebugBridge_PushMoreJS,
 			wumpa: k[13], item: k[14], roll: k[15], crates: k[16],
 			invisible: k[17], invincible: k[18], drawn: k[19], lods: k[20], impostor: k[21],
 			reserves: k[22], cross: !!k[23],
+			state: k[24], slideFrames: k[25], actions: k[26] >>> 0,
 		} : null);
 	}
 	// The kart counter (session 22), with the flicker counter on : per present, for each view
@@ -1198,7 +1201,7 @@ internal void WebDebugBridge_Publish(void)
 		struct RectMenu *sub = NULL;
 		const char *subTitle = NULL;
 		const char *subLabel = NULL;
-		s32 karts[4 * 24];
+		s32 karts[4 * 27];
 		int players = gGT->numPlyrCurrGame;
 
 		for (struct RectMenu *m = menu; (m != NULL) && (m->state & DRAW_NEXT_MENU_IN_HIERARCHY) && (m->ptrNextBox_InHierarchy != NULL);
@@ -1221,7 +1224,7 @@ internal void WebDebugBridge_Publish(void)
 		for (int i = 0; i < players; i++)
 		{
 			struct Driver *k = gGT->drivers[i];
-			s32 *o = &karts[i * 24];
+			s32 *o = &karts[i * 27];
 			int tx = 0;
 			int tz = 0;
 
@@ -1248,6 +1251,11 @@ internal void WebDebugBridge_Publish(void)
 			o[22] = k->reserves;
 			o[23] = (i < NATIVE_INPUT_MAX_CONTROLLERS) && ((NativeInput_GetSnapshotButtons(&s_controllers[i].snapshot) & 0x4000) == 0);
 			o[14] = (s32)k->heldItemID;
+			// session 42b : the kart's state (KS_*), a slide's frame counter (signed : it spins out or
+			// ends past the driver's limit) and the action flags — why a slide ended
+			o[24] = k->kartState;
+			o[25] = (k->kartState == KS_DRIFTING) ? k->KartStates.Drifting.numFramesDrifting : 0;
+			o[26] = (s32)k->actionsFlagSet;
 			o[15] = k->itemRollTimer;
 			o[16] = k->numTimesHitWeaponBox;
 			o[17] = k->invisibleTimer;

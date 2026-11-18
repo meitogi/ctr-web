@@ -515,7 +515,7 @@ function eRace() {
   const right = at(pad, 'right')
   const z = at(pad, 'steer')
   const R = [right.x + right.w / 2, right.y + right.h / 2]
-  const pk = (t, { slide = false, red = false } = {}) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide, red); return { bits: ~(p[2] | (p[3] << 8)) & 0xffff, lx: p[6] } }
+  const pk = (t, { slide = false, red = false, made = 0 } = {}) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide, red, false, made); return { bits: ~(p[2] | (p[3] << 8)) & 0xffff, lx: p[6] } }
   // GO held by the right thumb until it holds itself, then lifted
   pad.down(9, ...R, 0)
   pk(0)
@@ -574,28 +574,125 @@ test('E : the slide ends with the game\'s ; a hold turning starts it after 200 m
   assert.equal(pk(2500, { slide: false }).bits & B.r1, 0, 'the game ended it')
 })
 
-test('E : swipe up = the item, swipe down = the brake (held, GO let go)', () => {
+test('E : swipe up = the item with Up (a potion ahead), swipe down = the item with Down (a bomb backward)', () => {
   const { pad, R, pk } = eRace()
   pad.down(1, ...R, 2000)
   pad.move(1, R[0], R[1] - 40)
-  assert.equal(pk(2050).bits, B.cross | B.circle, 'the item')
+  assert.equal(pk(2050).bits, B.cross | B.circle | B.up, 'the item, forward')
   pad.up(1, 2100)
-  assert.equal(pk(2300).bits, B.cross, 'no hop after a swipe')
+  assert.equal(pk(2300).bits, B.cross, 'brief ; no hop after a swipe')
   pad.down(1, ...R, 3000)
   pad.move(1, R[0], R[1] + 40)
-  assert.equal(pk(3050).bits, B.square, 'the brake, Cross let go')
-  pad.up(1, 3500)
-  pk(3510)
-  pad.down(1, ...R, 3600)
-  assert.equal(pk(3610).bits, B.cross, 'after the brake, a touch is GO again')
+  assert.equal(pk(3050).bits, B.cross | B.circle | B.down, 'the item, behind ; GO stays held')
+  pad.up(1, 3100)
+  assert.equal(pk(3300).bits, B.cross, 'brief ; the direction let go with it')
 })
 
-test('E : the auto boost taps L1 as the meter turns red, once per red', () => {
+test('E : the stick pulled straight down brakes (GO let go) ; a turn does not, nor a slide', () => {
+  const { pad, R, z, pk } = eRace()
+  const [ox, oy] = [z.x + 60, z.y + 40]
+  const r = z.reach
+  pad.down(2, ox, oy, 2000)
+  pad.move(2, ox, oy + r * 0.7)
+  assert.equal(pk(2010).bits, B.cross, 'not far enough')
+  pad.move(2, ox, oy + r * 0.9)
+  assert.equal(pk(2020).bits, B.square, 'the brake ; Cross let go')
+  pad.move(2, ox + r * 0.3, oy + r * 0.7)
+  assert.equal(pk(2030).bits, B.square, 'kept until it comes back above 0.6')
+  pad.move(2, ox, oy + r * 0.5)
+  assert.equal(pk(2040).bits & B.square, 0, 'released')
+  pad.move(2, ox + r * 0.75, oy + r * 0.85)
+  assert.equal(pk(2050).bits & B.square, 0, 'a turn pulled back : outside the cone')
+  pad.move(2, ox + r, oy)
+  assert.equal(pk(2060).bits & B.square, 0, 'a turn')
+  // in a slide the stick is the slide's angle
+  pad.down(1, ...R, 2100)
+  pk(2110)
+  pad.up(1, 2120)
+  pad.down(1, ...R, 2130)
+  pk(2140)
+  pk(3100)
+  pad.up(1, 3110)
+  pad.move(2, ox + r, oy)
+  pk(3200)
+  pad.down(1, ...R, 3300)
+  pad.up(1, 3350)
+  pk(3360)
+  pad.move(2, ox, oy + r)
+  assert.equal(pk(3400, { slide: true }).bits & B.square, 0, 'no brake while sliding')
+})
+
+test('the brake on the stick is E\'s : A\'s stick pulled down does not brake', () => {
+  const pad = make('a')
+  const z = at(pad, 'steer')
+  pad.down(2, z.x + 60, z.y + 40, 0)
+  pad.move(2, z.x + 60, z.y + 40 + z.reach)
+  assert.equal(read(pad, true, 10).bits & B.square, 0)
+})
+
+test('E : the auto boost taps only a slide\'s first boost ; the second and third are the player\'s', () => {
   const { pad, pk } = eRace()
   pad.autoBoost = true
+  const seen = []
+  pad.onBoosts = (n) => seen.push(n)
   pk(2000, { slide: true })
-  assert.equal(pk(2010, { slide: true, red: true }).bits & B.l1, B.l1)
-  assert.equal(pk(2200, { slide: true, red: true }).bits & B.l1, 0)
+  assert.equal(pk(2010, { slide: true, red: true }).bits & B.l1, B.l1, 'the first red : tapped')
+  assert.equal(pk(2200, { slide: true, red: true }).bits & B.l1, 0, 'once')
+  pk(2300, { slide: true, made: 1 })
+  assert.equal(pk(2400, { slide: true, red: true, made: 1 }).bits & B.l1, 0, 'the second red : not tapped')
+  pk(2500, { slide: true, made: 2 })
+  assert.equal(pk(2600, { slide: true, red: true, made: 2 }).bits & B.l1, 0, 'nor the third')
+  pk(2700, {})
+  assert.deepEqual(seen, [1, 2, 0], 'the count told as it changes, 0 once the slide is over')
+  pk(2800, { slide: true })
+  assert.equal(pk(2810, { slide: true, red: true }).bits & B.l1, B.l1, 'the next slide\'s first')
+})
+
+test('E : a boost tapped before the red waits for it (bufferMs) ; without the red it is sent as it was', () => {
+  const { pad, R, pk } = eRace()
+  pad.bufferMs = 80
+  pk(2000, { slide: true })
+  pad.down(1, ...R, 2010)
+  assert.equal(pk(2020, { slide: true }).bits & B.l1, 0, 'early : kept')
+  assert.equal(pk(2050, { slide: true }).bits & B.l1, 0)
+  assert.equal(pk(2080, { slide: true, red: true }).bits & B.l1, B.l1, 'sent as the red starts')
+  pad.up(1, 2090)
   pk(2300, { slide: true })
-  assert.equal(pk(2400, { slide: true, red: true }).bits & B.l1, B.l1, 'the next red')
+  pad.down(1, ...R, 2400)
+  assert.equal(pk(2410, { slide: true }).bits & B.l1, 0, 'early again')
+  assert.equal(pk(2500, { slide: true }).bits & B.l1, B.l1, 'no red within 80 ms : sent')
+  pad.up(1, 2510)
+  pk(2700, { slide: true, red: true })
+  pad.down(1, ...R, 2800)
+  assert.equal(pk(2810, { slide: true, red: true }).bits & B.l1, B.l1, 'in the red : at once')
+  pad.up(1, 2820)
+  pad.bufferMs = 0
+  pk(3000, { slide: true })
+  pad.down(1, ...R, 3100)
+  assert.equal(pk(3110, { slide: true }).bits & B.l1, B.l1, 'off : every tap at once')
+})
+
+test('where the last finger landed on a boost control (the place of « 1 · 2 · 3 »)', () => {
+  const { pad, R, pk } = eRace()
+  pad.down(1, R[0] + 12, R[1] - 7, 2000)
+  pk(2010)
+  assert.deepEqual(pad.boostAt, { x: R[0] + 12, y: R[1] - 7 })
+})
+
+test('the cue : a tick at the red, a chime on a boost, a buzz where there is one ; silent while the sound sleeps', async () => {
+  const { createCue } = await import('../src/lib/touch/cue.js')
+  const played = []
+  const node = () => ({ type: '', frequency: { value: 0 }, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start(t) { played.push(t) }, stop() {} })
+  const ctx = { state: 'running', currentTime: 5, destination: {}, createOscillator: node, createGain: node }
+  const buzz = []
+  const cue = createCue({ context: () => ctx, vibrate: (ms) => buzz.push(ms) })
+  assert.equal(cue.red(), true)
+  assert.equal(played.length, 1)
+  assert.equal(cue.made(2), true)
+  assert.equal(played.length, 3, 'two notes')
+  assert.deepEqual(buzz, [10, 25])
+  ctx.state = 'suspended'
+  assert.equal(cue.red(), false)
+  assert.equal(played.length, 3)
+  assert.equal(createCue({ context: () => null, vibrate: null }).made(1), false, 'no sound, no buzz (iOS before the first touch)')
 })

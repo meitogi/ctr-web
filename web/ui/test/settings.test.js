@@ -11,7 +11,7 @@ const memory = (init = {}) => {
   return { map: m, getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }
 }
 
-const TOUCH_DEFAULTS = { autoStart: true, touchMode: 'auto', touchLayout: 'a', touchHold: true, touchHoldMs: 800, touchSize: 'm', touchSlideMs: 300, touchRockPx: 9, touchSlideHoldMs: 500, touchSteer: 'medium', touchCue: true, touchRetapMs: 250, touchAutoBoost: true }
+const TOUCH_DEFAULTS = { autoStart: true, touchMode: 'auto', touchLayout: 'e', touchHold: true, touchHoldMs: 800, touchSize: 'm', touchSlideMs: 300, touchRockPx: 9, touchSlideHoldMs: 500, touchSteer: 'medium', touchCue: true, touchRetapMs: 250, touchAutoBoost: true, touchBuffer: true, touchSound: true }
 
 test('defaults on an empty storage : a random name, drawn once and stored', () => {
   const storage = memory()
@@ -54,7 +54,7 @@ test('round trip : every field survives a reload of the page', () => {
   const a = createSettings(storage)
   const keyboard = bind(DEFAULT_KEYBOARD, 'cross', 22)
   const keyboardRight = bind(DEFAULT_KEYBOARD_RIGHT, 'start', 42)
-  const touch = { autoStart: false, touchMode: 'minimal', touchLayout: 'c', touchHold: false, touchHoldMs: 1200, touchSize: 'l', touchSlideMs: 0, touchRockPx: 14, touchSlideHoldMs: 800, touchSteer: 'high', touchCue: false, touchRetapMs: 0, touchAutoBoost: false }
+  const touch = { autoStart: false, touchMode: 'minimal', touchLayout: 'c', touchHold: false, touchHoldMs: 1200, touchSize: 'l', touchSlideMs: 0, touchRockPx: 14, touchSlideHoldMs: 800, touchSteer: 'high', touchCue: false, touchRetapMs: 0, touchAutoBoost: false, touchBuffer: false, touchSound: false }
   a.patch({ name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, duo: true, keyboardRight, ...touch })
   const b = createSettings(storage).get()
   assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE, ...touch })
@@ -86,10 +86,10 @@ test('a storage that throws (private mode) : defaults, and setting still works i
 test('start by itself and the touch controls : on / auto by default, defaults not written, nonsense cleaned', () => {
   const storage = memory()
   const a = createSettings(storage, { random: () => 0 })
-  assert.deepEqual(TOUCH_DEFAULTS, { autoStart: true, touchMode: 'auto', touchLayout: 'a', touchHold: true, touchHoldMs: TOUCH_HOLD_MS.default, touchSize: 'm', touchSlideMs: 300, touchRockPx: 9, touchSlideHoldMs: 500, touchSteer: 'medium', touchCue: true, touchRetapMs: 250, touchAutoBoost: true })
-  for (const k of ['autoStart', 'touchMode', 'touchLayout', 'touchHold', 'touchHoldMs', 'touchSize', 'touchSlideMs', 'touchRockPx', 'touchSlideHoldMs', 'touchSteer', 'touchCue', 'touchRetapMs', 'touchAutoBoost']) assert.equal(storage.map.has(KEYS[k]), false, k)
+  assert.deepEqual(TOUCH_DEFAULTS, { autoStart: true, touchMode: 'auto', touchLayout: 'e', touchHold: true, touchHoldMs: TOUCH_HOLD_MS.default, touchSize: 'm', touchSlideMs: 300, touchRockPx: 9, touchSlideHoldMs: 500, touchSteer: 'medium', touchCue: true, touchRetapMs: 250, touchAutoBoost: true, touchBuffer: true, touchSound: true })
+  for (const k of ['autoStart', 'touchMode', 'touchLayout', 'touchHold', 'touchHoldMs', 'touchSize', 'touchSlideMs', 'touchRockPx', 'touchSlideHoldMs', 'touchSteer', 'touchCue', 'touchRetapMs', 'touchAutoBoost', 'touchBuffer', 'touchSound']) assert.equal(storage.map.has(KEYS[k]), false, k)
   a.patch({ touchMode: 'nonsense', touchLayout: 'z', touchHoldMs: 99999, touchSize: 'xl' })
-  assert.deepEqual([a.get().touchMode, a.get().touchLayout, a.get().touchHoldMs, a.get().touchSize], ['auto', 'a', TOUCH_HOLD_MS.default, 'm'])
+  assert.deepEqual([a.get().touchMode, a.get().touchLayout, a.get().touchHoldMs, a.get().touchSize], ['auto', 'e', TOUCH_HOLD_MS.default, 'm'])
   storage.map.set(KEYS.touchHoldMs, '450')
   assert.equal(createSettings(storage).get().touchHoldMs, 450)
 })

@@ -51,6 +51,8 @@ export const tags = {
 	'TOUCH-BOOT-INTRO': ['input', 'boot'],
 	'TOUCH-STICK-SLIDE': ['input', 'race'],
 	'TOUCH-E': ['input', 'race'],
+	'TOUCH-E-ACTIONS': ['input', 'race'],
+	'TOUCH-E-BOOSTS': ['input', 'race'],
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -69,7 +71,8 @@ async function onPhone(ctx, at, s = {}, { kind = null, turbo: fast = false } = {
 	await phone(ctx, IPHONE_MINI)
 	// no finger left down from a scenario before (the browser keeps its touch points across loads)
 	await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, ctx.sid).catch(() => {})
-	await touchSettings(ctx, s)
+	// the scenarios written on layout A say nothing : A unless told (the default is E since 42b)
+	await touchSettings(ctx, { touchLayout: 'a', ...s })
 	await startAt(ctx, at, { turbo: fast })
 	const end = Date.now() + 10_000
 	let t = null
@@ -79,6 +82,29 @@ async function onPhone(ctx, at, s = {}, { kind = null, turbo: fast = false } = {
 }
 
 const kart = async ctx => (await state(ctx))?.kart ?? null
+
+/**
+ * What the game pulls from the touch pad from now on : `pulls(ctx)` returns and empties the list,
+ * one [buttons pressed (active high), sliding, red, boosts made, the stick's y byte] per pull.
+ */
+const spy = ctx => ctx.js("const t = Module.ctrInput.touch; window.__pulls = []; Module.ctrInput.touch = (h, d, ...a) => { const ok = t(h, d, ...a); if (ok) { __pulls.push([~(h[d + 2] | (h[d + 3] << 8)) & 0xffff, a[1] ? 1 : 0, a[2] ? 1 : 0, a[4] | 0, h[d + 7]]); if (__pulls.length > 6000) __pulls.shift() } return ok }; return true")
+const pulls = ctx => ctx.js('const p = window.__pulls; window.__pulls = []; return p')
+/** E in a Time Trial, GO held by itself, the kart at speed. */
+async function eDriving(ctx, s = {}, at = TT, fast = 9000) {
+	await onPhone(ctx, at, { touchLayout: 'e', ...s }, { kind: 'e' })
+	await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+	const f = fingers(ctx)
+	const right = await f.rect('right')
+	// the thumb down until the kart is at speed (whatever the track's countdown), then lifted
+	await f.down(2, right.cx, right.cy)
+	let speed = 0
+	for (const end = Date.now() + 20_000; Date.now() < end && speed < fast; await sleep(50)) speed = (await kart(ctx))?.speed ?? 0
+	await f.up(2)
+	await sleep(300)
+	const held = await touchState(ctx)
+	if (held.hold !== 'held' || speed < fast) throw new Error(`the right half held : ${held.hold}, speed ${speed}`)
+	return { f, right, zone: await f.rect('steer') }
+}
 
 /**
  * The Bot's keys as fingers (lib/autopilot.js's `out`) : steering on the stick's zone (layout A)
@@ -179,9 +205,9 @@ export default async ctx => {
 		const menu = await onPhone(ctx, 'menu', {}, { kind: 'menu' })
 		for (const id of ['dpad', 'cross', 'triangle', 'start']) if (!menu.ids.includes(id)) throw new Error(`the menus' pad lacks ${id} : ${menu.ids}`)
 		await shot(ctx, 'menu-pad')
-		const race = await onPhone(ctx, TT, {}, { kind: 'a' })
-		await shot(ctx, 'race-a')
-		return `desktop : none · menu : ${menu.ids.join(' ')} · race (A) : ${race.ids.join(' ')}`
+		const race = await onPhone(ctx, TT, { touchLayout: null }, { kind: 'e' })
+		await shot(ctx, 'race-default')
+		return `desktop : none · menu : ${menu.ids.join(' ')} · race (the default, E) : ${race.ids.join(' ')}`
 	})
 
 	await ctx.scenario('TOUCH-FINGERS', async () => {
@@ -395,7 +421,7 @@ export default async ctx => {
 	await ctx.scenario('TOUCH-E', async () => {
 		await onPhone(ctx, TT, { touchLayout: 'e' }, { kind: 'e' })
 		await until(ctx, 'the race', s => s.screen === 'race', { timeout: 30_000 })
-		await ctx.js("const t = Module.ctrInput.touch; window.__sl = { slide: 0, last: 0 }; Module.ctrInput.touch = (h, d, r, s, red, rev) => { if (s) __sl.slide++; __sl.last = s ? 1 : 0; return t(h, d, r, s, red, rev) }; return true")
+		await ctx.js("const t = Module.ctrInput.touch; window.__sl = { slide: 0, last: 0 }; Module.ctrInput.touch = (h, d, r, s, ...a) => { if (s) __sl.slide++; __sl.last = s ? 1 : 0; return t(h, d, r, s, ...a) }; return true")
 		const f = fingers(ctx)
 		const right = await f.rect('right')
 		const [rx, ry] = [right.cx, right.cy]
@@ -420,16 +446,113 @@ export default async ctx => {
 		await f.move(1, x, y)
 		await sleep(700)
 		const after = await ctx.js('return { ...window.__sl }')
-		await f.up(1)
-		await f.down(2, rx, ry)
-		await f.move(2, rx, ry + 45)
-		await sleep(400)
-		const braking = await kart(ctx)
 		await f.all()
 		if (during.slide < 5) throw new Error(`a tap turning : no slide (${JSON.stringify(during)})`)
 		if (after.last) throw new Error('the stick centred, the slide went on')
-		if (braking.cross) throw new Error('swipe down : Cross still held')
-		return `GO held by itself · a tap turning : the game slid ${during.slide} pulls, reserves up to ${best} (the auto boost) · the stick centred : ended · swipe down : the brake`
+		return `GO held by itself · a tap turning : the game slid ${during.slide} pulls, reserves up to ${best} (the auto boost) · the stick centred : ended`
+	})
+
+	// 42b : E's last actions, as the game pulls them. The item's direction is the game's rule
+	// (VehPickupItem.c : Down held = a bomb backward, Up held = a potion ahead) : what is checked
+	// here is that Circle and the direction reach the game in the same pull.
+	await ctx.scenario('TOUCH-E-ACTIONS', async () => {
+		const { f, right, zone } = await eDriving(ctx)
+		await spy(ctx)
+		const swipe = async dy => {
+			await f.down(2, right.cx, right.cy)
+			await f.move(2, right.cx, right.cy + dy)
+			await sleep(250)
+			await f.up(2)
+			await sleep(150)
+			return pulls(ctx)
+		}
+		const up = await swipe(-45)
+		const down = await swipe(45)
+		const both = (list, dir) => list.filter(p => (p[0] & (0x2000 | dir)) === (0x2000 | dir)).length
+		if (!both(up, 0x10)) throw new Error('swipe up : no pull with Circle and Up')
+		if (!both(down, 0x40)) throw new Error('swipe down : no pull with Circle and Down')
+		if (down.some(p => p[0] & 0x8000)) throw new Error('swipe down still brakes')
+		if (!(await kart(ctx)).cross) throw new Error('the swipes let GO go')
+		// a turn, pulled back a little : no brake
+		const [x, y] = [zone.x + 70, zone.y + 50]
+		await f.down(1, x, y)
+		await f.move(1, x + 40, y + 20)
+		await sleep(400)
+		const turn = await pulls(ctx)
+		if (turn.some(p => p[0] & 0x8000)) throw new Error('a turn brakes')
+		const fast = (await kart(ctx)).speed
+		// straight down : the brake, Cross let go ; kept down : the kart backs up
+		await f.move(1, x, y + 60)
+		await sleep(1500)
+		const braking = await pulls(ctx)
+		const slowed = await kart(ctx)
+		await sleep(2500)
+		const backing = await kart(ctx)
+		const drawn = await ctx.js("return document.querySelector('#ctr-touch .stick-base')?.classList.contains('brake') ?? false")
+		await f.all()
+		const squares = braking.filter(p => p[0] & 0x8000).length
+		if (squares < 5) throw new Error(`the stick down : Square in ${squares} of ${braking.length} pulls`)
+		if (slowed.cross) throw new Error('the brake : Cross still held')
+		if (!(Math.abs(slowed.speed) < Math.abs(fast) / 2)) throw new Error(`the brake : speed ${fast} → ${slowed.speed}`)
+		if (!drawn) throw new Error('the stick is not drawn braking')
+		const moved = Math.hypot(backing.pos.x - slowed.pos.x, backing.pos.z - slowed.pos.z)
+		return `swipe up : Circle + Up in ${both(up, 0x10)} pulls · swipe down : Circle + Down in ${both(down, 0x40)}, no Square, GO kept · a turn : no brake · the stick down : Square in ${squares} pulls, speed ${fast} → ${slowed.speed}, then ${backing.speed} (moved ${Math.round(moved)} : backing up)`
+	})
+
+	// 42b : the auto boost makes a slide's first boost only ; the zone turns red, « 1 · 2 · 3 » shows.
+	// In the race : the first red, tapped by the page, and the game's count coming back as 1. A slide
+	// on a straight meets a wall about a second in (KS_CRASHING), before its second red : the
+	// second and third reds are then played to the page in the game's place (`__force` : sliding,
+	// red, the boosts made, as the game would say them) and its packets read.
+	await ctx.scenario('TOUCH-E-BOOSTS', async () => {
+		const { f, right, zone } = await eDriving(ctx)
+		await spy(ctx)
+		await ctx.js("window.__seen = { made: 0, red: 0, bg: '', pips: 0 }; window.__seenT = setInterval(() => { const t = document.querySelector('#ctr-touch'); const p = t?.querySelector('.pips'); if (p) { __seen.pips++; __seen.made = Math.max(__seen.made, +p.dataset.made) } if (t?.dataset.window === 'red') { __seen.red++; __seen.bg = getComputedStyle(t.querySelector('[data-id=right]')).backgroundColor } }, 16); return true")
+		const [x, y] = [zone.x + 70, zone.y + 50]
+		await f.down(1, x, y)
+		await f.move(1, x + 60, y)
+		await sleep(150)
+		await f.down(2, right.cx, right.cy)
+		await sleep(80)
+		await f.up(2)
+		await sleep(2500)
+		const list = await pulls(ctx)
+		const seen = await ctx.js('return { ...window.__seen }')
+		// the slide as pulled, in runs : s = sliding, r = red, the digit = boosts made, L = L1
+		const runs = []
+		for (const p of list) { const k = `${p[1] ? 's' : '-'}${p[2] ? 'r' : ''}${p[3]}${p[0] & 0x400 ? 'L' : ''}`; if (runs.at(-1)?.[0] === k) runs.at(-1)[1]++; else runs.push([k, 1]) }
+		const trace = runs.map(r => `${r[0]}×${r[1]}`).join(' ')
+		const first = list.filter(p => (p[0] & 0x400) && p[1] && p[3] === 0).length
+		const made = Math.max(0, ...list.map(p => p[3]))
+		if (!first) throw new Error(`the first boost was not tapped : ${trace}`)
+		if (made !== 1) throw new Error(`the game's count after the first boost : ${made} (${trace})`)
+		if (!seen.red || !/255, 70, 50/.test(seen.bg)) throw new Error(`the right half at the red : ${JSON.stringify(seen)}`)
+		if (!seen.pips || seen.made !== 1) throw new Error(`« 1 · 2 · 3 » : ${JSON.stringify(seen)}`)
+		// the second and the third red, said to the page as the game would
+		await ctx.js("const t = Module.ctrInput.touch; Module.ctrInput.touch = (h, d, r, s, red, rev, made) => (window.__force ? t(h, d, r, window.__force[0], window.__force[1], rev, window.__force[2]) : t(h, d, r, s, red, rev, made)); return true")
+		const say = async (sliding, red, n, ms) => { await ctx.js(`window.__force = [${sliding}, ${red}, ${n}]; return true`); await sleep(ms) }
+		await pulls(ctx)
+		await say(true, false, 1, 200)
+		await say(true, true, 1, 300)
+		await say(true, false, 2, 200)
+		await say(true, true, 2, 300)
+		const auto = await pulls(ctx)
+		// the player's own tap in that red still boosts
+		await f.down(2, right.cx, right.cy)
+		await sleep(120)
+		await f.up(2)
+		await sleep(150)
+		const hand = await pulls(ctx)
+		const drawn = await ctx.js("const p = document.querySelector('#ctr-touch .pips'); return p ? { made: +p.dataset.made, now: [...p.children].findIndex(c => c.classList.contains('now')) + 1 } : null")
+		await ctx.js('window.__force = null; clearInterval(window.__seenT); return true')
+		await f.all()
+		const reds = auto.filter(p => p[2]).length
+		const l1 = auto.filter(p => p[0] & 0x400).length
+		if (reds < 10) throw new Error(`the reds said to the page : ${reds} pulls`)
+		if (l1) throw new Error(`the page tapped L1 at the second or third red (${l1} of ${auto.length} pulls)`)
+		if (!hand.some(p => p[0] & 0x400)) throw new Error(`the player's tap at the third red : no L1 (${JSON.stringify(await touchState(ctx))} ${hand.slice(0, 12).map(p => p[0].toString(16) + '/' + p[1] + p[2] + p[3]).join(' ')})`)
+		if (!drawn || drawn.made !== 2 || drawn.now !== 3) throw new Error(`« 1 · 2 · 3 » at the third red : ${JSON.stringify(drawn)}`)
+		return `in the race : the first red tapped by the page (L1 in ${first} pulls), the game counts ${made}, the zone red (${seen.bg}), the pips at ${seen.made} · the second and third reds (${reds} pulls, said to the page) : no L1 by the page, the player's tap gives it, the pips show 2 made and 3 now`
 	})
 
 	await ctx.scenario('TOUCH-SLIDE-HOLD', async () => {
