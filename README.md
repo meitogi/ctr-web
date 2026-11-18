@@ -21,10 +21,15 @@ game — live in **Second Lap**, the enhanced edition, built on top of this one.
 
 we don't host the game. don't ask. you know why (lawyers).
 
-you need your own **NTSC-U** copy as a raw disc image : `ctr-u.bin`, `MODE2/2352`, what a
-CD ripper spits out. a cooked 2048-byte `.iso` won't do — no voices, no videos, sad Aku
+you need your own copy as a raw disc image — **NTSC-U** (SCUS-94426) or **PAL** (SCES-02105),
+or both : `MODE2/2352`, what a CD ripper spits out. a cooked 2048-byte `.iso` won't do — no voices, no videos, sad Aku
 Aku. loose or in a `.zip`, drop it anywhere on the page **once**. it lives in your
 browser now. nothing gets uploaded. next time you just press the button and send it.
+
+the region is read off the disc. a PAL disc plays the same NTSC-U game with its six languages,
+text and voices (English, French, German, Italian, Spanish, Dutch) : your browser's language
+by default, Settings › System › Language for another (it applies at the next start). drop both
+discs and English comes from the NTSC-U one, the others from the PAL one.
 
 ## what works
 
@@ -86,7 +91,9 @@ measured yet.
 
 ## the limits (read this before you report them)
 
-- **your own NTSC-U disc.** PAL and Japanese discs are refused, for now.
+- **your own NTSC-U or PAL disc.** Japanese discs are refused. a PAL disc gives its languages,
+  not its version of the game : 60 Hz, the NTSC-U stats. the font has no ¡ ¿ º " nor the Ñ's
+  tilde, so they read as close letters (« ESPANOL »).
 - **Share : four players in all**, the host's own pads included. a fifth friend's window says
   « Too many players ». the guests watch a video of the host's game : expect a little delay.
 - **Share needs a direct connection** between the host and each guest. some networks
@@ -107,7 +114,6 @@ no dates. no versions. trust the process.
 |---|---|---|
 | next | **touch, tuned** | the touch layouts tuned in the hand, on real phones ; Android checked |
 | next | **your save, out and back** | export the card from Settings, import it on another browser |
-| trust me bro | **PAL discs** | French version first. 50 Hz and all |
 
 ## how it's built
 
@@ -117,7 +123,7 @@ no dates. no versions. trust the process.
 - **the picture** — **WebGL2** (CTR Native's renderer, ported to GLSL ES 3.0).
 - **the sound** — the PS1's sound chip emulated in an **AudioWorklet** (Web Audio), off the
   main thread, so the music keeps time when the page is busy.
-- **the disc** — your image, checked (NTSC-U, raw sectors), streamed into the browser's
+- **the disc** — your image, checked (NTSC-U or PAL, raw sectors), streamed into the browser's
   private storage (**OPFS**) once ; saves in IndexedDB.
 - **Share** — the host's canvas and sound sent as a WebRTC video + audio stream, peer to peer
   (public STUN only) ; the guests' pads sent back.
@@ -263,6 +269,8 @@ the ports (one list : [web/dev-ports.tsv](web/dev-ports.tsv), checked by `web/de
   code that parts of CTR Native's platform layer and PsyQ facade headers come from
 - [SDL3](https://github.com/libsdl-org/SDL) — audio, input, windows : the boring
   essentials nobody thanks
+- [CTR High Octane](https://github.com/Rinnegatamante/Crash-Team-Racing-High-Octane) — the idea
+  of playing with the PAL disc's voices, and where they sit on it
 - the browser port — WebAssembly, Share, the whole web thing :
   [Meitogi](https://github.com/meitogi)
 - Crash Team Racing is a trademark of Sony Computer Entertainment / Naughty Dog. we're

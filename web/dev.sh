@@ -67,6 +67,8 @@ cmd_build() {
   build_with_progress "$build.log" "$tree/web/build-web.sh" "$config" -DCTR_WEB_PRELOAD_DISC=OFF || exit 1
   # the disc the agent-browser bots store in their browser (web/*/bot.sh), linked, never copied
   [ -f "$tree/assets/ctr-u.bin" ] && ln -sf "$tree/assets/ctr-u.bin" "$build/ctr-u.bin"
+  # the PAL disc too when kept there (gitignored) : region.suite.mjs drops it from the server
+  [ -f "$tree/assets/ctr-pal.bin" ] && ln -sf "$tree/assets/ctr-pal.bin" "$build/ctr-pal.bin"
   return 0
 }
 

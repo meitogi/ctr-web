@@ -15,7 +15,8 @@
   import RoomPlayers from './RoomPlayers.svelte'
   import WhoPlays from './WhoPlays.svelte'
   import { browserOf, issueUrl, modeOf } from './lib/report.js'
-  import { NAME_LEN } from './lib/settings.js'
+  import { browserLanguage } from './lib/language.js'
+  import { LANGUAGE_CHOICES, NAME_LEN } from './lib/settings.js'
   import { LANG, T } from './lib/strings.js'
   import { ui } from './state.svelte.js'
   import { live, settings } from './store.js'
@@ -67,6 +68,16 @@
   const pickAnother = () => document.getElementById('disc-input')?.click()
   // « Unlock everything » changed while the game runs : the game keeps the value it started with
   // (lib/input-hook.js unlockAll) — Restart now, or Later (kept for the next start)
+  // the game's language (lib/language.js) : read when the disc opens, so it applies at a restart
+  const hasPal = $derived(!!ui.discs?.some((d) => d.region === 'pal'))
+  const autoLanguage = $derived(hasPal ? browserLanguage(navigator.languages) : 'en')
+  function setLanguage(choice) {
+    settings.patch({ gameLanguage: choice })
+    const wanted = choice === 'auto' ? autoLanguage : choice
+    if (ui.phase === 'running' && ui.disc?.language && wanted !== ui.disc.language) {
+      ui.confirm = { text: T.languageRestart, action: T.restartNow, cancelLabel: T.later, run: restartGame }
+    }
+  }
   function setUnlock(on) {
     settings.patch({ unlockAll: on })
     const started = globalThis.Module?.ctrInput?.unlockAll?.()
@@ -144,9 +155,18 @@
           <input id="ctr-unlock-all" type="checkbox" role="switch" class="switch" checked={s.unlockAll} onchange={(e) => setUnlock(e.currentTarget.checked)} />
         </label>
         <div class="label">{T.gameData}</div>
-        <div class="setrow">
-          <span>{ui.disc ? T.found(ui.disc.serial.replace('_', '-').replace('.', '')) : T.discNone}{#if ui.disc?.size}<small>{T.discSize(mb(ui.disc.size))}</small>{/if}</span>
+        {#each ui.discs ?? (ui.disc ? [ui.disc] : [null]) as d}
+          <div class="setrow">
+            <span>{d ? T.found(d.serial.replace('_', '-').replace('.', '')) : T.discNone}{#if d?.size}<small>{T.discSize(mb(d.size))}</small>{/if}</span>
+          </div>
+        {/each}
+        <div class="label">{T.gameLanguage}</div>
+        <div id="ctr-game-language" class="seg small" role="radiogroup" aria-label={T.gameLanguage}>
+          {#each LANGUAGE_CHOICES as c}
+            <button type="button" role="radio" data-lang={c} aria-checked={s.gameLanguage === c} class:on={s.gameLanguage === c} onclick={() => setLanguage(c)}>{c === 'auto' ? T.gameLanguageAuto(T.gameLanguages[autoLanguage]) : T.gameLanguages[c]}</button>
+          {/each}
         </div>
+        <p class="help">{T.gameLanguageHelp(hasPal)}</p>
         <div class="actions">
           <button type="button" class="btn" onclick={pickAnother}>{T.discChange}</button>
           <button type="button" id="forget-disc" class="btn danger" disabled={!ui.disc} onclick={forgetStoredDisc}>{T.discForget}</button>
@@ -164,6 +184,10 @@
 </aside>
 
 <style>
+  /* the language choice : TouchSettings.svelte's segments, wrapped (seven choices) */
+  .seg { display: flex; flex-wrap: wrap; padding: 4px; border-radius: 12px; gap: 4px; background: rgba(255, 255, 255, 0.06); }
+  .seg button { flex: 1 1 28%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 9px; background: none; font-weight: 600; font-size: 13px; cursor: pointer; color: var(--ink-dim); }
+  .seg button.on { background: #fff; color: #111; }
   aside {
     position: fixed; top: 0; right: 0; bottom: 0; width: var(--sidebar-width); max-width: 100vw; z-index: 20;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;

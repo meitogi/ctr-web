@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling modules under `python3 -I`
 
+import hwl as hwl_view  # noqa: E402
 import lng  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -246,6 +247,7 @@ def main(argv):
 		"xa_map_us_to_pal": None,
 		"voice_map_us_to_pal": voice_map(ut, pt),
 		"hwl": hwl_compare(os.path.join(us_out, "disc", "SOUNDS", "KART.HWL"), os.path.join(pal_out, "disc", "SOUNDS", "KART.HWL")),
+		"hwl_view": hwl_view.view(read_bytes(os.path.join(us_out, "disc", "SOUNDS", "KART.HWL")), read_bytes(os.path.join(pal_out, "disc", "SOUNDS", "KART.HWL"))),
 		"str": {"us": str_frames(os.path.join(us_out, "disc", "TEST.STR")), "pal": str_frames(os.path.join(pal_out, "disc", "TEST.STR"))},
 	}
 	result["xa_map_us_to_pal"] = xa_map(result["xnf"]["us"]["ENG"], result["xnf"]["pal"]["ENG"])
@@ -290,6 +292,12 @@ def main(argv):
 	print(f"\n## voiceData (GAME voice lines)\n\nUS {v['us_shape']} PAL {v['pal_shape']} ; voiceID US {v['us_voiceID']} PAL {v['pal_voiceID']} ; US ids without a PAL line : {none}")
 	h = result["hwl"]
 	print(f"\n## KART.HWL\n\nUS {h['us']['numOtherFX']} OtherFX / {h['us']['numBanks']} banks / {h['us']['numSequences']} seq ; PAL {h['pal']['numOtherFX']} / {h['pal']['numBanks']} / {h['pal']['numSequences']} ; OtherFX ops {h['otherfx_ops']} ; EngineFX same {h['engine_same']}")
+	v = result["hwl_view"]
+	print(f"\nSample map : conflicts {v['sample_conflicts'] or 'none'}, US samples unmatched {v['us_samples_unmatched'] or 'none'}\n")
+	print("| language | OtherFX sample mismatches | English field mismatches | banks from PAL | banks assembled |\n|---|---|---|---|---|")
+	for code, r in v["languages"].items():
+		built = [n for n, b in enumerate(r["banks"]) if "samples" in b]
+		print(f"| {code} | {len(r['fx_sample_mismatch'])} | {len(r['fx_field_mismatch'])} | {len(r['banks']) - len(built)} | {built} |")
 	print(f"\n## STR\n\nUS {result['str']['us']} ; PAL {result['str']['pal']}")
 	return 0
 

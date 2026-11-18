@@ -19,6 +19,7 @@ import App from './App.svelte'
 import './app.css'
 import { findCachedDisc, forgetDisc, probeDisc, storeDiscStream } from '../../disc.js'
 import { resolveDisc } from './lib/discsource.js'
+import { chooseGame } from './lib/language.js'
 import { guestInput } from './lib/guest-input.js'
 import { createInputHook } from './lib/input-hook.js'
 import { createTouchPad } from './lib/touch/pad.js'
@@ -76,6 +77,43 @@ function bootGame(serial) {
   setTimeout(done, 400)
 }
 
+// The discs kept in this browser (a US one, a PAL one, or both), each checked again ; a bad image is
+// removed (not one the storage failed to read : it may be whole). `failure` : the first refusal.
+async function keptDiscs() {
+  const kept = {}
+  let failure = null
+  for (const region of ['us', 'pal']) {
+    const file = await findCachedDisc(region)
+    if (!file) continue
+    let probe
+    try {
+      probe = await probeDisc(file)
+    } catch (e) {
+      // the stored disc could not be read (the browser's storage failing) : said, and kept — it may be
+      // whole (the page stayed on « Checking… » for good before ; session 45b's fault disc-read)
+      probe = { ok: false, reason: 'read', message: String(e?.message ?? e) }
+    }
+    // a disc kept under the other region's name (put there by hand) still counts, as what it is
+    if (probe.ok) kept[probe.region] ??= { file, serial: probe.serial, size: file.size }
+    else {
+      failure ??= probe
+      if (probe.reason !== 'read') await forgetDisc(region)
+    }
+  }
+  return { kept, failure }
+}
+
+// The disc the game reads and its language (lib/language.js) : what platform/web_disc_view.c
+// takes when the game opens the disc.
+function useDiscs(kept) {
+  const { language, region } = chooseGame(settings.get().gameLanguage, kept, navigator.languages)
+  const disc = kept[region]
+  globalThis.__ctrDisc = disc.file
+  globalThis.__ctrLang = language
+  ui.disc = { serial: disc.serial, size: disc.size, region, language }
+  ui.discs = ['us', 'pal'].filter((r) => kept[r]).map((r) => ({ region: r, serial: kept[r].serial, size: kept[r].size }))
+}
+
 async function storeAndBoot(found, { reload }) {
   ui.phase = 'preparing'
   ui.error = ''
@@ -85,7 +123,7 @@ async function storeAndBoot(found, { reload }) {
   try {
     stored = await storeDiscStream(await found.open(), found.size, (written, total) => {
       ui.progress = { ...ui.progress, written, total }
-    })
+    }, found.region)
   } catch (e) {
     ui.progress = null
     ui.phase = reload ? 'running' : 'boot'
@@ -99,21 +137,22 @@ async function storeAndBoot(found, { reload }) {
   // what was written is checked again before anything boots from it ; a bad image is deleted
   const probe = await probeDisc(stored)
   if (!probe.ok) {
-    await forgetDisc()
+    await forgetDisc(found.region)
     ui.progress = null
     ui.phase = 'boot'
     ui.error = errorText(T, probe)
     return
   }
-  ui.disc = { serial: probe.serial, size: stored.size }
   install.keep()
   if (reload) {
     location.reload()
     return
   }
+  const { kept } = await keptDiscs()
+  kept[found.region] ??= { file: stored, serial: probe.serial, size: stored.size }
+  useDiscs(kept)
   ui.progress = null
-  globalThis.__ctrDisc = stored
-  bootGame(probe.serial)
+  bootGame(ui.disc.serial)
 }
 
 /** A file dropped or picked : checked, then stored and booted (or, over a running game, confirmed). */
@@ -134,8 +173,9 @@ export async function handleFile(file) {
     return
   }
   if (running) {
+    const serial = found.serial.replace('_', '-').replace('.', '')
     ui.confirm = {
-      text: T.replaceAsk(found.serial.replace('_', '-').replace('.', '')),
+      text: ui.discs?.some((d) => d.region === found.region) || !ui.discs ? T.replaceAsk(serial) : T.addAsk(serial),
       action: T.replace,
       run: () => storeAndBoot(found, { reload: true }),
     }
@@ -227,33 +267,17 @@ mount(App, { target: document.getElementById('ctr-ui'), props: { input, touch, h
     return
   }
   ui.status = T.checkingSaved
-  const cached = await findCachedDisc()
-  if (!cached) {
+  const { kept, failure } = await keptDiscs()
+  if (!kept.us && !kept.pal) {
+    if (failure) ui.error = errorText(T, failure)
     ui.phase = 'boot'
     ui.status = ''
-    return
-  }
-  ui.status = T.checking(cached.name || 'ctr-u.bin')
-  let probe
-  try {
-    probe = await probeDisc(cached)
-  } catch (e) {
-    // the stored disc could not be read (the browser's storage failing) : said, and kept — it may be
-    // whole (the page stayed on « Checking… » for good before ; session 45b's fault disc-read)
-    probe = { ok: false, reason: 'read', message: String(e?.message ?? e) }
-  }
-  if (!probe.ok) {
-    ui.error = errorText(T, probe)
-    ui.phase = 'boot'
-    ui.status = ''
-    if (probe.reason !== 'read') await forgetDisc()
     return
   }
   // the boot screen stays : the game starts on the player's press (Boot.svelte, App.svelte), which
   // also lets the page's audio start with sound
-  ui.disc = { serial: probe.serial, size: cached.size }
+  useDiscs(kept)
   install.keep()
-  globalThis.__ctrDisc = cached
   ui.phase = 'ready'
   ui.status = ''
   // the second window of Settings › Dev (debug) : in the room already, nobody to press

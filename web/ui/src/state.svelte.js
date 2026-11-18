@@ -39,6 +39,8 @@ export const ui = $state({
   players: [],
   // the stored disc : { serial, size } or null
   disc: null,
+  // the discs kept in this browser : [{ region, serial, size }] (main.js useDiscs)
+  discs: null,
   // the Controls tab is waiting for a key / button : { device: 'keyboard'|'gamepad', button }
   listening: null,
   notice: '',

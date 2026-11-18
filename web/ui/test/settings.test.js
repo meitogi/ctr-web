@@ -16,7 +16,7 @@ const TOUCH_DEFAULTS = { autoStart: true, touchMode: 'auto', touchLayout: 'e', t
 test('defaults on an empty storage : a random name, drawn once and stored', () => {
   const storage = memory()
   const s = createSettings(storage, { random: () => 0 }).get()
-  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, unlockAll: true, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE, ...TOUCH_DEFAULTS })
+  assert.deepEqual(s, { name: NAMES[0], volume: DEFAULT_VOLUME, muted: false, unlockAll: true, keyboard: DEFAULT_KEYBOARD, gamepad: DEFAULT_GAMEPAD, duo: false, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight: DEFAULT_KEYBOARD_RIGHT, device: DEFAULT_DEVICE, ...TOUCH_DEFAULTS, gameLanguage: 'auto' })
   assert.equal(storage.map.get(KEYS.name), NAMES[0]) // Online reads this key
   assert.equal(createSettings(storage, { random: () => 0.99 }).get().name, NAMES[0]) // not drawn again
 })
@@ -54,12 +54,15 @@ test('round trip : every field survives a reload of the page', () => {
   const a = createSettings(storage)
   const keyboard = bind(DEFAULT_KEYBOARD, 'cross', 22)
   const keyboardRight = bind(DEFAULT_KEYBOARD_RIGHT, 'start', 42)
-  const touch = { autoStart: false, touchMode: 'minimal', touchLayout: 'c', touchHold: false, touchHoldMs: 1200, touchSize: 'l', touchSlideMs: 0, touchRockPx: 14, touchSlideHoldMs: 800, touchSteer: 'high', touchCue: false, touchRetapMs: 0, touchAutoBoost: false, touchBuffer: false, touchSound: false, touchCustom: null, touchTutorial: 'seen' }
+  const touch = { autoStart: false, touchMode: 'minimal', touchLayout: 'c', touchHold: false, touchHoldMs: 1200, touchSize: 'l', touchSlideMs: 0, touchRockPx: 14, touchSlideHoldMs: 800, touchSteer: 'high', touchCue: false, touchRetapMs: 0, touchAutoBoost: false, touchBuffer: false, touchSound: false, touchCustom: null, touchTutorial: 'seen', gameLanguage: 'fr' }
   a.patch({ name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, duo: true, keyboardRight, ...touch })
   const b = createSettings(storage).get()
   assert.deepEqual(b, { name: 'Crash', volume: 0.35, muted: true, unlockAll: false, keyboard, gamepad: DEFAULT_GAMEPAD, duo: true, keyboardLeft: DEFAULT_KEYBOARD_LEFT, keyboardRight, device: DEFAULT_DEVICE, ...touch })
   assert.equal(storage.map.has(KEYS.keyboardLeft), false)
   assert.equal(storage.map.has(KEYS.gamepad), false) // defaults are not written
+  a.patch({ gameLanguage: 'klingon' })
+  assert.equal(createSettings(storage).get().gameLanguage, 'auto')
+  assert.equal(storage.map.has(KEYS.gameLanguage), false)
 })
 
 test('the name : NAME_LEN 9, printable ASCII, subscribers see the cleaned value', () => {

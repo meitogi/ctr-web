@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { checkRawSectorHeader, probeDisc } from '../disc.js';
+import { PAL_SERIAL } from '../disc.js';
 import { CNF_LBA, EXPECTED_SERIAL, ROOT_LBA, buildDisc, formDataOffset, writeDirRecord } from './fixtures.js';
 
 const RAW_SECTOR_SIZE = 2352;
@@ -27,7 +28,20 @@ test('checkRawSectorHeader rejects a corrupt sync pattern', () => {
 
 test('probeDisc accepts a valid synthetic NTSC-U disc', async () => {
   const result = await probeDisc(buildDisc());
-  assert.deepEqual(result, { ok: true, serial: EXPECTED_SERIAL });
+  assert.deepEqual(result, { ok: true, serial: EXPECTED_SERIAL, region: 'us' });
+});
+
+test('probeDisc accepts the PAL disc (SCES-02105), region detected from SYSTEM.CNF', async () => {
+  const result = await probeDisc(buildDisc({ serial: PAL_SERIAL, name: 'Crash Team Racing (Europe).bin' }));
+  assert.deepEqual(result, { ok: true, serial: PAL_SERIAL, region: 'pal' });
+});
+
+test('probeDisc rejects a cooked .iso of the PAL disc too', async () => {
+  const file = buildDisc({ serial: PAL_SERIAL });
+  const cooked = new File([await file.arrayBuffer().then((b) => b.slice(0, file.size - 304))], 'ctr-pal.iso');
+  const result = await probeDisc(cooked);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'size');
 });
 
 test('probeDisc rejects a size that is not a multiple of 2352 (cooked .iso)', async () => {
@@ -46,7 +60,7 @@ test('probeDisc rejects a bad raw-sector sync pattern', async () => {
   assert.equal(result.reason, 'format');
 });
 
-test('probeDisc rejects a PAL serial', async () => {
+test('probeDisc rejects another serial (another game, another release)', async () => {
   const result = await probeDisc(buildDisc({ serial: 'SCES_123.45' }));
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'region');

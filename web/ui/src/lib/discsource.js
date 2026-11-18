@@ -1,9 +1,10 @@
 // What the player dropped → the disc image to store : a raw .bin as is, or the .bin inside a .zip.
 // Every candidate goes through the same probeDisc (web/disc.js : raw MODE2/2352 size, sector
-// sync, NTSC-U serial in SYSTEM.CNF) before a byte is copied.
+// sync, an NTSC-U or PAL serial in SYSTEM.CNF) before a byte is copied.
 //
 // In a zip : one .bin → that one (a .cue beside it is ignored) ; several → the first, largest
-// first, that probes NTSC-U ; none → 'zip-no-bin'. A refused candidate gives its own reason
+// first, that probes, an NTSC-U one before a PAL one (the other is dropped on its own) ; none →
+// 'zip-no-bin'. A refused candidate gives its own reason
 // (region, size…) when nothing else passes.
 import { ZipError, entryView, openEntry, readZipDirectory } from './zip.js'
 
@@ -18,15 +19,15 @@ async function looksLikeZip(file) {
 
 /**
  * @param {File|Blob} file - what was dropped or picked
- * @param {(f: Blob) => Promise<{ok: boolean, reason?: string, message?: string, serial?: string}>} probeDisc
- * @returns {Promise<{ok: true, kind: 'bin'|'zip', serial: string, name: string, size: number, source?: string, open: () => Promise<ReadableStream<Uint8Array>>}
+ * @param {(f: Blob) => Promise<{ok: boolean, reason?: string, message?: string, serial?: string, region?: 'us'|'pal'}>} probeDisc
+ * @returns {Promise<{ok: true, kind: 'bin'|'zip', serial: string, region: 'us'|'pal', name: string, size: number, source?: string, open: () => Promise<ReadableStream<Uint8Array>>}
  *                 | {ok: false, reason: string, message: string, serial?: string}>}
  */
 export async function resolveDisc(file, probeDisc) {
   if (!(await looksLikeZip(file))) {
     const probe = await probeDisc(file)
     if (!probe.ok) return probe
-    return { ok: true, kind: 'bin', serial: probe.serial, name: file.name, size: file.size, open: async () => file.stream() }
+    return { ok: true, kind: 'bin', serial: probe.serial, region: probe.region, name: file.name, size: file.size, open: async () => file.stream() }
   }
   let entries
   try {
@@ -38,16 +39,20 @@ export async function resolveDisc(file, probeDisc) {
   const bins = entries.filter((e) => !e.directory && isBin(e.name)).sort((a, b) => b.size - a.size)
   if (!bins.length) return { ok: false, reason: 'zip-no-bin', message: 'There is no .bin disc image in this archive.' }
   let firstFailure = null
+  let pal = null
   for (const entry of bins) {
     let view
     try {
       view = await entryView(file, entry)
       const probe = await probeDisc(view)
       if (probe.ok) {
-        return {
-          ok: true, kind: 'zip', serial: probe.serial, name: view.name, size: entry.size, source: file.name,
+        const found = {
+          ok: true, kind: 'zip', serial: probe.serial, region: probe.region, name: view.name, size: entry.size, source: file.name,
           open: () => openEntry(file, entry),
         }
+        if (probe.region === 'us') return found
+        pal ??= found
+        continue
       }
       firstFailure ??= probe
     } catch (e) {
@@ -57,5 +62,5 @@ export async function resolveDisc(file, probeDisc) {
       view?.close?.()
     }
   }
-  return firstFailure
+  return pal ?? firstFailure
 }
