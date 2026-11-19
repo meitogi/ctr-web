@@ -12,7 +12,7 @@
 //   Browser : the agent browser (`agent-browser up`), else ctr-browser.sh on the Mac.
 // Not a node --test file : `node --test web/test/*.test.js` never loads it.
 
-import { PLAYER, bootToMenu, brief, menuTo, open, recordWithSound, startAt, state, vblankAdvances } from './ctr.mjs'
+import { MAIN_MENU, PLAYER, bootToMenu, brief, menuTo, open, recordWithSound, startAt, state, vblankAdvances } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
@@ -47,7 +47,7 @@ export default async ctx => {
 			path = path.concat(await menuTo(ctx, 'ADVENTURE', dir => ctx.press(dir === 'down' ? 'ArrowDown' : 'ArrowUp')))
 		})
 		const s = await state(ctx)
-		if (s.menu.label !== 'ADVENTURE') throw new Error(`cursor on ${s.menu.label}`)
+		if (s.menu.id !== MAIN_MENU.ADVENTURE) throw new Error(`cursor on ${s.menu.label}`)
 		return path.join(' → ')
 	})
 

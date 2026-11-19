@@ -1,7 +1,7 @@
 // The bot's decisions (src/lib/autopilot.js), on a fake clock and a fake kart.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MAIN_MENU, createPicker, drive, inBootIntro, menuTo } from '../src/lib/autopilot.js'
+import { MAIN_MENU, MAIN_MENU_IDS, createPicker, drive, inBootIntro, menuTo, onMainMenu } from '../src/lib/autopilot.js'
 
 /** A clock that moves only when the code sleeps. */
 function clock() {
@@ -114,14 +114,32 @@ test('picker : after 3 refused Cross presses, moves again', async () => {
   assert.equal(r.log.at(-2), 'ArrowRight', `moved before the 4th : ${r.log.join(' ')}`)
 })
 
-test('menuTo : walks the rows to the label, checking each step', async () => {
+// A French main menu : the ids drive the walk, the labels are only along for the ride (visited).
+const FR_MAIN_MENU = ['AVENTURE', 'CONTRE LA MONTRE', 'ARCADE', 'VS.', 'BATAILLE', 'EN LIGNE', 'MEILLEURS SCORES', 'ALBUM']
+
+test('menuTo : walks the rows to the id, checking each step — a French menu', async () => {
   const c = clock()
   let row = 0
   const out = { press: async (k) => { row += k === 'ArrowDown' ? 1 : -1 } }
-  const read = async () => ({ menu: { row, label: MAIN_MENU[row] } })
-  const visited = await menuTo({ read, out, label: 'NETPLAY', rows: MAIN_MENU, settle: async () => {}, ...c })
-  assert.deepEqual(visited, MAIN_MENU.slice(0, 6))
-  await assert.rejects(menuTo({ read, out: { press: async () => {} }, label: 'ADVENTURE', rows: MAIN_MENU, settle: async () => {}, ...c }), /never left row 5/)
+  const read = async () => ({ menu: { row, id: MAIN_MENU_IDS[row], label: FR_MAIN_MENU[row] } })
+  const visited = await menuTo({ read, out, id: MAIN_MENU.NETPLAY, rows: MAIN_MENU_IDS, settle: async () => {}, ...c })
+  assert.deepEqual(visited, FR_MAIN_MENU.slice(0, 6))
+  await assert.rejects(menuTo({ read, out: { press: async () => {} }, id: MAIN_MENU.ADVENTURE, rows: MAIN_MENU_IDS, settle: async () => {}, ...c }), /never left row 5/)
+})
+
+test('onMainMenu : true on a French main-menu row, false on a submenu or the pause menu', () => {
+  assert.equal(onMainMenu({ screen: 'menu', menu: { input: true, id: MAIN_MENU['TIME TRIAL'], label: 'CONTRE LA MONTRE' } }), true)
+  // Adventure's own New/Load submenu (game/230/D230.c rowsAdventure, id 0x8d) : not a main-menu row
+  assert.equal(onMainMenu({ screen: 'menu', menu: { input: true, id: 0x8d, label: 'NOUVELLE' } }), false)
+  // the pause menu's QUIT row (game/zGlobal_DATA.c rowsArcadeRace, id 0x3) : not a main-menu row
+  assert.equal(onMainMenu({ screen: 'menu', menu: { input: true, id: 0x3, label: 'QUITTER' } }), false)
+  assert.equal(onMainMenu({ screen: 'menu', menu: { input: false, id: MAIN_MENU.ADVENTURE, label: 'AVENTURE' } }), false)
+  assert.equal(onMainMenu(null), false)
+})
+
+test('onMainMenu : true on the real bridge shape (__ctr.menu, platform/web_debug_bridge.c)', () => {
+  const s = { screen: 'menu', menu: { title: '', row: 1, label: 'TIME TRIAL', id: MAIN_MENU['TIME TRIAL'], titleId: -1, locked: false, state: 0, input: true } }
+  assert.equal(onMainMenu(s), true)
 })
 
 test('boot intro : the Naughty Dog crate and the title before its menu takes input, nothing after', () => {

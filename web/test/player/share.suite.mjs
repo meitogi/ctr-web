@@ -49,7 +49,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture } from '/opt/devcontainer/base/skills/visual-loop/scripts/cdp.mjs'
 import { makePlayer, pageScript } from '/opt/devcontainer/base/skills/visual-loop/lib/player.mjs'
-import { IPHONE_MINI, PLAYER, fingers, menuTo, phone, startAt, state, until } from './ctr.mjs'
+import { IPHONE_MINI, MAIN_MENU, PLAYER, fingers, menuTo, phone, startAt, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8091/index.html',
@@ -333,7 +333,7 @@ export default async ctx => {
 					await ctx.frames(15)
 				}
 			}
-			const select = await until(ctx, 'the character select, the guest in it', s => s.charSelect ? s.charSelect.players === 2 : s.menu?.label !== 'VS.', { timeout: 8000 })
+			const select = await until(ctx, 'the character select, the guest in it', s => s.charSelect ? s.charSelect.players === 2 : s.menu?.id !== MAIN_MENU['VS.'], { timeout: 8000 })
 			await sleep(1500)
 
 			// The guest moves P2's cursor : keyboard Right, then the virtual pad's d-pad

@@ -91,8 +91,10 @@ async function gesture(ctx) {
 	for (const type of ['mousePressed', 'mouseReleased']) await ctx.conn.send('Input.dispatchMouseEvent', { type, x: at.x, y: at.y, button: 'left', clickCount: 1 }, ctx.sid)
 }
 
-// The main menu in any language : ctr.mjs bootToMenu knows it by its English rows (autopilot.js
-// MAIN_MENU), so here by the level, the mode and the untitled menu taking input.
+// autopilot.js's onMainMenu is id-based (language-free) too, but doesn't exclude the moment
+// ADVENTURE_MODE sets while the menu still reads idle (ctr.mjs bootToMenu's own `idle` wrapper
+// applies that guard for its callers) ; toMenu() below presses through that same moment, so this
+// suite keeps its own check, by the level, the mode and the untitled menu taking input.
 const onMenu = s => s?.screen === 'menu' && s.levelID === 39 && !!s.menu?.input && s.menu.title === '' && /MAIN_MENU/.test(String(s.mode ?? '')) && !/ADVENTURE_MODE/.test(String(s.mode ?? ''))
 
 /** Skips the intro (Cross, Triangle out of a press that opened Adventure) to the main menu. */
@@ -284,25 +286,30 @@ const HUD_BOXES = {
 	icons: [0.03, 0.25, 0.14, 0.77], position: [0.03, 0.75, 0.22, 0.99],
 }
 
-/** Quits a race through the pause menu's « QUIT », « YES » (an English game), back to the main menu. */
+// game/zGlobal_DATA.c rowsArcadeRace (row 4, QUIT) / rowsQuit ; include/namespace_Lng.h LNG_QUIT ;
+// the question's own title reuses the same id (menuQuit.stringIndexTitle = LNG_QUIT)
+const LNG_QUIT = 0x3
+const LNG_YES = 0xd2
+
+/** Quits a race through the pause menu's QUIT row, then YES, back to the main menu. */
 async function quitRace(ctx) {
 	await ctx.press('Enter') // Start
 	let s = await until(ctx, 'the pause menu', s => !!s.menu?.input, { timeout: 10_000 })
-	for (let i = 0; i < 8 && !/^QUIT/.test(s.menu.label ?? ''); i++) {
+	for (let i = 0; i < 8 && s.menu.id !== LNG_QUIT; i++) {
 		await ctx.press('ArrowDown')
 		await ctx.frames(8)
 		s = await state(ctx)
 	}
-	if (!/^QUIT/.test(s.menu.label ?? '')) throw new Error(`no QUIT row in the pause menu (${JSON.stringify(s.menu)})`)
+	if (s.menu.id !== LNG_QUIT) throw new Error(`no QUIT row in the pause menu (${JSON.stringify(s.menu)})`)
 	await ctx.press('c')
 	// « QUIT » asks : YES / NO, on NO
-	s = await until(ctx, 'the QUIT question', s => s.menu?.title === 'QUIT' && !!s.menu.input, { timeout: 10_000 })
-	for (let i = 0; i < 4 && s.menu.label !== 'YES'; i++) {
+	s = await until(ctx, 'the QUIT question', s => s.menu?.titleId === LNG_QUIT && !!s.menu.input, { timeout: 10_000 })
+	for (let i = 0; i < 4 && s.menu.id !== LNG_YES; i++) {
 		await ctx.press('ArrowUp')
 		await ctx.frames(8)
 		s = await state(ctx)
 	}
-	if (s.menu.label !== 'YES') throw new Error(`no YES under QUIT (${JSON.stringify(s.menu)})`)
+	if (s.menu.id !== LNG_YES) throw new Error(`no YES under QUIT (${JSON.stringify(s.menu)})`)
 	await ctx.press('c')
 	await until(ctx, 'the race left', s => !/PAUSE/.test(String(s.mode)), { timeout: 30_000 })
 	return toMenu(ctx)

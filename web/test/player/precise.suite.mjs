@@ -89,14 +89,18 @@ async function onCard(ctx, name, query = '') {
 	return { what, card: await card(ctx), state: { ...s, unlocks: (await state(ctx)).unlocks } }
 }
 
+// game/230/D230.c rowsAdventure ; include/namespace_Lng.h LNG_NEW / LNG_MEMCARD_LOAD
+const LNG_NEW = 0x8d
+const LNG_LOAD = 0x8e
+
 /** ADVENTURE › LOAD › profile 1, by the pad, from the main menu : the hub's first frames. */
 async function adventureLoad(ctx) {
 	await ctx.pad(0).connect()
 	await sleep(500)
 	await ctx.pad(0).press('cross')
-	await until(ctx, 'NEW / LOAD', s => s.sub?.label === 'NEW', { timeout: 10_000 })
+	await until(ctx, 'NEW / LOAD', s => s.sub?.id === LNG_NEW, { timeout: 10_000 })
 	await ctx.pad(0).press('down')
-	await until(ctx, 'LOAD', s => s.sub?.label === 'LOAD', { timeout: 5000 })
+	await until(ctx, 'LOAD', s => s.sub?.id === LNG_LOAD, { timeout: 5000 })
 	await ctx.pad(0).press('cross')
 	await sleep(2500)
 	await ctx.pad(0).press('cross')

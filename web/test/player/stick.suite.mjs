@@ -5,7 +5,7 @@
 // RUN : as menu.suite.mjs — bash plans/ctr-native-web/tools/play.sh stick <session> <port>
 // Not a node --test file.
 
-import { MAIN_MENU, PLAYER, bootToMenu, menuTo, recordWithSound, state, until } from './ctr.mjs'
+import { MAIN_MENU, PLAYER, bootToMenu, menuTo, onMainMenu, recordWithSound, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
@@ -29,7 +29,7 @@ export default async ctx => {
 			path = path.concat(await menuTo(ctx, 'ADVENTURE', dir => flick(ctx, dir)))
 		})
 		const s = await state(ctx)
-		if (s.menu.label !== 'ADVENTURE') throw new Error(`cursor on ${s.menu.label}`)
+		if (s.menu.id !== MAIN_MENU.ADVENTURE) throw new Error(`cursor on ${s.menu.label}`)
 		return path.join(' → ')
 	})
 
@@ -47,7 +47,7 @@ export default async ctx => {
 		const moved = await state(ctx)
 		await ctx.frames(8)
 		await ctx.pad(0).press('triangle')
-		await until(ctx, 'back on the main menu', n => n.sub == null && n.menu?.input && MAIN_MENU.includes(n.menu.label), { timeout: 8000 })
+		await until(ctx, 'back on the main menu', n => n.sub == null && onMainMenu(n), { timeout: 8000 })
 		return `${JSON.stringify(sub.sub.title)} : ${JSON.stringify(sub.sub.label)} → ${JSON.stringify(moved.sub.label)}`
 	})
 

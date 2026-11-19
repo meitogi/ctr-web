@@ -37,7 +37,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { MAIN_MENU, bootFast, menuTo, open, runDirOf, say, shot, startAt, state, turbo, until } from './ctr.mjs'
+import { bootFast, menuTo, open, runDirOf, say, shot, startAt, state, turbo, until } from './ctr.mjs'
 import { guestWindow, settled, share, waitIn } from './share.suite.mjs'
 
 export const meta = { url: 'http://localhost:8091/index.html', login: false, player: { gamepad: true, pressFrames: 8 } }
@@ -367,7 +367,7 @@ export default async ctx => {
 			await ctx.js("document.getElementById('ctr-share-btn').click(); return true")
 			const off = await waitIn(ctx.js, 'Share off', "(() => { const s = window.__ctrShare.state(); return s.sharing ? null : s })()", 10_000)
 			const gone = await waitIn(g.js, 'the guest told', "(() => { const s = window.__ctrShareGuest.state(); return s.state === 'closed' ? s : null })()", 20_000)
-			return `link shown and copied (« ${copy.button} », ${copy.toasts.join(' | ') || 'no toast'}) · guest P${gs.slot + 1} joined on the main menu (${MAIN_MENU[on.menu.row]}), ${frames} frames of it decoded, its Down read by the game (pad word ${pad.buttons.toString(16)}) · pressed again : sharing ${off.sharing}, guest ${gone.state} (${gone.code})`
+			return `link shown and copied (« ${copy.button} », ${copy.toasts.join(' | ') || 'no toast'}) · guest P${gs.slot + 1} joined on the main menu (${on.menu.label}), ${frames} frames of it decoded, its Down read by the game (pad word ${pad.buttons.toString(16)}) · pressed again : sharing ${off.sharing}, guest ${gone.state} (${gone.code})`
 		} finally {
 			await g.close()
 		}

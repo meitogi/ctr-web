@@ -9,14 +9,14 @@ import { execSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as autopilot from '../../ui/src/lib/autopilot.js'
-import { MAIN_MENU, onMainMenu, menuTo as autoMenuTo } from '../../ui/src/lib/autopilot.js'
+import { MAIN_MENU, MAIN_MENU_IDS, onMainMenu, menuTo as autoMenuTo } from '../../ui/src/lib/autopilot.js'
 
 // The suites' page options. pressFrames : a press must outlast one game frame
 // (30 fps) on any display — 8 rAF = 67 ms at 120 Hz, 133 ms at 60 Hz.
 export const PLAYER = { gamepad: true, pressFrames: 8 }
 
 // MAIN_MENU (the main menu's rows) and onMainMenu : web/ui/src/lib/autopilot.js's, shared with the page
-export { MAIN_MENU, onMainMenu }
+export { MAIN_MENU, MAIN_MENU_IDS, onMainMenu }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
@@ -126,8 +126,8 @@ export async function menuTo(ctx, label, step) {
 	return autoMenuTo({
 		read: () => state(ctx),
 		out: { press: key => step(key === 'ArrowDown' ? 'down' : 'up') },
-		label,
-		rows: MAIN_MENU,
+		id: MAIN_MENU[label],
+		rows: MAIN_MENU_IDS,
 		settle: () => ctx.frames(8),
 	})
 }

@@ -26,7 +26,12 @@
 //                (bit 0x8000 = MENU_ROW_LOCKED), state = the menu's flags,
 //                input = !(state & DISABLE_INPUT_ALLOW_FUNCPTRS) : the main
 //                menu is active during the title intro with input disabled,
-//                MM_Title.c clears the flag at TITLE_INTRO_MENU_READY_FRAME
+//                MM_Title.c clears the flag at TITLE_INTRO_MENU_READY_FRAME ;
+//                id = rows[rowSelected].stringIndex & MENU_ROW_LNG_MASK (the
+//                row's LNG string id, language-independent), titleId =
+//                stringIndexTitle masked the same way, -1 for
+//                RECTMENU_STRING_NONE (no title), locked = the row's
+//                MENU_ROW_LOCKED bit
 //   kart         gGT->drivers[0] (player 1), null when no driver :
 //                lap      lapIndex, 0 on the first lap, ++ in PlayLevel.c
 //                speed    speedApprox, signed, > 0 forward (VehFrame.c :
@@ -129,7 +134,8 @@
 
 EM_JS(void, WebDebugBridge_PushJS,
       (int vblank, int gameMode1, int gameMode2, int levelID, int numLaps, int lights, int raceTime,
-       int hasMenu, const char *menuTitle, int menuRow, const char *menuLabel, int menuState,
+       int hasMenu, const char *menuTitle, int menuRow, const char *menuLabel, int menuId, int menuTitleId,
+       int menuLocked, int menuState,
        int hasKart, int lap, int speed, int rank, int finished, int posX, int posY, int posZ, int angle,
        int checkpoint, int targetX, int targetZ, int toFinish),
 {
@@ -177,7 +183,7 @@ EM_JS(void, WebDebugBridge_PushJS,
 		screen, mode, gameMode1: m1, gameMode2: gameMode2 >>> 0,
 		levelID, numLaps, lights, raceTime,
 		track: globalThis.__ctrTrack ?? null,
-		menu: hasMenu ? { title: str(menuTitle), row: menuRow, label: str(menuLabel), state: menuState >>> 0, input: !(menuState & 0x20) } : null,
+		menu: hasMenu ? { title: str(menuTitle), row: menuRow, label: str(menuLabel), id: menuId, titleId: menuTitleId, locked: !!menuLocked, state: menuState >>> 0, input: !(menuState & 0x20) } : null,
 		kart: hasKart ? {
 			lap, speed, rank, finished: !!finished,
 			pos: { x: posX, y: posY, z: posZ }, angle,
@@ -211,14 +217,15 @@ EM_JS(void, WebDebugBridge_UnlocksJS, (u32 w0, u32 w1, int open), {
 
 // Runs right after WebDebugBridge_PushJS, on the object it just wrote.
 EM_JS(void, WebDebugBridge_PushMoreJS,
-      (int hasSub, const char *subTitle, int subRow, const char *subLabel, int subState, int players, const s32 *karts, int charSelect,
+      (int hasSub, const char *subTitle, int subRow, const char *subLabel, int subId, int subTitleId,
+       int subLocked, int subState, int players, const s32 *karts, int charSelect,
        int poolThread, int poolSmall),
 {
 	const c = globalThis.__ctr;
 	if (!c) return;
 	c.pools = { thread: poolThread, small: poolSmall };
 	const str = p => (p ? UTF8ToString(p) : null);
-	c.sub = hasSub ? { title: str(subTitle), row: subRow, label: str(subLabel), state: subState >>> 0, input: !(subState & 0x20) } : null;
+	c.sub = hasSub ? { title: str(subTitle), row: subRow, label: str(subLabel), id: subId, titleId: subTitleId, locked: !!subLocked, state: subState >>> 0, input: !(subState & 0x20) } : null;
 	c.players = players;
 	c.charSelect = charSelect < 0 ? null : { locked: charSelect & 0xf, players: (charSelect >> 4) & 7,
 		characters: Array.from({ length: (charSelect >> 4) & 7 }, (_, p) => (charSelect >> (8 + p * 4)) & 0xf) };
@@ -1156,6 +1163,9 @@ internal void WebDebugBridge_Publish(void)
 	const char *menuTitle = NULL;
 	const char *menuLabel = NULL;
 	int menuRow = -1;
+	int menuId = -1;
+	int menuTitleId = -1;
+	int menuLocked = 0;
 	int menuState = 0;
 	int checkpoint = -1;
 	int targetX = 0;
@@ -1189,11 +1199,14 @@ internal void WebDebugBridge_Publish(void)
 	if (menu != NULL)
 	{
 		menuTitle = WebDebugBridge_String(menu->stringIndexTitle);
+		menuTitleId = (menu->stringIndexTitle == RECTMENU_STRING_NONE) ? -1 : (menu->stringIndexTitle & MENU_ROW_LNG_MASK);
 		menuRow = menu->rowSelected;
 		menuState = menu->state;
 		if ((menu->rows != NULL) && (menuRow >= 0))
 		{
 			menuLabel = WebDebugBridge_String(menu->rows[menuRow].stringIndex);
+			menuId = menu->rows[menuRow].stringIndex & MENU_ROW_LNG_MASK;
+			menuLocked = (menu->rows[menuRow].stringIndex & MENU_ROW_LOCKED) != 0;
 		}
 	}
 
@@ -1204,7 +1217,8 @@ internal void WebDebugBridge_Publish(void)
 	}
 
 	WebDebugBridge_PushJS(VSync(-1), gGT->gameMode1, gGT->gameMode2, gGT->levelID, gGT->numLaps, gGT->trafficLightsTimer,
-	                      gGT->elapsedEventTime, menu != NULL, menuTitle, menuRow, menuLabel, menuState, d != NULL, d ? d->lapIndex : 0,
+	                      gGT->elapsedEventTime, menu != NULL, menuTitle, menuRow, menuLabel, menuId, menuTitleId, menuLocked,
+	                      menuState, d != NULL, d ? d->lapIndex : 0,
 	                      d ? d->speedApprox : 0, d ? d->driverRank : 0, d ? ((d->actionsFlagSet & ACTION_RACE_FINISHED) != 0) : 0,
 	                      d ? (d->posCurr.x >> 8) : 0, d ? (d->posCurr.y >> 8) : 0, d ? (d->posCurr.z >> 8) : 0, d ? (d->angle & 0xfff) : 0, checkpoint, targetX,
 	                      targetZ, d ? (int)d->distanceToFinish_curr : 0);
@@ -1213,6 +1227,9 @@ internal void WebDebugBridge_Publish(void)
 		struct RectMenu *sub = NULL;
 		const char *subTitle = NULL;
 		const char *subLabel = NULL;
+		int subId = -1;
+		int subTitleId = -1;
+		int subLocked = 0;
 		s32 karts[4 * 27];
 		int players = gGT->numPlyrCurrGame;
 
@@ -1224,9 +1241,12 @@ internal void WebDebugBridge_Publish(void)
 		if (sub != NULL)
 		{
 			subTitle = WebDebugBridge_String(sub->stringIndexTitle);
+			subTitleId = (sub->stringIndexTitle == RECTMENU_STRING_NONE) ? -1 : (sub->stringIndexTitle & MENU_ROW_LNG_MASK);
 			if ((sub->rows != NULL) && (sub->rowSelected >= 0))
 			{
 				subLabel = WebDebugBridge_String(sub->rows[sub->rowSelected].stringIndex);
+				subId = sub->rows[sub->rowSelected].stringIndex & MENU_ROW_LNG_MASK;
+				subLocked = (sub->rows[sub->rowSelected].stringIndex & MENU_ROW_LOCKED) != 0;
 			}
 		}
 		if (players > 4)
@@ -1294,7 +1314,8 @@ internal void WebDebugBridge_Publish(void)
 			for (int p = 0; p < 4; p++)
 				charSelect |= (data.characterIDs[p] & 0xf) << (8 + p * 4);
 		}
-		WebDebugBridge_PushMoreJS(sub != NULL, subTitle, sub ? sub->rowSelected : -1, subLabel, sub ? (int)sub->state : 0, players, karts,
+		WebDebugBridge_PushMoreJS(sub != NULL, subTitle, sub ? sub->rowSelected : -1, subLabel, subId, subTitleId, subLocked,
+		                          sub ? (int)sub->state : 0, players, karts,
 		                          charSelect,
 		                          WebDebugBridge_PoolFree(&gGT->JitPools.thread), WebDebugBridge_PoolFree(&gGT->JitPools.smallStack));
 		WebDebugBridge_UnlocksJS(GAME_PROGRESS.unlocks[0], GAME_PROGRESS.unlocks[1], WEB_UNLOCK_ALL_OPEN);

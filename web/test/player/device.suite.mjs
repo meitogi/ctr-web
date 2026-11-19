@@ -10,7 +10,7 @@
 // RUN : as menu.suite.mjs — bash plans/ctr-native-web/tools/play.sh device <session> <port>
 // (debug build : window.__ctr). Not a node --test file.
 
-import { MAIN_MENU, PLAYER, bootToMenu, menuTo, state, until } from './ctr.mjs'
+import { PLAYER, bootToMenu, menuTo, onMainMenu, state, until } from './ctr.mjs'
 
 export const meta = {
 	url: 'http://localhost:8093/index.html',
@@ -63,7 +63,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('DEVICE-KEYBOARD-ONLY', async () => {
-		await until(ctx, 'the main menu', s => s.menu?.input && MAIN_MENU.includes(s.menu.label), { timeout: 10_000 })
+		await until(ctx, 'the main menu', s => onMainMenu(s), { timeout: 10_000 })
 		await ctx.pad(0).connect()
 		await setDevice(ctx, 'keyboard')
 		try {
@@ -83,7 +83,7 @@ export default async ctx => {
 	})
 
 	await ctx.scenario('DEVICE-GAMEPAD-ONLY', async () => {
-		await until(ctx, 'the main menu', s => s.menu?.input && MAIN_MENU.includes(s.menu.label), { timeout: 10_000 })
+		await until(ctx, 'the main menu', s => onMainMenu(s), { timeout: 10_000 })
 		await ctx.pad(0).connect()
 		await setDevice(ctx, 'gamepad')
 		try {

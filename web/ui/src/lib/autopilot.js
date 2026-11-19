@@ -14,11 +14,18 @@ export const DOWN = 'ArrowDown'
 export const FIRE = 'v'
 export const CROSS = 'c'
 export const DIRS = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp']
-// Main menu rows (D230.rowsMainMenuBasic, game/230/D230.c), as the game spells them.
-// ONLINE : the CTR_ONLINE build's row (session 14) ; absent from the OFF build's menu
-export const MAIN_MENU = ['ADVENTURE', 'TIME TRIAL', 'ARCADE', 'VS.', 'BATTLE', 'NETPLAY', 'HIGH SCORE', 'SCRAPBOOK']
+// Main menu rows (D230.rowsMainMenuBasic / rowsMainMenuWithScrapbook, game/230/D230.c), by their
+// LNG string id (include/namespace_Lng.h) — language-independent, unlike the game's own spelling
+// of them — keyed by the English name for messages and as the callers' argument.
+// NETPLAY : the CTR_ONLINE build's row (ONLINE_LNG_ROW, session 14) ; absent from the OFF build's
+// menu, kept so Second Lap's merge (which takes the CTR_ONLINE build) still matches it.
+export const MAIN_MENU = { ADVENTURE: 0x4c, 'TIME TRIAL': 0x4d, ARCADE: 0x4e, 'VS.': 0x4f, BATTLE: 0x50, NETPLAY: 0x9a, 'HIGH SCORE': 0x51, SCRAPBOOK: 0x234 }
+// The canonical row order : a locked / absent row (NETPLAY off this build, SCRAPBOOK before its
+// unlock) never changes the relative order of the others, so this fixed table is menuTo's
+// direction source — not the live row number, which shifts when a row is missing.
+export const MAIN_MENU_IDS = Object.values(MAIN_MENU)
 /** True on the main menu taking input (any row selected). */
-export const onMainMenu = (s) => s?.screen === 'menu' && s.menu != null && s.menu.input && MAIN_MENU.includes(s.menu.label)
+export const onMainMenu = (s) => s?.screen === 'menu' && s.menu != null && s.menu.input && MAIN_MENU_IDS.includes(s.menu.id)
 // enum LevelID (include/namespace_Level.h)
 const MAIN_MENU_LEVEL = 39
 const NAUGHTY_DOG_CRATE = 41
@@ -241,25 +248,26 @@ export function createPicker({ out, now = Date.now, sleep = realSleep, random = 
 }
 
 /**
- * Moves a menu's cursor to the row labelled `label` (rows : the menu's labels in order),
- * pressing ArrowDown / ArrowUp and checking each step leaves the row. `settle()` waits for the
- * game to sample the release (8 rAF in the suites). Returns the rows visited.
+ * Moves a menu's cursor to the row whose LNG id is `id` (rows : the menu's ids in canonical
+ * order), pressing ArrowDown / ArrowUp and checking each step leaves the row. `settle()` waits
+ * for the game to sample the release (8 rAF in the suites). Returns the rows visited, as their
+ * live label (whatever language the game runs) — display only, never compared.
  */
-export async function menuTo({ read, out, label, rows, settle, now = Date.now, sleep = realSleep }) {
+export async function menuTo({ read, out, id, rows, settle, now = Date.now, sleep = realSleep }) {
   const visited = []
   for (let i = 0; i <= rows.length; i++) {
     const s = await read()
     visited.push(s.menu.label)
-    if (s.menu.label === label) return visited
-    const dir = rows.indexOf(s.menu.label) < rows.indexOf(label) ? 'ArrowDown' : 'ArrowUp'
+    if (s.menu.id === id) return visited
+    const dir = rows.indexOf(s.menu.id) < rows.indexOf(id) ? 'ArrowDown' : 'ArrowUp'
     const row = s.menu.row
     await out.press(dir)
     for (const end = now() + 3000; ; await sleep(50)) {
       const m = (await read())?.menu
       if (m && m.row !== row) break
-      if (now() > end) throw new Error(`the cursor never left row ${row} (${s.menu.label})`)
+      if (now() > end) throw new Error(`the cursor never left row ${row} (0x${s.menu.id?.toString(16)})`)
     }
     await settle()
   }
-  throw new Error(`never reached ${label} (visited ${visited.join(' → ')})`)
+  throw new Error(`never reached 0x${id.toString(16)} (visited ${visited.join(' → ')})`)
 }

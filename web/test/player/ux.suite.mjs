@@ -228,7 +228,7 @@ export default async ctx => {
 		if ((await state(ctx)).menu.row !== row) throw new Error('ArrowDown still moves the cursor after the remap')
 		const path = await menuTo(ctx, 'TIME TRIAL', dir => ctx.press(dir === 'down' ? 's' : 'ArrowUp'))
 		const s = await state(ctx)
-		if (s.menu.label !== 'TIME TRIAL') throw new Error(`cursor on ${s.menu.label}`)
+		if (s.menu.id !== MAIN_MENU['TIME TRIAL']) throw new Error(`cursor on ${s.menu.label}`)
 		await shot(ctx, 'remap-key-moved')
 		// back to the defaults through the panel's own button
 		await ctx.press('Escape')
@@ -380,7 +380,7 @@ export default async ctx => {
 		// the regular boot helper on a freshly loaded page
 		await open(ctx)
 		const s = await bootToMenu(ctx)
-		if (!MAIN_MENU.includes(s.menu.label)) throw new Error(brief(s))
+		if (!onMainMenu(s)) throw new Error(brief(s))
 		return brief(s)
 	})
 }
