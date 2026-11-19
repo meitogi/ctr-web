@@ -87,6 +87,13 @@ docker run -d --name ctr-relay -p 8787:8787 -e RELAY_KEY="$(openssl rand -base64
 
 or without Docker : `cd relay && npm ci && RELAY_KEY=… npm start`.
 
+**Version.** The relay has its own version, `version` in [package.json](package.json), answered by
+`GET /version`. The published image carries it as a tag (`ghcr.io/meitogi/ctr-relay:1.1.0`) beside
+`latest`. A change to the image (`relay.js`, `package.json`, the lockfile, the `Dockerfile`) bumps
+it in the same commit : `cd relay && npm version patch --no-git-tag-version` (`minor` for a new
+feature, `major` for a protocol change the pages must follow). A version is published once ; an
+unbumped change still updates `latest`, and the run says to bump.
+
 It listens on plain `ws://:8787`. Browsers need `wss://` : put it behind a
 reverse proxy ([deploy/](deploy/), next section), or give it a certificate with
 `TLS_CERT` / `TLS_KEY` and it serves `wss://` itself.

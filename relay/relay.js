@@ -18,6 +18,9 @@ import { createServer as createHttpsServer } from 'node:https';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 
+/** The relay's own version (package.json) : GET /version ; bumped with `npm version` (README.md). */
+export const VERSION = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+
 /** Close codes sent to a client, in the 4000–4999 application range. */
 export const CLOSE = {
   badHello: 4400, // malformed hello
@@ -132,6 +135,10 @@ export function createRelay({
       res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
       const live = { players: accepted, rooms: roomCount, peakPlayers: stats.peakSockets, peakRooms: stats.peakRooms, since: stats.since };
       return res.end(`${JSON.stringify(live)}\n`);
+    }
+    if (req.url === '/version') {
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return res.end(`${VERSION}\n`);
     }
     const ok = req.url === '/healthz';
     res.writeHead(ok ? 200 : 426, { 'content-type': 'text/plain' });

@@ -112,5 +112,7 @@ box, Share by one button and the local pads. What the project is and how to run 
   the four ; `platform/native_input.c` keeps a pad plugged later off a guest's seat.
 - `relay/` : the WebSocket relay for Share rooms ([relay/README.md](relay/README.md)). Its image
   (`ghcr.io/meitogi/ctr-relay`, `.github/workflows/relay-image.yml`) is published from here only,
-  for both editions : Second Lap has no relay-image workflow.
+  for both editions : Second Lap has no relay-image workflow. The relay has its own version
+  (`relay/package.json`) : a change to the image bumps it (`npm version patch|minor|major
+  --no-git-tag-version` in `relay/`), the game's tags do not rebuild it.
 - Match the surrounding style : tabs in C, the existing comment density and tone.

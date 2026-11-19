@@ -114,6 +114,13 @@ describe('open relay (no key)', () => {
     assert.equal(await a.closed, CLOSE.badHello);
   });
 
+  test('/version answers the package\'s version', async () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    const res = await fetch(`http://127.0.0.1:${relay.port}/version`);
+    assert.equal(res.status, 200);
+    assert.equal((await res.text()).trim(), pkg.version);
+  });
+
   test('/healthz answers 200, any other path 426', async () => {
     assert.equal((await fetch(`http://127.0.0.1:${relay.port}/healthz`)).status, 200);
     assert.equal((await fetch(`http://127.0.0.1:${relay.port}/`)).status, 426);
