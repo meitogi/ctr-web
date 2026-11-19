@@ -120,7 +120,9 @@
 //                for no driver.
 //   __ctr.disc   { region: 'us' | 'pal', language (web_disc_view.c), xa: the last XA file opened
 //                as the disc read it (XA/<language>/... for a PAL language), lng: { id: text } of
-//                the loaded LNG for ids 3 and 560 (560 : past PAL's inserted strings) }.
+//                the loaded LNG for ids 3 and 560 (560 : past PAL's inserted strings), band :
+//                { relocated : the PAL shared VRAM band is moved to the US rows, applied / refused :
+//                its byte patches so far } }.
 
 #include <emscripten.h>
 #include <platform/native_web_ui.h>
@@ -195,10 +197,11 @@ EM_JS(void, WebDebugBridge_PushPathJS, (int levelID, const s16 *frames, int coun
 });
 
 
-EM_JS(void, WebDebugBridge_DiscJS, (int pal, int language, const char *xa, const char *s3, const char *s560), {
+EM_JS(void, WebDebugBridge_DiscJS, (int pal, int language, const char *xa, const char *s3, const char *s560, int bandPatches, int bandApplied, int bandRefused), {
 	const c = globalThis.__ctr;
 	const str = p => (p ? UTF8ToString(p) : null);
-	if (c) c.disc = { region: pal ? 'pal' : 'us', language: ['en', 'fr', 'de', 'it', 'es', 'nl'][language], xa: str(xa), lng: { 3: str(s3), 560: str(s560) } };
+	if (c) c.disc = { region: pal ? 'pal' : 'us', language: ['en', 'fr', 'de', 'it', 'es', 'nl'][language], xa: str(xa), lng: { 3: str(s3), 560: str(s560) },
+		band: { relocated: bandPatches > 0, applied: bandApplied >>> 0, refused: bandRefused >>> 0 } };
 });
 
 EM_JS(void, WebDebugBridge_UnlocksJS, (u32 w0, u32 w1, int open), {
@@ -1298,7 +1301,7 @@ internal void WebDebugBridge_Publish(void)
 		{
 			const int n = GAME_LANGUAGE_STRING_COUNT;
 			WebDebugBridge_DiscJS(s_webViewPal, s_webViewLanguage, s_webViewLastXa[0] ? s_webViewLastXa : NULL, (n > 3) ? GAME_LANGUAGE_STRINGS[3] : NULL,
-			                      (n > 560) ? GAME_LANGUAGE_STRINGS[560] : NULL);
+			                      (n > 560) ? GAME_LANGUAGE_STRINGS[560] : NULL, (int)s_webViewBandCount, (int)s_webViewBandApplied, (int)s_webViewBandRefused);
 		}
 		{
 			int drivers = 0;

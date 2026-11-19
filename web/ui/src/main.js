@@ -106,6 +106,9 @@ async function keptDiscs() {
 // The disc the game reads and its language (lib/language.js) : what platform/web_disc_view.c
 // takes when the game opens the disc.
 function useDiscs(kept) {
+  // debug : ?disc=us|pal reads that kept disc alone (the tests compare both discs in one language)
+  const only = __CTR_DEV__ ? new URLSearchParams(location.search).get('disc') : null
+  if (only && kept[only]) kept = { [only]: kept[only] }
   const { language, region } = chooseGame(settings.get().gameLanguage, kept, navigator.languages)
   const disc = kept[region]
   globalThis.__ctrDisc = disc.file

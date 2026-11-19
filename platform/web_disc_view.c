@@ -12,6 +12,10 @@
 //                    from XA/<language>/* ;
 //   SOUNDS/KART.HWL  its header with the OtherFX and banks in US order ; a US bank no PAL bank
 //                    holds exactly is assembled from the PAL samples, appended after the file.
+// The PAL disc also keeps its shared 2D VRAM band (fonts, HUD icons, the racers' CLUTs) at
+// 0,472, inside the US game's second framebuffer, which overwrites it : the BIGFILE entries
+// are served with that band moved onto the US band's rows (0,216), its VRM rect and every
+// texture page and CLUT read inside it, one byte per field, patched as the sectors are read.
 // The maps come from both discs' data (tools/extract, web_disc_view_maps.h). A US disc goes
 // through untouched, except LNG slot 1 when another language is chosen.
 //
@@ -66,6 +70,10 @@ global_variable int s_webViewReady;
 global_variable int s_webViewPal;
 global_variable int s_webViewLanguage; // 0 en, 1 fr, 2 de, 3 it, 4 es, 5 nl
 global_variable char s_webViewLastXa[64]; // the last XA file opened, as read (the tests' __ctr.disc)
+global_variable u32 *s_webViewBandAt;     // PAL : the band patches, (byte in BIGFILE.BIG << 2) | code, ascending
+global_variable u32 s_webViewBandCount;
+global_variable u32 s_webViewBandApplied;  // patches applied, and refused (a byte not as the tables expect)
+global_variable u32 s_webViewBandRefused;
 
 // The page's choice (web/ui/src/lib/language.js) : one of the codes above, else English.
 EM_JS(int, CTRWeb_DiscLanguage, (void), {
@@ -229,6 +237,97 @@ internal u8 *WebDiscView_BuildLng(const u8 *src, u32 srcSize, u32 *sizeOut)
 	return out;
 }
 
+// ---- the shared VRAM band (PAL) ----
+
+// The band patches at their place in the disc's BIGFILE, from its header (`header`, numEntry
+// entries) ; 0 if a table entry falls outside it.
+internal int WebDiscView_BuildBand(const u8 *header, u32 numEntry)
+{
+	u32 n = 0;
+
+	s_webViewBandAt = (u32 *)malloc(sizeof(u32) * WEB_DISC_VIEW_BAND_PATCHES);
+	if (s_webViewBandAt == NULL)
+	{
+		return 0;
+	}
+
+	for (u32 e = 0; e < WEB_DISC_VIEW_BAND_ENTRIES; e++)
+	{
+		u32 entry = s_webViewBandEntries[3 * e];
+		u32 count = s_webViewBandEntries[3 * e + 1];
+		const u8 *p = &s_webViewBandStream[s_webViewBandEntries[3 * e + 2]];
+		u32 base;
+		u32 size;
+		u32 offset = 0;
+
+		if ((entry >= numEntry) || (n + count > WEB_DISC_VIEW_BAND_PATCHES))
+		{
+			return 0;
+		}
+		base = WebDiscView_LE32(header + 8 + 8 * entry) * WEB_DISC_VIEW_SECTOR;
+		size = WebDiscView_LE32(header + 12 + 8 * entry);
+		for (u32 i = 0; i < count; i++)
+		{
+			u32 v = 0;
+			u32 shift = 0;
+
+			do
+			{
+				v |= (u32)(*p & 0x7f) << shift;
+				shift += 7;
+			} while (*p++ & 0x80);
+			offset += v >> 2;
+			if ((offset >= size) || (base + offset >= 0x40000000u) || ((n > 0) && (((base + offset) << 2) <= s_webViewBandAt[n - 1])))
+			{
+				return 0; // outside the entry, or not ascending
+			}
+			s_webViewBandAt[n++] = ((base + offset) << 2) | (v & 3);
+		}
+	}
+
+	s_webViewBandCount = n;
+	return 1;
+}
+
+// Applies the band patches falling in a BIGFILE sector just read. A byte is changed only when it
+// holds what the tables were made from : a CLUT row 472-511, the lower texture page row, the
+// band's rect at y 472.
+internal void WebDiscView_PatchBand(u32 sector, u8 *payload)
+{
+	u32 start = sector * WEB_DISC_VIEW_SECTOR;
+	u32 lo = 0;
+	u32 hi = s_webViewBandCount;
+
+	while (lo < hi)
+	{
+		u32 mid = (lo + hi) / 2;
+
+		if ((s_webViewBandAt[mid] >> 2) < start)
+		{
+			lo = mid + 1;
+		}
+		else
+		{
+			hi = mid;
+		}
+	}
+
+	for (; (lo < s_webViewBandCount) && ((s_webViewBandAt[lo] >> 2) < start + WEB_DISC_VIEW_SECTOR); lo++)
+	{
+		u8 *b = &payload[(s_webViewBandAt[lo] >> 2) - start];
+		u32 code = s_webViewBandAt[lo] & 3;
+		int expected = (code == 0) ? ((*b >= 0x76) && (*b <= 0x7f)) : (code == 1) ? ((*b & 0x10) != 0) : (*b == 0x01);
+
+		if (!expected)
+		{
+			s_webViewBandRefused++;
+			continue;
+		}
+		*b = (u8)(*b - ((code == 0) ? 0x40 : (code == 1) ? 0x10 : 0x01));
+		s_webViewBandApplied++;
+	}
+}
+
 // ---- BIGFILE ----
 
 internal int WebDiscView_BuildBigfile(struct WebDiscViewFile *view)
@@ -293,6 +392,12 @@ internal int WebDiscView_BuildBigfile(struct WebDiscViewFile *view)
 	{
 		free(header);
 		free(lng);
+		return 0;
+	}
+
+	if (s_webViewPal && !WebDiscView_BuildBand(header, numEntry))
+	{
+		free(header);
 		return 0;
 	}
 
@@ -577,7 +682,15 @@ internal int WebDiscView_ReadDataSector(u32 lba, u8 *payload)
 	}
 	if (sector < view->realSectors)
 	{
-		return NativeDiscImage_ReadDataSector(view->real.lba + sector, payload);
+		if (!NativeDiscImage_ReadDataSector(view->real.lba + sector, payload))
+		{
+			return 0;
+		}
+		if ((index == WEB_DISC_VIEW_BIGFILE) && (s_webViewBandCount != 0))
+		{
+			WebDiscView_PatchBand(sector, payload);
+		}
+		return 1;
 	}
 	for (u32 i = 0; i < view->numParts; i++)
 	{
@@ -693,6 +806,11 @@ internal void WebDiscView_Free(void)
 		}
 	}
 	memset(s_webViewFiles, 0, sizeof(s_webViewFiles));
+	free(s_webViewBandAt);
+	s_webViewBandAt = NULL;
+	s_webViewBandCount = 0;
+	s_webViewBandApplied = 0;
+	s_webViewBandRefused = 0;
 	s_webViewReady = 0;
 }
 

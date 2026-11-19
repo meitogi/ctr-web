@@ -4,12 +4,17 @@
 
 Reads what extract.py and diff.py wrote and emits index tables only (numbers, no disc data) :
 the BIGFILE entry per language, the LNG string ids, the XA song ids, the KART.HWL OtherFX and
-banks. `platform/web_disc_view.c` applies them when a PAL disc is read.
+banks, and the byte patches that move the PAL shared VRAM band onto the US one's rows
+(texrefs.py). `platform/web_disc_view.c` applies them when a PAL disc is read.
 """
 
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # sibling modules under `python3 -I`
+
+import texrefs  # noqa: E402
 
 LANGUAGES = ["en", "fr", "de", "it", "es", "nl"]
 BIGFILE_LANGUAGE = {"en": (None, "ENG"), "fr": ("FRN",), "de": ("GRM",), "it": ("ITL",), "es": ("SPN",), "nl": ("DCH",)}
@@ -56,6 +61,36 @@ def game_song_map(diff, us_voice):
 				if out[us_id] is None:
 					out[us_id] = voice[index[first0 + n % n0]]
 	return out
+
+
+def band_stream(patches):
+	"""Per PAL entry, its patches as varints ((offset - previous offset) << 2 | PATCH_*), LEB128 :
+	(entries [(pal index, patch count, stream start)], stream bytes)."""
+	entries, stream = [], []
+	for index in sorted(patches):
+		entries.append((index, len(patches[index]), len(stream)))
+		prev = 0
+		for off, code in patches[index]:
+			v = (off - prev) << 2 | code
+			prev = off
+			while True:
+				b = v & 0x7F
+				v >>= 7
+				stream.append(b | (0x80 if v else 0))
+				if not v:
+					break
+	return entries, stream
+
+
+def band(us_out, pal_out, diff):
+	"""The PAL band's patches, refused unless `texrefs.prove` holds."""
+	same = {r["us_index"]: r["us_size"] == r["pal_size"] for r in diff["bigfile"]["entries"]}
+	us_rows, pal_rows = texrefs.scan_discs(us_out, pal_out)
+	problems, _ = texrefs.prove(us_rows, pal_rows, lambda u: same[u])
+	if problems:
+		raise ValueError("the shared VRAM band move is not proven:\n  " + "\n  ".join(problems[:20]))
+	pal_band = texrefs.band_rects(texrefs.shared_rects(us_rows), texrefs.shared_rects(pal_rows))[1]
+	return pal_band, texrefs.band_patches(pal_rows, pal_band)
 
 
 def c_array(ctype, name, values, per_line=24):
@@ -106,6 +141,16 @@ def generate(us_out, pal_out, diff_path):
 	out.append(c_array("s16", "s_webViewBanks[WEB_DISC_VIEW_LANGUAGES * WEB_DISC_VIEW_BANKS]", banks).replace(f"[{len(banks)}]", ""))
 	out.append(c_array("u16", "s_webViewAssembledAt", starts))
 	out.append(c_array("u16", "s_webViewAssembled", assembled))
+	pal_band, patches = band(us_out, pal_out, diff)
+	entries, stream = band_stream(patches)
+	out.append(f"// The PAL shared VRAM band {pal_band[0]},{pal_band[1]} {pal_band[2]}x{pal_band[3]} moved up 256 rows (tools/extract/texrefs.py).\n"
+		"// s_webViewBandEntries : per PAL BIGFILE entry, its index, its patch count, where its patches start in the stream.\n"
+		"// A patch decrements one byte : code 0 a CLUT word's high byte by 0x40, 1 a tpage word's low byte by 0x10,\n"
+		"// 2 a VRM rect's y high byte by 1. Each is a LEB128 varint : (offset in the entry - the previous one's) << 2 | code.")
+	out.append(f"#define WEB_DISC_VIEW_BAND_ENTRIES {len(entries)}")
+	out.append(f"#define WEB_DISC_VIEW_BAND_PATCHES {sum(n for _, n, _ in entries)}")
+	out.append(c_array("u32", "s_webViewBandEntries[WEB_DISC_VIEW_BAND_ENTRIES * 3]", [v for e in entries for v in e], per_line=18).replace(f"[{3 * len(entries)}]", ""))
+	out.append(c_array("u8", "s_webViewBandStream", stream, per_line=40))
 	return "\n".join(out)
 
 
