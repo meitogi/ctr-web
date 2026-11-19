@@ -110,5 +110,7 @@ box, Share by one button and the local pads. What the project is and how to run 
   by the page (`web/ui/`, `web/share/panel.js`) ; the page never calls into the wasm (ASYNCIFY).
 - Share's seats are the page's (`web/share/slots.js`) : the host's local players count among
   the four ; `platform/native_input.c` keeps a pad plugged later off a guest's seat.
-- `relay/` : the WebSocket relay for Share rooms ([relay/README.md](relay/README.md)).
+- `relay/` : the WebSocket relay for Share rooms ([relay/README.md](relay/README.md)). Its image
+  (`ghcr.io/meitogi/ctr-relay`, `.github/workflows/relay-image.yml`) is published from here only,
+  for both editions : Second Lap has no relay-image workflow.
 - Match the surrounding style : tabs in C, the existing comment density and tone.
