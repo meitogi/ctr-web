@@ -65,6 +65,10 @@
     const side = ui.settingsOpen && running ? 400 : 0
     const k = Math.max(0.25, Math.min((window.innerWidth - side) / canvas.width, window.innerHeight / canvas.height))
     canvas.style.setProperty('--game-scale', k.toFixed(4))
+    // a rotation leaves iOS with the page scrolled (the game, still at the old scale for a frame, wider
+    // than the new width) : everything was offset, the touches too (the user, 2026-11-19, on turning
+    // the phone) — nothing here scrolls, put it back
+    if (window.scrollX || window.scrollY) window.scrollTo(0, 0)
   }
   $effect(() => {
     const canvas = document.getElementById('canvas')

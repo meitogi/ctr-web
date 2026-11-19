@@ -604,7 +604,15 @@ export default async ctx => {
 		const flat = await rects()
 		const go = flat.controls.find(c => c.id === 'right')
 		if (Math.abs(flat.game[1] - (375 - flat.game[3]) / 2) > 1 || !go || go.x < 400) throw new Error(`back to landscape : ${JSON.stringify(flat.game)} ${JSON.stringify(go)}`)
-		return `${out.join(' · ')} · GO upright : speed ${speed} · landscape again : the game centred, the right half from x ${Math.round(go.x)}`
+		// and upright again, mid-race (the user, 2026-11-19 : « tout était décalé » right after turning
+		// the phone) : nothing scrolled nor zoomed, the controls where the band is
+		await phone(ctx, { ...IPHONE_MINI, portrait: true })
+		await sleep(800)
+		const again = await ctx.js('return { scroll: [scrollX, scrollY], vv: [visualViewport.scale, visualViewport.offsetLeft, visualViewport.offsetTop], meta: document.querySelector(\'meta[name=viewport]\').content }')
+		const up = await rects()
+		const top = Math.min(...up.controls.map(c => c.y))
+		if (again.scroll.some(Boolean) || again.vv[0] !== 1 || again.vv[1] || again.vv[2] || top < up.game[1] + up.game[3] - 1 || !/maximum-scale=1/.test(again.meta)) throw new Error(`turned upright again : ${JSON.stringify({ again, top, game: up.game })}`)
+		return `${out.join(' · ')} · GO upright : speed ${speed} · landscape again : the game centred, the right half from x ${Math.round(go.x)} · upright again : no scroll, scale 1, the controls from y ${Math.round(top)}`
 	})
 
 	// 42b, the user 2026-11-19 : « slide gauche slide droite pour déclencher le dérapage. Et que ça
