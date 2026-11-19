@@ -199,7 +199,7 @@ export function installMeasure({ start, handleFile, log = () => {} }) {
     const el = document.getElementById('ctr-touch')
     const st = g.ctrUI?.settings?.get?.() ?? {}
     return { mode: st.touchMode, layout: st.touchLayout, hold: st.touchHold, holdMs: st.touchHoldMs, size: st.touchSize, autoStart: st.autoStart,
-      drawn: el ? el.dataset.kind : null, insets: cs ? [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft] : null }
+      drawn: el ? el.dataset.kind : null, holds: g.ctrUI?.touchHolds?.() ?? [], insets: cs ? [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft] : null }
   }
   const gaps = []
   const state = { step: 'disc', raceFrom: 0, startTap: 0, discFrom: 0, lastFrame: 0, lastFrameAt: 0 }

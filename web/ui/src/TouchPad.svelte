@@ -39,7 +39,7 @@
 
   const mode = $derived(s.touchMode === 'auto' ? 'enhanced' : s.touchMode)
   const touchScreen = $derived(!!ui.install?.touch || touched)
-  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm && !ui.touchEditor && !ui.touchTutorial)
+  const shown = $derived(enabled && mode !== 'pad' && touchScreen && !padHides && !ui.settingsOpen && !ui.confirm && !ui.touchEditor)
   const has = $derived(touchTraits(s))
   const kind = $derived(mode === 'minimal' ? 'minimal' : racing ? s.touchLayout : 'menu')
 
@@ -158,6 +158,7 @@
     if (r.at && knob && base) {
       base.classList.toggle('slide', r.ids.includes('steer-slide'))
       base.classList.toggle('brake', r.ids.includes('brake'))
+      base.classList.toggle('gas', r.ids.includes('gas'))
       base.style.transform = `translate(${r.at.ox}px, ${r.at.oy}px)`
       knob.style.transform = `translate(${r.at.x}px, ${r.at.y}px)`
       base.hidden = false
@@ -274,5 +275,7 @@
   .stick-base:global(.slide) { border-color: #4dabf7; background: rgba(77, 171, 247, 0.3); }
   /* the stick pulled straight down : the brake */
   .stick-base:global(.brake) { border-color: #ff4632; background: rgba(255, 70, 50, 0.35); }
+  /* pushed straight up : GO */
+  .stick-base:global(.gas) { border-color: #f59f00; background: rgba(245, 159, 0, 0.3); }
   .stick-knob { width: 50px; height: 50px; margin: -25px 0 0 -25px; background: rgba(255, 255, 255, 0.55); }
 </style>

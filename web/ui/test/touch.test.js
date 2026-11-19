@@ -541,7 +541,7 @@ test('E : a tap with the stick centred = a hop (R1, brief) ; GO stays held', () 
   assert.equal(pad.hold.state, 'held')
 })
 
-test('E : a tap turning = hop + slide kept while the game slides ; a tap in it = the boost ; the stick centred 0.3 s ends it', () => {
+test('E : a tap turning = hop + slide kept while the game slides ; a tap in it = the boost ; the stick crosses the centre, kept there, still sliding ; the steering thumb lifted ends it', () => {
   const { pad, R, z, pk } = eRace()
   const [ox, oy] = [z.x + 60, z.y + z.h - 80]
   pad.down(2, ox, oy, 2000)
@@ -557,8 +557,14 @@ test('E : a tap turning = hop + slide kept while the game slides ; a tap in it =
   assert.equal(pk(2600, { slide: true }).bits, B.cross | B.r1)
   pad.move(2, ox, oy)
   pk(2700, { slide: true })
-  assert.equal(pk(2850, { slide: true }).bits & B.r1, B.r1, 'centred less than 0.3 s : still sliding (a wide slide crosses the centre)')
-  assert.equal(pk(3010, { slide: true }).bits & B.r1, 0, 'centred 0.3 s : the slide ends')
+  assert.equal(pk(3200, { slide: true }).bits & B.r1, B.r1, 'centred 0.5 s : still sliding (the centre is the slide\'s middle curve)')
+  pad.move(2, ox - z.reach, oy)
+  const p = new Uint8Array(8)
+  pad.packet(p, 0, true, 3300, true)
+  assert.ok(p[6] < 0x40, 'away from the turn : the stick sent the other way (the slide widens)')
+  assert.equal(pk(3400, { slide: true }).bits & B.r1, B.r1, 'still sliding')
+  pad.up(2, 3450)
+  assert.equal(pk(3500, { slide: true }).bits & B.r1, 0, 'the steering thumb lifted : the slide ends')
 })
 
 test('E : the slide ends with the game\'s ; a hold turning starts it after 200 ms', () => {
@@ -620,6 +626,37 @@ test('E : the stick pulled straight down brakes (GO let go) ; a turn does not, n
   pk(3360)
   pad.move(2, ox, oy + r)
   assert.equal(pk(3400, { slide: true }).bits & B.square, 0, 'no brake while sliding')
+})
+
+test('E : the stick pushed straight up is GO, through the hold ; locked, a push neither adds nor lets go ; never in a slide', () => {
+  const pad = make('e')
+  const z = at(pad, 'steer')
+  const [ox, oy] = [z.x + 60, z.y + z.h - 40]
+  const r = z.reach
+  const pk = (t, slide = false) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, slide); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  pad.down(2, ox, oy, 0)
+  pad.move(2, ox, oy - r * 0.7)
+  assert.equal(pk(10), 0, 'not far enough')
+  pad.move(2, ox + r * 0.75, oy - r * 0.85)
+  assert.equal(pk(20), 0, 'a turn pushed up : outside the cone')
+  pad.move(2, ox, oy - r * 0.9)
+  assert.equal(pk(30), B.cross, 'GO')
+  assert.equal(pad.hold.state, 'pressing')
+  pad.move(2, ox + r * 0.3, oy - r * 0.7)
+  assert.equal(pk(500), B.cross, 'kept until it comes back under 0.6')
+  pk(900)
+  assert.equal(pad.hold.state, 'held', 'held 0.8 s : locked')
+  pad.move(2, ox, oy)
+  assert.equal(pk(1000), B.cross, 'the thumb back to the centre : still locked')
+  pad.move(2, ox, oy - r)
+  pk(1100)
+  pad.move(2, ox, oy)
+  pk(1200)
+  assert.equal(pad.hold.state, 'held', 'a short push on a locked GO does not let it go')
+  pad.move(2, ox, oy + r)
+  assert.equal(pk(1300), B.square, 'the brake lets go of everything')
+  pad.move(2, ox, oy - r)
+  assert.equal(pk(1400, true), 0, 'in a slide the stick is the slide\'s angle')
 })
 
 test('the brake on the stick is E\'s : A\'s stick pulled down does not brake', () => {

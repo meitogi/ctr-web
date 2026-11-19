@@ -38,6 +38,13 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   let racing = false
   let cross = false // the hold's Cross, at the last update
   let held = 'idle' // the hold's state, as last told (onHold)
+  const holdLog = [] // { t, from, to, why } : the hold's last changes
+  // what the player has done since resetDid(), for the first-race tutorial's cards (TouchTutorial
+  // .svelte, the user 2026-11-19 : « détecter automatiquement si les trucs sont faits pour passer au
+  // suivant ») : the race started, steered, GO's time pressed in ms, a slide (the game's), the item,
+  // the brake, the look back
+  const did = { start: false, steer: false, goMs: 0, slide: false, item: false, brake: false, look: false }
+  let didAt = 0
   // what a finger pressed when it landed, until the next pull : a tap shorter than the game's input
   // update (~33 ms at 30 fps) still reaches it once
   let landed = 0
@@ -82,7 +89,9 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   // thrown ahead), down = the item used behind (Down with Circle : a bomb rolls backward ; the game
   // reads the direction for those two only, VehPickupItem.c), a tap or 200 ms still = a hop (the
   // stick centred) or a hop and a slide (turning), the slide kept by the page while the game says
-  // it slides, ended by the stick 0.3 s at the centre ; in a slide a touch = the boost.
+  // it slides, ended by the steering thumb lifted (the user, 2026-11-19 : the stick's whole range
+  // doses the slide, into the turn tight, away wide — the centre ended it in b.29, so a thumb going
+  // from one side to the other lost it) ; in a slide a touch = the boost.
   // `autoBoost` : the page taps the slide's first boost itself as the meter turns red ; the second
   // and third are the player's (the user, 2026-11-18 : « qu'une maîtrise du tactile puisse le
   // permettre aussi »).
@@ -93,7 +102,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   // A boost tapped before the red is a failed boost in the game (the meter is emptied) : with
   // `bufferMs`, a tap in a slide outside the red waits that long for the red and is sent as it
   // starts — or as it was, when the red does not come.
-  let eSlide = null // { since, seen, centreSince }
+  let eSlide = null // { since, seen }
   let r1Until = 0
   let circleUntil = 0
   let itemDir = 0 // Up or Down, held with the item's Circle
@@ -105,7 +114,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   const goLatched = () => hold.state === 'held' || hold.state === 'retouched'
   const hopOrSlide = (t) => {
     const v = lastStick ? Math.hypot(lastStick[0], lastStick[1]) : 0
-    if (v >= 0.35) eSlide = { since: t, seen: false, centreSince: 0 }
+    if (v >= 0.35) eSlide = { since: t, seen: false }
     else r1Until = -1 // a hop : R1 for 100 ms from the next pull
   }
   const rocked = (f, y, w) => (y - f.restY > self.rockPx) || (w > 0 && f.restW > 0 && w > f.restW * 1.5)
@@ -238,13 +247,15 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       cross = false
     },
     /**
-     * What the fingers press now : { bits (active high), go (GO's Cross), stick: [x, y] in -1..1 or
+     * What the fingers press now : { bits (active high), go (GO's Cross), gas (the brake stick
+     * pushed up : GO), stick: [x, y] in -1..1 or
      * null, at: the stick's { ox, oy, x, y } in px (where it landed, where it is), ids: the controls
      * pressed (for drawing) }
      */
     read(only = null) {
       let bits = 0
       let go = false
+      let gas = false // the brake stick pushed up (see `gas` below)
       let stick = null
       let at = null
       const ids = []
@@ -282,6 +293,16 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
               bits |= B.square
               ids.push('brake')
             }
+            // its mirror (the user, 2026-11-19 : « si on met le stick vers le haut faut que ça
+            // avance ») : pushed straight up = GO, through the held accelerator ; the brake first
+            const up = -dy * k
+            if (sliding || eSlide || f.braking) f.gas = false
+            else if (f.gas) f.gas = up >= 0.6 && side <= up
+            else f.gas = up >= 0.8 && side <= up * 0.7
+            if (f.gas) {
+              gas = true
+              ids.push('gas')
+            }
           }
           continue
         }
@@ -313,7 +334,7 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         }
         bits |= b
       }
-      return { bits, go, stick, at, ids }
+      return { bits, go, gas, stick, at, ids }
     },
     /**
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
@@ -352,7 +373,9 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       const r = self.read()
       let bits = r.bits | landed | pulse
-      const go = r.go || landedGo
+      // the stick pushed up is GO until the hold has locked : locked, it neither adds nor takes
+      // anything (a short push would otherwise be the « tap on a locked GO » that lets it go)
+      const go = r.go || landedGo || (r.gas && !goLatched())
       let stick = r.stick
       lastStick = stick
       // E : a finger still 200 ms on the right half, neither moved nor lifted : the hop / the slide
@@ -382,15 +405,14 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       }
       if (slideUntil && now > slideUntil) slideUntil = 0
       if (slideUntil) bits |= B.r1
-      // E's slide : R1 while the game slides ; ended by the game, the stick 0.3 s centred, the brake
-      // (the slide starts when the hop lands : 16 to 22 of the game's input reads after the tap as
+      // E's slide : R1 while the game slides ; ended by the game, the steering thumb lifted, the
+      // brake (the slide starts when the hop lands : 16 to 22 of the game's input reads after the tap as
       // measured in a race, 42b — R1 waits 0.7 s for it, 0.4 s left that no margin)
       if (eSlide) {
-        const v = stick ? Math.hypot(stick[0], stick[1]) : 0
+        let steering = false
+        for (const id in fingers) if (fingers[id].start.type === 'stick') steering = true
         if (sliding) eSlide.seen = true
-        if (v < 0.2) eSlide.centreSince ||= now
-        else eSlide.centreSince = 0
-        if ((bits & B.square) || !racing || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 700) || (eSlide.centreSince && now - eSlide.centreSince >= 300)) eSlide = null
+        if ((bits & B.square) || !racing || !steering || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 700)) eSlide = null
         else bits |= B.r1
       }
       if (r1Until === -1) r1Until = now + 100
@@ -418,10 +440,25 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       // (the user : « le auto accelerate se désactive quand on doit redémarrer après une chute »)
       cross = hold.update(now, { go, brake, racing: racing && !revving })
       if (hold.state !== held) {
+        // why, for the measuring report (the user, 2026-11-19 : the hold let go after a hit, not
+        // reproduced by a hit alone) : the last 20 changes
+        const why = brake ? 'brake' : !racing ? 'race' : revving ? 'revving' : go ? 'go' : 'lift'
+        holdLog.push({ t: Math.round(now), from: held, to: hold.state, why })
+        if (holdLog.length > 20) holdLog.shift()
         held = hold.state
         self.onHold?.(held)
       }
       const buttons = ~(bits | (cross ? B.cross : 0)) & 0xffff
+      if (racing && !revving) {
+        did.start = true
+        if (stick ? Math.abs(stick[0]) >= 0.5 : (bits & (B.left | B.right))) did.steer = true
+        if (cross && didAt) did.goMs += Math.min(100, now - didAt)
+        if (sliding) did.slide = true
+        if (bits & B.circle) did.item = true
+        if (bits & B.square) did.brake = true
+        if (bits & B.r2) did.look = true
+      }
+      didAt = now
       dst[at] = 0
       dst[at + 1] = analog ? PAD_ANALOG : PAD_DIGITAL
       dst[at + 2] = buttons & 0xff
@@ -479,6 +516,14 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     get sliding() { return slideUntil > 0 },
     /** called with the new value when the game's « racing » changes (TouchPad.svelte) */
     onRacing: null,
+    /** what the player has done since resetDid() : { start, steer, goMs, slide, item, brake, look } */
+    get did() { return did },
+    resetDid() {
+      did.start = did.steer = did.slide = did.item = did.brake = did.look = false
+      did.goMs = 0
+    },
+    /** the hold's last 20 changes, { t, from, to, why : brake · race · revving · go · lift } */
+    get holdLog() { return holdLog },
     /** called with the hold's state when it changes (hold.js : idle, pressing, held, retouched) */
     onHold: null,
   }

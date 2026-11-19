@@ -1,4 +1,4 @@
-// The game paused under one of the page's own screens (the touch editor, the first-race tutorial) :
+// The game paused under one of the page's own screens (the touch editor) :
 // the pad taps Start itself, as the II button would. The game does not take the pause at every
 // moment (the checkered flag still on screen at a race's start, its cooldown after a resume —
 // MainFrame.c) : Start is tapped again every half second until the game says no race is driven,

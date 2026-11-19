@@ -1076,6 +1076,15 @@ internal void WebDebugBridge_CardGhost(struct GameTracker *gGT)
 	WebDebugBridge_CardDoneJS("requested");
 }
 
+// A hit on the first player, by the game's own damage (session 42b : the touch pad's held
+// accelerator after a projectile) : ctrDev.hit(type) — 1 a spin (a potion, a banana), 2 blasted (a
+// missile, a bomb). Taken once, in a race only.
+EM_JS(int, WebDebugBridge_HitJS, (void), {
+	const t = globalThis.__ctrHit;
+	globalThis.__ctrHit = 0;
+	return t | 0;
+});
+
 internal void WebDebugBridge_Precise(struct GameTracker *gGT)
 {
 	// a race or a battle (not the boot's intro levels, the hubs, the menus), loaded, its drivers in
@@ -1092,6 +1101,14 @@ internal void WebDebugBridge_Precise(struct GameTracker *gGT)
 		WebDebugBridge_Seed(gGT, seed);
 	}
 	WebDebugBridge_Replay(gGT, raceBegins);
+	{
+		const s32 hit = WebDebugBridge_HitJS();
+
+		if (live && (hit > 0) && ((gGT->gameMode1 & (PAUSE_ALL | END_OF_RACE)) == 0))
+		{
+			VehPickState_NewState(gGT->drivers[0], hit, gGT->drivers[1] != NULL ? gGT->drivers[1] : gGT->drivers[0], 0);
+		}
+	}
 
 	{
 		u32 v[30];

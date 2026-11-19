@@ -4,7 +4,8 @@
 // layout, another one, the minimal pad or the player's own. One card an action ; an action the
 // pad has no control for has no card. TouchTutorial.svelte draws them, strings.js says them.
 //
-// A card : { id, parts: [text keys, said in a row], targets: [the ids of the controls it lights] }.
+// A card : { id, parts: [text keys, said in a row], targets: [the ids of the controls it lights] } ;
+// done(id, did) : the player did it (the next card comes by itself).
 import { PSX_BIT as B } from '../guest-input.js'
 
 const ids = (list) => list.map((c) => c.id)
@@ -30,8 +31,9 @@ export function cards(controls) {
   const steer = stick.length ? ['steerStick', stick] : dpad.length ? ['steerDpad', dpad] : arrows.length >= 2 ? ['steerArrows', arrows] : null
   const gas = gesture.length ? ['goGesture', 'startGesture', gesture] : go.length ? ['goButton', 'startButton', go] : cross.length ? ['goPad', 'startPad', cross] : null
   const out = []
-  if (steer || gas) out.push({ id: 'go', parts: [steer?.[0], gas?.[0]].filter(Boolean), targets: ids([...(steer?.[1] ?? []), ...(gas?.[2] ?? [])]) })
+  // the start first : the cards open during the track's fly-in, before the countdown
   if (gas) out.push({ id: 'start', parts: [gas[1]], targets: ids(gas[2]) })
+  if (steer || gas) out.push({ id: 'go', parts: [steer?.[0], gas?.[0], brakeStick.length ? 'goStick' : null].filter(Boolean), targets: ids([...(steer?.[1] ?? []), ...(gas?.[2] ?? [])]) })
   if (gesture.length) out.push({ id: 'slide', parts: ['slideGesture'], targets: ids(gesture) })
   else if (anchor.length) out.push({ id: 'slide', parts: [boost.length ? 'slideButton' : 'slideButtonAlone'], targets: ids([...anchor, ...boost]) })
   else if (glide.length) out.push({ id: 'slide', parts: ['slideGlide'], targets: ids(with_((c) => c.group)) })
@@ -45,5 +47,22 @@ export function cards(controls) {
 }
 
 /** Every text key a card can say (strings.js has each, in every language : tutorial.test.js). */
-export const PARTS = ['steerStick', 'steerDpad', 'steerArrows', 'goGesture', 'goButton', 'goPad', 'startGesture', 'startButton', 'startPad', 'slideGesture', 'slideButton', 'slideButtonAlone', 'slideGlide', 'slidePad', 'itemSwipe', 'itemButtons', 'itemButton', 'brakeStick', 'brakeButton', 'look']
-export const CARDS = ['go', 'start', 'slide', 'items', 'brake', 'look']
+export const PARTS = ['steerStick', 'goStick', 'steerDpad', 'steerArrows', 'goGesture', 'goButton', 'goPad', 'startGesture', 'startButton', 'startPad', 'slideGesture', 'slideButton', 'slideButtonAlone', 'slideGlide', 'slidePad', 'itemSwipe', 'itemButtons', 'itemButton', 'brakeStick', 'brakeButton', 'look']
+export const CARDS = ['start', 'go', 'slide', 'items', 'brake', 'look']
+
+/**
+ * Whether the player has done what card `id` shows, from the touch pad's `did` (pad.js) : the
+ * cards go on by themselves while the race runs (the user, 2026-11-19 : « le tuto doit être en
+ * même temps et pas mettre en pause »).
+ */
+export function done(id, did) {
+  switch (id) {
+    case 'start': return did.start
+    case 'go': return did.steer && did.goMs >= 1500
+    case 'slide': return did.slide
+    case 'items': return did.item
+    case 'brake': return did.brake
+    case 'look': return did.look
+    default: return false
+  }
+}

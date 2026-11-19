@@ -15,6 +15,7 @@
 //   faults    ?fault=<a>[,<b>…] or ctrDev.fault(name, on) : disc-read (the disc's reads fail),
 //             storage-full (the browser refuses to store a disc), card-full (the card refuses a
 //             save), relay-silent (Share's relay never answers). The page alone.
+//   hit       ctrDev.hit(type) : the first player hit by the game's own damage (1 a spin, 2 blasted).
 // The settings presets (?preset=) are read earlier, by store.js (dev/presets.js).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const frameOf = () => globalThis.__ctr?.frame ?? 0
@@ -357,5 +358,7 @@ export function installPrecise({ log = () => {} } = {}) {
       })
     }
   })()
-  return { seed, replay, card, ...pause, fault, faults: () => ({ ...faults }), ready }
+  // a hit on the first player, the game's own damage : 1 a spin, 2 blasted (web_debug_bridge.c)
+  const hit = (type = 2) => { globalThis.__ctrHit = type | 0 }
+  return { seed, replay, card, ...pause, fault, faults: () => ({ ...faults }), hit, ready }
 }

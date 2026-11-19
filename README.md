@@ -65,8 +65,9 @@ measured yet.
   storage after 7 days without a visit — the home page says which one you're in.
 - **touch controls.** three ways to play, Settings › Controls › Touch :
   - **Enhanced** (the default on a touch screen) : made for the game, two thumbs and no button to
-    aim at. left thumb anywhere on the left = a stick, right where it lands ; pulled straight down
-    it brakes, then backs up. the right half of the screen is one gesture : hold = GO, a tap = a
+    aim at. left thumb anywhere on the left = a stick, right where it lands ; pushed straight up it
+    goes, pulled straight down it brakes, then backs up ; in a slide it doses the curve (into the
+    turn tight, away wide) and lifting it ends the slide. the right half of the screen is one gesture : hold = GO, a tap = a
     hop, a tap while turning = a slide, a tap in a slide = its boost (the side turns red at the
     moment, « 1 · 2 · 3 » counts them ; the first is made for you, the other two are yours).
     swipe up or down there = your item, forward or behind (a bomb rolls backward, a potion is
@@ -75,8 +76,8 @@ measured yet.
     four more layouts to try (A to D : buttons, a glide, left / right, one thumb a side), and
     **your own** : « Edit my pad » moves, resizes, adds and removes controls — the super buttons
     (a GO that holds itself, a slide that is kept, a boost lit at its moment…) or the pad's plain
-    ones. your first race by touch opens with six short cards ; « Show the tutorial again » brings
-    them back.
+    ones. your first race by touch shows six short cards while you drive, each going on once
+    you've done it (› skips one) ; « Show the tutorial again » brings them back.
   - **Minimal** : the pad's own buttons on the screen, one for one.
   - **Pad** : nothing on the screen. a connected pad hides the touch controls anyway ; touch the
     screen and they're back.

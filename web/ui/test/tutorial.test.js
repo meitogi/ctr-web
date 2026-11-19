@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { fromPalette, startFrom } from '../src/lib/touch/custom.js'
 import { layout } from '../src/lib/touch/layouts.js'
-import { CARDS, PARTS, cards } from '../src/lib/touch/tutorial.js'
+import { CARDS, PARTS, cards, done } from '../src/lib/touch/tutorial.js'
 
 const MINI = { W: 812, H: 375, left: 47, right: 47, bottom: 21, top: 0 }
 const say = (controls) => cards(controls).map((c) => `${c.id}:${c.parts.join('+')}`)
@@ -11,26 +11,27 @@ const say = (controls) => cards(controls).map((c) => `${c.id}:${c.parts.join('+'
 test('the default (E) : the six actions, the right half and the stick lit', () => {
   const list = cards(layout('e', MINI))
   assert.deepEqual(list.map((c) => c.id), CARDS)
-  assert.deepEqual(say(layout('e', MINI)), ['go:steerStick+goGesture', 'start:startGesture', 'slide:slideGesture', 'items:itemSwipe', 'brake:brakeStick', 'look:look'])
-  assert.deepEqual(list[0].targets, ['steer', 'right'])
+  assert.deepEqual(say(layout('e', MINI)), ['start:startGesture', 'go:steerStick+goGesture+goStick', 'slide:slideGesture', 'items:itemSwipe', 'brake:brakeStick', 'look:look'])
+  assert.deepEqual(list[0].targets, ['right'], 'the start : GO')
+  assert.deepEqual(list[1].targets, ['steer', 'right'])
   assert.deepEqual(list[4].targets, ['steer'], 'the brake is the stick')
   assert.deepEqual(list[5].targets, ['look'])
 })
 
 test('each layout gets the same six actions, said for its own controls', () => {
-  assert.deepEqual(say(layout('a', MINI)), ['go:steerStick+goButton', 'start:startButton', 'slide:slideButton', 'items:itemButton', 'brake:brakeButton', 'look:look'])
+  assert.deepEqual(say(layout('a', MINI)), ['start:startButton', 'go:steerStick+goButton', 'slide:slideButton', 'items:itemButton', 'brake:brakeButton', 'look:look'])
   assert.deepEqual(cards(layout('a', MINI))[2].targets, ['slide', 'boost'])
   assert.deepEqual(say(layout('b', MINI))[2], 'slide:slideGlide')
   assert.deepEqual(cards(layout('b', MINI))[2].targets, ['go', 'slide', 'boost'])
-  assert.deepEqual(say(layout('c', MINI)), ['go:steerArrows+goButton', 'start:startButton', 'slide:slidePad', 'items:itemButton', 'brake:brakeButton', 'look:look'])
+  assert.deepEqual(say(layout('c', MINI)), ['start:startButton', 'go:steerArrows+goButton', 'slide:slidePad', 'items:itemButton', 'brake:brakeButton', 'look:look'])
   assert.deepEqual(say(layout('d', MINI))[2], 'slide:slideButtonAlone')
-  assert.deepEqual(say(layout('minimal', MINI)).slice(0, 4), ['go:steerDpad+goPad', 'start:startPad', 'slide:slidePad', 'items:itemButton'])
+  assert.deepEqual(say(layout('minimal', MINI)).slice(0, 4), ['start:startPad', 'go:steerDpad+goPad', 'slide:slidePad', 'items:itemButton'])
   assert.deepEqual(say(startFrom('three', MINI)).map((c) => c.split(':')[0]), CARDS)
 })
 
 test('the player\'s own pad : an action with no control has no card', () => {
   const bare = layout('a', MINI).filter((c) => !['brake', 'look', 'item'].includes(c.id))
-  assert.deepEqual(cards(bare).map((c) => c.id), ['go', 'start', 'slide'])
+  assert.deepEqual(cards(bare).map((c) => c.id), ['start', 'go', 'slide'])
   const both = [...bare, fromPalette('itemUp', bare, MINI, 'm', 300, 100), fromPalette('itemDown', bare, MINI, 'm', 360, 100)]
   const items = cards(both).find((c) => c.id === 'items')
   assert.deepEqual([items.parts, items.targets], [['itemButtons'], ['itemUp', 'itemDown']])
@@ -43,7 +44,7 @@ test('every text a card can say exists in every language', async () => {
     const t = STRINGS[lang].tutorial
     for (const k of PARTS) assert.equal(typeof t.text[k], 'string', `${lang} text.${k}`)
     for (const k of CARDS) assert.equal(typeof t.titles[k], 'string', `${lang} titles.${k}`)
-    for (const k of ['skip', 'next', 'back', 'play', 'again', 'againHelp']) assert.equal(typeof t[k], 'string', `${lang} ${k}`)
+    for (const k of ['skip', 'next', 'hint', 'again', 'againHelp']) assert.equal(typeof t[k], 'string', `${lang} ${k}`)
   }
   for (const list of [layout('e', MINI), layout('a', MINI), layout('b', MINI), layout('c', MINI), layout('d', MINI), layout('minimal', MINI)]) for (const c of cards(list)) for (const k of c.parts) assert.ok(PARTS.includes(k), k)
 })
@@ -125,4 +126,47 @@ test('the pad drops a tap the game has not been given ; one in flight stays', as
 
 test('a pad with none of the six actions has no card (the tutorial closes itself)', () => {
   assert.deepEqual(cards([{ id: 'start', type: 'rect', bits: 0x8, label: 'II' }, { id: 'triangle', type: 'button', bits: 0x1000, label: 'TRI' }]), [])
+})
+
+test('the cards go on by themselves : each is done when the pad (the real one) has done it', async () => {
+  const { createTouchPad } = await import('../src/lib/touch/pad.js')
+  const { PSX_BIT: B } = await import('../src/lib/guest-input.js')
+  const pad = createTouchPad()
+  pad.place('e', MINI)
+  pad.show(true)
+  const at = (id) => pad.controls.find((c) => c.id === id)
+  const right = at('right')
+  const z = at('steer')
+  const R = [right.x + right.w / 2, right.y + right.h / 2]
+  const pk = (t, { race = true, slide = false, revving = false } = {}) => { const p = new Uint8Array(8); pad.packet(p, 0, race, t, slide, false, revving); return ~(p[2] | (p[3] << 8)) & 0xffff }
+  const d = pad.did
+  pk(0, { revving: true })
+  assert.equal(done('start', d), false, 'the countdown : not started')
+  pk(100)
+  assert.equal(done('start', d), true, 'GO : started')
+  pad.down(9, ...R, 200)
+  for (let t = 200; t <= 1800; t += 100) pk(t)
+  assert.equal(done('go', d), false, 'GO 1.6 s without steering : not yet')
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(2, ox, oy, 1900)
+  pad.move(2, ox + z.reach, oy)
+  pk(1900)
+  assert.equal(done('go', d), true, 'GO and a turn')
+  pad.up(9, 1950)
+  pk(2000, { slide: true })
+  assert.equal(done('slide', d), true, 'the game\'s slide')
+  assert.equal(done('items', d) || done('brake', d) || done('look', d), false)
+  pad.up(2, 2050)
+  pk(2060)
+  pad.down(1, ...R, 2100)
+  pad.move(1, R[0], R[1] - 40)
+  assert.ok(pk(2150) & B.circle)
+  assert.equal(done('items', d), true, 'a swipe : the item')
+  pad.up(1, 2200)
+  pad.down(2, ox, oy - 100, 2300)
+  pad.move(2, ox, oy - 100 + z.reach)
+  assert.ok(pk(2350) & B.square)
+  assert.equal(done('brake', d), true, 'the stick down : the brake')
+  pad.resetDid()
+  assert.equal(done('start', d) || done('slide', d), false, 'reset : nothing done')
 })

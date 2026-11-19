@@ -11,6 +11,8 @@
 //   ctrUI.guestInput()         the player's mapping as web/share/protocol.js reads it (guest-input.js)
 //   ctrUI.racing()             a race is driven (the game's word at its last input update) : Share tells
 //                             its guests (their touch pads, session 42)
+//   ctrUI.touchHolds()         the touch pad's held accelerator : its last changes and why (the
+//                             measuring report)
 // Debug builds (__CTR_DEV__) load src/dev/ : the « Bot » switch and Settings › Dev with its second
 // window ; a window opened as that second one (?dev=<mode>) boots by itself.
 // and Module.ctrInput for the game (lib/input-hook.js, pulled by platform/native_input.c).
@@ -244,7 +246,7 @@ function adopt(id, title, el) {
 
 // Share's panel tells what the page's Share button shows (web/share/panel.js render)
 const share = (s) => { if (JSON.stringify(ui.share) !== JSON.stringify(s)) ui.share = s }
-globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, share, guestInput: () => guestInput(settings.get()), racing: () => touch.racing }
+globalThis.ctrUI = { settings, adopt, toast, dismissToast, handleFile, players, text: T, share, guestInput: () => guestInput(settings.get()), racing: () => touch.racing, touchHolds: () => touch.holdLog.slice() }
 
 // Test-only hook (session 3) : the agent browser runs on another machine than the files, so CDP's
 // DOM.setFileInputFiles cannot point at them ; suites fetch a same-origin fixture into the same
