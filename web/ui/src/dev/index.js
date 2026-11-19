@@ -45,7 +45,7 @@ export function install({ toast = () => {}, start = () => {}, handleFile = () =>
     toast,
     // the tests' fast start (fast.js) : snapshots, the direct start, turbo
     ...fast,
-    // the precise start (precise.js) : seed, replay, card, pause / step / resume, fault, hit
+    // the precise start (precise.js) : seed, replay, card, pause / step / resume, fault, hit, item
     ...precise,
   }
   if (measure) installMeasure({ start, handleFile, log })

@@ -18,6 +18,11 @@ test('the default (E) : the six actions, the right half and the stick lit', () =
   assert.deepEqual(list[5].targets, ['look'])
 })
 
+test('E with the swipe slide : the slide and the item said its way', () => {
+  assert.deepEqual(say(layout('e', MINI)).slice(2, 4), ['slide:slideGesture', 'items:itemSwipe'])
+  assert.deepEqual(cards(layout('e', MINI), { swipe: true }).slice(2, 4).map((c) => `${c.id}:${c.parts.join('+')}`), ['slide:slideSwipe', 'items:itemTap'])
+})
+
 test('each layout gets the same six actions, said for its own controls', () => {
   assert.deepEqual(say(layout('a', MINI)), ['start:startButton', 'go:steerStick+goButton', 'slide:slideButton', 'items:itemButton', 'brake:brakeButton', 'look:look'])
   assert.deepEqual(cards(layout('a', MINI))[2].targets, ['slide', 'boost'])

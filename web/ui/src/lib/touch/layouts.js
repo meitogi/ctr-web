@@ -1,5 +1,6 @@
-// The touch controls' places on a phone in landscape (session 42's design sheets,
-// plans/…/proofs/42/design) : pure, from the viewport and its safe areas — no DOM.
+// The touch controls' places on a phone (session 42's design sheets, plans/…/proofs/42/design) :
+// pure, from the viewport and its safe areas — no DOM. Drawn for landscape ; in portrait the game
+// sits at the top (app.css) and the same layout is drawn smaller in the band under it (`band`).
 //
 // A layout is a list of controls in CSS px of the viewport :
 //   { id, type: 'button', cx, cy, r, bits, label }       a round button
@@ -33,13 +34,39 @@ export const SIZES = { s: 0.88, m: 1, l: 1.14 }
  * @param {{ size?: 's' | 'm' | 'l' }} [opts]
  */
 export function layout(kind, view, { size = 'm' } = {}) {
+  const b = band(view)
+  const list = drawn(kind, b, size)
+  return b.y0 ? list.map((c) => shift(c, b.y0)) : list
+}
+
+/**
+ * The view the controls are drawn in. Landscape : the viewport itself. Portrait (the user,
+ * 2026-11-19 : « mettre les contrôles plus petits en bas ») : the band under the game — the game
+ * is scaled to the width and put under the top safe area (app.css), its bottom at `y0` — with a
+ * unit of its own (`unit`, a layout's « 1 » in px before the size setting) : the landscape one
+ * (H / 375) would be twice a phone's width there. Already a band : as it is.
+ */
+export function band(view) {
+  const { W, H } = view
+  if (H <= W || view.y0 !== undefined) return view
+  const y0 = Math.round((view.top ?? 0) + Math.min(W / 800, H / 600) * 600)
+  const h = H - y0
+  return { W, H: h, left: view.left, right: view.right, top: 8, bottom: view.bottom, unit: (Math.min(W, h) / 375) * 0.85, y0 }
+}
+
+/** A control moved down by dy px (a band's controls put on the screen). */
+export function shift(c, dy) {
+  return c.type === 'button' || c.type === 'dpad' ? { ...c, cy: c.cy + dy } : { ...c, y: c.y + dy }
+}
+
+function drawn(kind, view, size) {
   const { W, H } = view
   // nothing under the notch's band nor the home bar ; a minimum margin where there is none
   const L = Math.max(view.left ?? 0, 8)
   const R = Math.max(view.right ?? 0, 8)
   const bottom = Math.max(view.bottom ?? 0, 8)
   const top = Math.max(view.top ?? 0, 8)
-  const u = (H / 375) * (SIZES[size] ?? 1)
+  const u = (view.unit ?? H / 375) * (SIZES[size] ?? 1)
   const lx = L + 64 * u
   const rx = W - R - 62 * u
   const by = H - bottom - 92 * u

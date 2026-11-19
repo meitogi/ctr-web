@@ -130,6 +130,7 @@
     pad.retapMs = mode === 'enhanced' && has.retap ? s.touchRetapMs : 0
     pad.autoBoost = mode === 'enhanced' && has.gesture && s.touchAutoBoost
     pad.bufferMs = mode === 'enhanced' && s.touchBuffer ? TOUCH_BUFFER_MS : 0
+    pad.swipeSlide = mode === 'enhanced' && has.gesture && s.touchSwipeSlide
   })
   $effect(() => {
     pad.show(shown)
@@ -242,6 +243,8 @@
   .ctl :global(.label) { pointer-events: none; }
   .ctl.back { border-color: #ff6b6b; }
   .ctl.go { border-color: #f59f00; border-width: 3px; font-size: 18px; }
+  /* upright the controls are smaller (layouts.js `band`) : so are their words */
+  @media (orientation: portrait) and (pointer: coarse) { .ctl, .dpad { font-size: 10px; letter-spacing: 0; } .ctl.go { font-size: 16px; } }
   .ctl:global(.on) { background: rgba(255, 255, 255, 0.45); }
   .dpad { border-radius: 50%; background: transparent; border: 0; }
   .arm { position: absolute; width: 34%; height: 34%; border-radius: 8px; background: rgba(255, 255, 255, 0.16); border: 2px solid rgba(255, 255, 255, 0.7); box-sizing: border-box; pointer-events: none; }

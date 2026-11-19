@@ -87,6 +87,37 @@ test('what a pad lacks : no accelerator, no steering (a warning, not a refusal)'
   assert.deepEqual(missing(layout('a', MINI).filter((c) => c.type !== 'stick')), { go: false, steer: true })
 })
 
+const MINI_UP = { W: 375, H: 812, left: 0, right: 0, top: 50, bottom: 34 }
+const GAME_BOTTOM = MINI_UP.top + MINI_UP.W * 0.75
+const top = (c) => (c.type === 'button' || c.type === 'dpad' ? c.cy - c.r : c.y)
+
+test('portrait : every start goes to a spec and back unchanged, in the band under the game', () => {
+  for (const name of STARTS) {
+    const controls = startFrom(name, MINI_UP)
+    for (const c of controls) assert.ok(top(c) >= GAME_BOTTOM, `${name} ${c.id} under the game : ${top(c)}`)
+    const back = fromSpec(cleanSpec(JSON.stringify(toSpec(controls, MINI_UP, 'm', name))), MINI_UP)
+    for (const c of controls) {
+      const [x, y] = centre(c)
+      const [bx, by] = centre(back.find((k) => k.id === c.id))
+      near(bx, x, `${name} ${c.id} x`)
+      near(by, y, `${name} ${c.id} y`)
+    }
+  }
+})
+
+test('portrait : a pad made in landscape opens in the band, its corners kept ; an added control lands there, a drag stays there', () => {
+  const spec = toSpec(layout('a', MINI), MINI, 'm', 'a')
+  const up = fromSpec(spec, MINI_UP)
+  for (const c of up) assert.ok(top(c) >= GAME_BOTTOM, `${c.id} : ${top(c)}`)
+  const go = up.find((c) => c.id === 'go')
+  assert.ok(go.cx > MINI_UP.W / 2 && go.cy > MINI_UP.H * 0.8, 'GO still bottom right')
+  const moved = moveTo(go, 100, 0, MINI_UP)
+  assert.ok(moved.cy >= GAME_BOTTOM, `dragged onto the game : kept under it (${moved.cy})`)
+  const added = fromPalette('brake', up, MINI_UP, 'm', 100, 600)
+  assert.equal(added.cy, 600)
+  assert.ok(added.r < fromPalette('brake', [], MINI, 'm', 100, 100).r, 'smaller upright')
+})
+
 test('moving keeps a control inside the safe area ; scaling keeps its centre', () => {
   const go = layout('a', MINI).find((c) => c.id === 'go')
   const moved = moveTo(go, 5000, -40, MINI)

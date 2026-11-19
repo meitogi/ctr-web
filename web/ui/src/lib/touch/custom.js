@@ -5,7 +5,8 @@
 // A spec is what the browser keeps : { from, controls: [...] }, each control a layouts.js control
 // (type, bits, label and its flags : go, anchor, boost, boosts, gesture, brake, group, back) whose
 // place is written from the nearest corner of the safe area, in the layouts' own unit (u = the
-// viewport's height / 375 × the size setting) :
+// viewport's height / 375 × the size setting ; in portrait, the band under the game's, layouts.js
+// `band` — so a pad made in landscape opens in that band, its corners kept) :
 //   ax 'l' | 'r', ay 't' | 'b'   the corner
 //   dx, dy                       the control's centre from that corner
 //   r, or w and h, and `reach` for a stick
@@ -13,7 +14,7 @@
 // so a pad follows a rotation, another phone or another size. `fromSpec` gives layouts.js controls
 // in CSS px ; `toSpec` reads them back.
 import { PSX_BIT as B } from '../guest-input.js'
-import { layout, SIZES } from './layouts.js'
+import { band, layout, shift, SIZES } from './layouts.js'
 
 export const SCALE = Object.freeze({ min: 0.6, max: 1.6 })
 export const OPACITY = Object.freeze({ min: 0.2, max: 1 })
@@ -50,12 +51,13 @@ const TYPES = ['button', 'rect', 'dpad', 'stick']
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d)
 
-const frame = (view, size) => {
+const frame = (screen, size) => {
+  const view = band(screen)
   const L = Math.max(view.left ?? 0, 8)
   const R = Math.max(view.right ?? 0, 8)
   const top = Math.max(view.top ?? 0, 8)
   const bottom = Math.max(view.bottom ?? 0, 8)
-  return { L, R, top, bottom, u: (view.H / 375) * (SIZES[size] ?? 1) }
+  return { W: view.W, H: view.H, y0: view.y0 ?? 0, L, R, top, bottom, u: (view.unit ?? view.H / 375) * (SIZES[size] ?? 1) }
 }
 
 /** The centre of a layouts.js control, in px. */
@@ -63,11 +65,11 @@ export const centre = (c) => (c.type === 'button' || c.type === 'dpad' ? [c.cx, 
 
 /** layouts.js controls (CSS px, at this view) → a spec's controls. */
 export function toSpec(controls, view, size = 'm', from = null) {
-  const { W, H } = view
-  const { L, R, top, bottom, u } = frame(view, size)
+  const { W, H, y0, L, R, top, bottom, u } = frame(view, size)
   const out = []
   for (const c of controls) {
-    const [cx, cy] = centre(c)
+    const [cx, sy] = centre(c)
+    const cy = sy - y0
     const s = c.scale ?? 1
     const ax = cx < W / 2 ? 'l' : 'r'
     const ay = cy < H / 2 ? 't' : 'b'
@@ -85,12 +87,11 @@ export function toSpec(controls, view, size = 'm', from = null) {
 
 /** A spec → layouts.js controls at this view (each with its `scale` and `opacity`). */
 export function fromSpec(spec, view, size = 'm') {
-  const { W, H } = view
-  const { L, R, top, bottom, u } = frame(view, size)
+  const { W, H, y0, L, R, top, bottom, u } = frame(view, size)
   const out = []
   for (const k of spec.controls) {
     const cx = k.ax === 'l' ? L + k.dx * u : W - R - k.dx * u
-    const cy = k.ay === 't' ? top + k.dy * u : H - bottom - k.dy * u
+    const cy = y0 + (k.ay === 't' ? top + k.dy * u : H - bottom - k.dy * u)
     const s = k.s
     const c = { id: k.id, type: k.type, scale: s, opacity: k.o }
     if (k.type === 'button' || k.type === 'dpad') Object.assign(c, { cx, cy, r: k.r * u * s })
@@ -154,20 +155,19 @@ export function fromPalette(name, controls, view, size, cx, cy) {
  * accelerate, the index fingers have the boost (right) and the item (left) at the top.
  */
 function threeFingers(view, size) {
-  const { W, H } = view
-  const { L, R, top, bottom, u } = frame(view, size)
+  const { W, H, y0, L, R, top, bottom, u } = frame(view, size)
   const e = layout('e', view, { size })
   const pick = (id) => e.find((c) => c.id === id)
-  return [
-    { ...pick('steer'), brake: false },
+  // in the band (y0 : the screen's px) ; `e`'s are on the screen already
+  const own = [
     { id: 'go', type: 'button', cx: W - R - 70 * u, cy: H - bottom - 76 * u, r: 50 * u, bits: B.cross, label: 'GO', go: true },
     { id: 'slide', type: 'button', cx: W - R - 176 * u, cy: H - bottom - 58 * u, r: 36 * u, bits: B.r1, label: 'SLIDE', anchor: true },
     { id: 'brake', type: 'button', cx: W - R - 172 * u, cy: H - bottom - 138 * u, r: 24 * u, bits: B.square, label: 'BRAKE' },
     { id: 'boost', type: 'button', cx: W - R - 60 * u, cy: top + 96 * u, r: 38 * u, bits: B.l1, label: 'BOOST', boost: true },
     { id: 'item', type: 'button', cx: L + 60 * u, cy: top + 96 * u, r: 32 * u, bits: B.circle, label: 'ITEM' },
     { id: 'look', type: 'rect', x: W - R - 190 * u, y: top + 6 * u, w: 54 * u, h: 28 * u, bits: B.r2, label: 'LOOK' },
-    pick('start'),
   ]
+  return [{ ...pick('steer'), brake: false }, ...own.map((c) => (y0 ? shift(c, y0) : c)), pick('start')]
 }
 
 /** What « Start from… » offers : the built-in layouts, and the presets that exist only here. */
@@ -198,9 +198,9 @@ export function missing(controls) {
 
 /** A control moved so that its centre stays inside the safe area. */
 export function moveTo(c, cx, cy, view) {
-  const { L, R, top, bottom } = frame(view, 'm')
-  const x = clamp(cx, L, view.W - R)
-  const y = clamp(cy, top, view.H - bottom)
+  const { W, H, y0, L, R, top, bottom } = frame(view, 'm')
+  const x = clamp(cx, L, W - R)
+  const y = clamp(cy, y0 + top, y0 + H - bottom)
   if (c.type === 'button' || c.type === 'dpad') return { ...c, cx: x, cy: y }
   return { ...c, x: x - c.w / 2, y: y - c.h / 2 }
 }

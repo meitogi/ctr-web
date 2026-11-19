@@ -45,6 +45,7 @@ export const KEYS = {
   touchRetapMs: 'ctr-ui.touch-retap-ms',
   touchAutoBoost: 'ctr-ui.touch-auto-boost',
   touchBuffer: 'ctr-ui.touch-buffer',
+  touchSwipeSlide: 'ctr-ui.touch-swipe-slide',
   touchSound: 'ctr-ui.touch-sound',
   touchCustom: 'ctr-ui.touch-custom',
   touchTutorial: 'ctr-ui.touch-tutorial',
@@ -67,6 +68,10 @@ export const TOUCH_MODES = ['auto', 'pad', 'minimal', 'enhanced']
 // the first one is the default : E, the one a new player gets (the user, 2026-11-18)
 // ; the last one is the player's own (touchCustom, lib/touch/custom.js), offered once it exists
 export const TOUCH_LAYOUTS = ['e', 'a', 'b', 'c', 'd', 'mine']
+// what Settings offers (the user, 2026-11-19, the tri : C obsolete, B not practical, A and D
+// replaced by E) : E and the player's own pad. A to D stay valid where they are kept (shown while
+// in use) and as the editor's « Start from… »
+export const TOUCH_OFFERED = ['e', 'mine']
 /** how long a boost tapped before the meter's red waits for it (lib/touch/pad.js bufferMs) */
 export const TOUCH_BUFFER_MS = 80
 export const TOUCH_SIZES = ['s', 'm', 'l']
@@ -166,6 +171,8 @@ export function loadSettings(storage, { deviceKey = KEYS.device } = {}) {
     touchAutoBoost: read(storage, KEYS.touchAutoBoost) !== '0',
     // a boost tapped a little before the red is kept for it
     touchBuffer: read(storage, KEYS.touchBuffer) !== '0',
+    // layout E, to try (the user, 2026-11-19) : a swipe left / right slides, a tap uses the item
+    touchSwipeSlide: read(storage, KEYS.touchSwipeSlide) === '1',
     // the page's own sounds : a tick at the red, a chime on a boost made
     touchSound: read(storage, KEYS.touchSound) !== '0',
     // « my pad » : the layout built in the editor, null until then
@@ -202,6 +209,7 @@ function saveSettings(storage, s, deviceKey) {
   write(storage, KEYS.touchRetapMs, s.touchRetapMs === 250 ? null : s.touchRetapMs)
   write(storage, KEYS.touchAutoBoost, s.touchAutoBoost ? null : '0')
   write(storage, KEYS.touchBuffer, s.touchBuffer ? null : '0')
+  write(storage, KEYS.touchSwipeSlide, s.touchSwipeSlide ? '1' : null)
   write(storage, KEYS.touchSound, s.touchSound ? null : '0')
   write(storage, KEYS.touchCustom, s.touchCustom ? JSON.stringify(s.touchCustom) : null)
   write(storage, KEYS.touchTutorial, s.touchTutorial === 'seen' ? '1' : s.touchTutorial === 'new' ? '0' : null)

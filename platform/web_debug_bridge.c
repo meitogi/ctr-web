@@ -1085,6 +1085,15 @@ EM_JS(int, WebDebugBridge_HitJS, (void), {
 	return t | 0;
 });
 
+// An item in the first player's hand (session 42b : E's tap that uses the item) : ctrDev.item(id),
+// a DriverHeldItem (2 a missile, 1 a bomb, 4 a potion…), one of it, the roulette done. Taken once,
+// in a race only ; -1 when none was asked.
+EM_JS(int, WebDebugBridge_ItemJS, (void), {
+	const t = globalThis.__ctrItem;
+	globalThis.__ctrItem = undefined;
+	return t === undefined ? -1 : t | 0;
+});
+
 internal void WebDebugBridge_Precise(struct GameTracker *gGT)
 {
 	// a race or a battle (not the boot's intro levels, the hubs, the menus), loaded, its drivers in
@@ -1107,6 +1116,17 @@ internal void WebDebugBridge_Precise(struct GameTracker *gGT)
 		if (live && (hit > 0) && ((gGT->gameMode1 & (PAUSE_ALL | END_OF_RACE)) == 0))
 		{
 			VehPickState_NewState(gGT->drivers[0], hit, gGT->drivers[1] != NULL ? gGT->drivers[1] : gGT->drivers[0], 0);
+		}
+	}
+	{
+		const s32 item = WebDebugBridge_ItemJS();
+
+		if (live && (item >= 0) && (item < HELD_ITEM_NONE))
+		{
+			gGT->drivers[0]->heldItemID = (DriverHeldItem)item;
+			gGT->drivers[0]->numHeldItems = 1;
+			gGT->drivers[0]->itemRollTimer = 0;
+			gGT->drivers[0]->noItemTimer = 0;
 		}
 	}
 

@@ -27,6 +27,10 @@
 //                      auto boost giving reserves ; the steering thumb lifted ends it
 //   TOUCH-E-STICK-UP   layout E : the stick pushed up = GO from the start, locks like GO
 //   TOUCH-HOLD-HIT     layout E : the hold locked, P1 blasted then spun (ctrDev.hit) : still locked
+//   TOUCH-PORTRAIT     a phone held upright : the game at the top, E / A / minimal in the band under
+//                      it, smaller, none over the game ; GO drives ; back to landscape as before
+//   TOUCH-E-SWIPE      E's swipe slide : a swipe right slides right (stick untouched) ; a tap with
+//                      an item (ctrDev.item) uses it, no hop ; held still : the hop
 //   TOUCH-E-COUNTERSTEER layout E : a slide, the stick held into the turn → away : tighter → wider, never ended
 //   TOUCH-SLIDE-HOLD   layout D : a slide (R with the stick turned, at speed) held 0.5 s holds
 //                      itself — the game's « sliding » reaches the page —, R lights up at the boost's
@@ -58,6 +62,8 @@ export const tags = {
 	'TOUCH-E-BOOSTS': ['input', 'race'],
 	'TOUCH-E-STICK-UP': ['input', 'race'],
 	'TOUCH-HOLD-HIT': ['input', 'race'],
+	'TOUCH-PORTRAIT': ['input', 'page'],
+	'TOUCH-E-SWIPE': ['input', 'race'],
 	'TOUCH-E-COUNTERSTEER': ['input', 'race'],
 	'TOUCH-EDITOR': ['input', 'page'],
 	'TOUCH-TUTORIAL': ['input', 'page'],
@@ -68,15 +74,15 @@ const TT = { race: 'crash-cove', char: 'crash', mode: 'tt' }
 
 /** The touch settings (lib/settings.js keys) set before the page loads ; null removes one. */
 async function touchSettings(ctx, s) {
-	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms', touchRetapMs: 'ctr-ui.touch-retap-ms', touchTutorial: 'ctr-ui.touch-tutorial' }
+	const keys = { touchMode: 'ctr-ui.touch-mode', touchLayout: 'ctr-ui.touch-layout', touchHold: 'ctr-ui.touch-hold', touchHoldMs: 'ctr-ui.touch-hold-ms', touchRetapMs: 'ctr-ui.touch-retap-ms', touchTutorial: 'ctr-ui.touch-tutorial', touchSwipeSlide: 'ctr-ui.touch-swipe-slide' }
 	const set = {}
 	for (const k in keys) set[keys[k]] = k in s ? s[k] : null
 	await ctx.js(`const s = ${JSON.stringify(set)}; for (const k in s) { if (s[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, String(s[k])) } return true`)
 }
 
 /** The page on the phone, at `at` (startAt's), with these touch settings ; waits for the controls. */
-async function onPhone(ctx, at, s = {}, { kind = null, turbo: fast = false } = {}) {
-	await phone(ctx, IPHONE_MINI)
+async function onPhone(ctx, at, s = {}, { kind = null, turbo: fast = false, portrait = false } = {}) {
+	await phone(ctx, { ...IPHONE_MINI, portrait })
 	// no finger left down from a scenario before (the browser keeps its touch points across loads)
 	await ctx.conn.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, ctx.sid).catch(() => {})
 	// the scenarios written on layout A say nothing : A unless told (the default is E since 42b)
@@ -561,6 +567,107 @@ export default async ctx => {
 			if (t.hold !== 'held' || !k.cross || back < 9000) throw new Error(`after hit ${type} : hold ${t.hold}, Cross ${k.cross}, back to ${back} — ${trace.join(' ')}`)
 		}
 		return out.join(' · ')
+	})
+
+	// 42b, the user 2026-11-19 : « améliorer les contrôles en mode vertical, mettre les contrôles plus
+	// petits en bas » — upright, the game at the top (its picture's rect), the controls under it.
+	await ctx.scenario('TOUCH-PORTRAIT', async () => {
+		const rects = () => ctx.js("const c = document.getElementById('canvas').getBoundingClientRect(); return { game: [c.x, c.y, c.width, c.height], controls: [...document.querySelectorAll('#ctr-touch [data-id]')].map(e => { const r = e.getBoundingClientRect(); return { id: e.dataset.id, x: r.x, y: r.y, w: r.width, h: r.height } }), W: innerWidth, H: innerHeight }")
+		const out = []
+		for (const layout of ['e', 'a', 'minimal']) {
+			const s = layout === 'minimal' ? { touchMode: 'minimal' } : { touchLayout: layout }
+			await onPhone(ctx, TT, s, { kind: layout, portrait: true })
+			await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+			await sleep(500)
+			const r = await rects()
+			const [gx, gy, gw, gh] = r.game
+			if (r.W !== 375 || Math.abs(gy) > 1 || Math.abs(gw - 375) > 1) throw new Error(`the game upright : ${JSON.stringify(r.game)} on ${r.W} × ${r.H}`)
+			const over = r.controls.filter(c => c.y < gy + gh - 1 || c.y + c.h > r.H + 1 || c.x < -1 || c.x + c.w > r.W + 1)
+			if (over.length) throw new Error(`${layout} : over the game or off the screen : ${JSON.stringify(over)}`)
+			if (!r.controls.length) throw new Error(`${layout} : no controls`)
+			await shot(ctx, `portrait-${layout}`)
+			out.push(`${layout} : ${r.controls.length} controls from y ${Math.round(Math.min(...r.controls.map(c => c.y)))} (the game ends at ${Math.round(gy + gh)})`)
+		}
+		// E drives upright : the right half held
+		await onPhone(ctx, TT, { touchLayout: 'e' }, { kind: 'e', portrait: true })
+		await until(ctx, 'the race', st => st.screen === 'race', { timeout: 30_000 })
+		const f = fingers(ctx)
+		const right = await f.rect('right')
+		await f.down(2, right.cx, right.cy)
+		let speed = 0
+		for (const end = Date.now() + 20_000; Date.now() < end && speed < 9000; await sleep(50)) speed = (await kart(ctx))?.speed ?? 0
+		await f.all()
+		if (speed < 9000) throw new Error(`GO upright : speed ${speed}`)
+		// turned back : landscape's places, the game centred again
+		await phone(ctx, IPHONE_MINI)
+		await sleep(800)
+		const flat = await rects()
+		const go = flat.controls.find(c => c.id === 'right')
+		if (Math.abs(flat.game[1] - (375 - flat.game[3]) / 2) > 1 || !go || go.x < 400) throw new Error(`back to landscape : ${JSON.stringify(flat.game)} ${JSON.stringify(go)}`)
+		return `${out.join(' · ')} · GO upright : speed ${speed} · landscape again : the game centred, the right half from x ${Math.round(go.x)}`
+	})
+
+	// 42b, the user 2026-11-19 : « slide gauche slide droite pour déclencher le dérapage. Et que ça
+	// déclenche en prio l'item si on a un item au lieu du saut » — the switch on : a swipe right with
+	// the stick untouched, the game slides right ; an item in hand (ctrDev.item), a tap uses it
+	// (heldItemID back to none) with no hop ; another, held still : the hop, the item kept.
+	await ctx.scenario('TOUCH-E-SWIPE', async () => {
+		// the kart's turn over 0.3 s of a slide (4096 a turn ; its sign, the side)
+		const slideTurn = async (what) => {
+			const st = await until(ctx, what, c => c.karts?.[0]?.state === 2, { timeout: 3000, every: 30 })
+			await sleep(300)
+			const a1 = (await state(ctx)).karts[0].angle
+			await until(ctx, `${what} over`, c => c.karts?.[0]?.state !== 2, { timeout: 5000, every: 50 })
+			return ((((a1 - st.karts[0].angle) % 4096) + 6144) % 4096) - 2048
+		}
+		// the side of a right turn, by the stick : the same tap as without the switch, the stick right
+		const one = await eDriving(ctx, { touchSwipeSlide: 1 })
+		const [x, y] = [one.zone.x + one.zone.w / 2, one.zone.y + one.zone.h / 2]
+		await one.f.down(1, x, y)
+		await one.f.move(1, x + 70, y)
+		await sleep(150)
+		await one.f.down(2, one.right.cx, one.right.cy)
+		await sleep(80)
+		await one.f.up(2)
+		const stickTurn = await slideTurn('the stick\'s slide')
+		await one.f.all()
+		// a swipe right, the stick untouched (the race again : a slide ends at a wall)
+		const { f, right } = await eDriving(ctx, { touchSwipeSlide: 1 })
+		const k0 = (await state(ctx)).karts[0]
+		await f.down(2, right.cx, right.cy)
+		await f.move(2, right.cx + 50, right.cy)
+		await sleep(60)
+		await f.up(2)
+		const turn = await slideTurn('the swiped slide')
+		if (!turn || Math.sign(turn) !== Math.sign(stickTurn)) throw new Error(`the swipe right turned ${turn}, the stick right ${stickTurn}`)
+		// an item : a tap uses it, the kart stays on the ground
+		await ctx.js('ctrDev.item(2); return true')
+		await until(ctx, 'the item in hand', c => c.karts?.[0]?.item === 2, { timeout: 3000, every: 30 })
+		await sleep(300)
+		await spy(ctx)
+		await f.down(2, right.cx, right.cy)
+		await sleep(70)
+		await f.up(2)
+		const used = await until(ctx, 'the item used', c => c.karts?.[0]?.item === 15, { timeout: 3000, every: 30 }).catch(() => null)
+		const tapped = await pulls(ctx)
+		const r1 = tapped.filter(p => p[0] & 0x800).length
+		const circle = tapped.filter(p => p[0] & 0x2000).length
+		if (!used || !circle || r1) throw new Error(`a tap with an item : used ${!!used}, Circle in ${circle} pulls, R1 in ${r1}`)
+		// held still with an item : the hop, the item kept
+		await sleep(1500)
+		await ctx.js('ctrDev.item(2); return true')
+		await until(ctx, 'the item in hand', c => c.karts?.[0]?.item === 2, { timeout: 3000, every: 30 })
+		await sleep(300)
+		await pulls(ctx)
+		await f.down(2, right.cx, right.cy)
+		await sleep(350)
+		await f.up(2)
+		await sleep(300)
+		const held = await pulls(ctx)
+		const k = (await state(ctx)).karts[0]
+		const hop = held.filter(p => p[0] & 0x800).length
+		if (!hop || held.some(p => p[0] & 0x2000) || k.item !== 2) throw new Error(`held still with an item : R1 in ${hop} pulls, Circle ${held.filter(p => p[0] & 0x2000).length}, item ${k.item}`)
+		return `a swipe right, the stick untouched : the slide, turned ${turn} in 0.3 s (a slide by the stick right : ${stickTurn}, the same side ; speed ${k0.speed}) · a missile in hand, a tap : used (Circle in ${circle} pulls, no R1) · another, held still : the hop (R1 in ${hop} pulls), the missile kept`
 	})
 
 	// 42b, the user 2026-11-19 : « s'il va vers la gauche il faudrait qu'en braquant à droite je

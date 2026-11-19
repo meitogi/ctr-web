@@ -73,8 +73,11 @@ measured yet.
     swipe up or down there = your item, forward or behind (a bomb rolls backward, a potion is
     thrown ahead). **GO holds itself** once you've kept it pressed 0.8 s in a race (a plain press
     first : the start boost is yours) — the brake, the pause or the finish let go.
-    four more layouts to try (A to D : buttons, a glide, left / right, one thumb a side), and
-    **your own** : « Edit my pad » moves, resizes, adds and removes controls — the super buttons
+    a switch to try instead : swipe left or right to slide that way, a tap uses your item (the hop
+    is then a touch held still). held upright, the game goes to the top and the controls, smaller,
+    to the band under it. **your own** pad : « Edit my pad » starts from the default or from four
+    older layouts (buttons, a glide, left / right, one thumb a side) and moves, resizes, adds and
+    removes controls — the super buttons
     (a GO that holds itself, a slide that is kept, a boost lit at its moment…) or the pad's plain
     ones. your first race by touch shows six short cards while you drive, each going on once
     you've done it (› skips one) ; « Show the tutorial again » brings them back.

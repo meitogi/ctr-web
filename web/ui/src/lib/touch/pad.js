@@ -102,7 +102,14 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
   // A boost tapped before the red is a failed boost in the game (the meter is emptied) : with
   // `bufferMs`, a tap in a slide outside the red waits that long for the red and is sent as it
   // starts — or as it was, when the red does not come.
-  let eSlide = null // { since, seen }
+  // `swipeSlide` (the user, 2026-11-19 : « slide gauche slide droite pour déclencher le dérapage … et
+  // que ça déclenche en prio l'item si on a un item au lieu du saut ») : moved left or right, the
+  // touch is the slide to that side — the stick put full that way until the game slides, then the
+  // player's again (centred : the game's middle curve) ; a tap (lifted inside 200 ms) uses the item
+  // when the kart holds one (the game's word, `item`), the hop then being the 200 ms still touch.
+  // Such a slide ends on a steering thumb lifted only if one came down during it.
+  let eSlide = null // { since, seen, dir, thumb }
+  let hasItem = false
   let r1Until = 0
   let circleUntil = 0
   let itemDir = 0 // Up or Down, held with the item's Circle
@@ -198,8 +205,12 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       f.x = x
       f.y = y
       if (f.start.gesture && f.mode === 'pending') {
+        const dx = x - f.ox
         const dy = y - f.oy
-        if (dy < -30 || dy > 30) {
+        if (self.swipeSlide && (dx < -30 || dx > 30) && Math.abs(dx) > Math.abs(dy)) {
+          f.mode = 'done'
+          eSlide = { since: null, seen: false, dir: dx < 0 ? -1 : 1, thumb: false }
+        } else if (dy < -30 || dy > 30) {
           f.mode = 'done'
           circleUntil = -1
           itemDir = dy < 0 ? B.up : B.down
@@ -221,7 +232,10 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
       const f = fingers[id]
       if (!f) return false
       const r = self.read(id)
-      if (f.start.gesture && f.mode === 'pending') hopOrSlide(t)
+      if (f.start.gesture && f.mode === 'pending') {
+        if (self.swipeSlide && hasItem && racing && t - f.t0 < 200) { circleUntil = -1; itemDir = 0 }
+        else hopOrSlide(t)
+      }
       // a steering thumb lifted while turning : the stick kept for a re-touch (not after a slide)
       if (f.start.type === 'stick' && !f.drift && self.retapMs > 0 && racing && f.raw && Math.hypot(f.raw[0], f.raw[1]) >= 0.4) {
         stickMemo = { raw: f.raw, out: r.stick, until: t + self.retapMs }
@@ -340,7 +354,8 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
      * The pad now, as an 8-byte PSX packet at dst[at] (status, id, buttons lo / hi, right x y, left
      * x y) ; `race` : a race is driven (the game's word). Returns 0 while hidden.
      */
-    packet(dst, at, race, now, slide = false, red = false, revving = false, made = 0) {
+    packet(dst, at, race, now, slide = false, red = false, revving = false, made = 0, item = false) {
+      hasItem = !!item
       if (race !== racing) {
         racing = race
         self.onRacing?.(race)
@@ -412,8 +427,15 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
         let steering = false
         for (const id in fingers) if (fingers[id].start.type === 'stick') steering = true
         if (sliding) eSlide.seen = true
-        if ((bits & B.square) || !racing || !steering || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 700)) eSlide = null
-        else bits |= B.r1
+        if (steering) eSlide.thumb = true
+        eSlide.since ??= now
+        const lifted = eSlide.dir ? eSlide.thumb && !steering : !steering
+        if ((bits & B.square) || !racing || lifted || (eSlide.seen && !sliding) || (!eSlide.seen && now - eSlide.since > 700)) eSlide = null
+        else {
+          bits |= B.r1
+          // a swiped slide : turned that way until the game slides
+          if (eSlide.dir && !eSlide.seen) stick = [eSlide.dir, 0]
+        }
       }
       if (r1Until === -1) r1Until = now + 100
       if (r1Until && now < r1Until) bits |= B.r1
@@ -494,6 +516,8 @@ export function createTouchPad({ hold: holdOpts = {} } = {}) {
     autoBoost: false,
     /** how long a boost tapped before the red waits for it ; 0 = off */
     bufferMs: 0,
+    /** E : a swipe left / right on the right half slides that way ; a tap uses the item held */
+    swipeSlide: false,
     /** the slide's boosts made, as the game counts them (0 outside a slide) */
     get boosts() { return boosts },
     /** called with that count when it changes */

@@ -2,7 +2,7 @@
   // Settings › Controls › Touch (session 42) : the way to play on a touch screen (a pad / the minimal
   // on-screen pad / the enhanced one), the enhanced one's layout, the held accelerator and its delay,
   // the controls' size. Kept by the browser (lib/settings.js) ; TouchPad.svelte follows at once.
-  import { TOUCH_HOLD_MS, TOUCH_LAYOUTS, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_RETAP_MS, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS, TOUCH_STEER, touchTraits } from './lib/settings.js'
+  import { TOUCH_HOLD_MS, TOUCH_OFFERED, TOUCH_ROCK_PX, TOUCH_SIZES, TOUCH_RETAP_MS, TOUCH_SLIDE_HOLD_MS, TOUCH_SLIDE_MS, TOUCH_STEER, touchTraits } from './lib/settings.js'
   import { ui } from './state.svelte.js'
   import { T } from './lib/strings.js'
   import { live, settings } from './store.js'
@@ -13,7 +13,8 @@
   // what the layout in use has : the settings that only make sense with it
   const has = $derived(touchTraits(s))
   // « mine » is offered once it exists
-  const layouts = $derived(TOUCH_LAYOUTS.filter((l) => l !== 'mine' || s.touchCustom))
+  // the one in use stays in the list until another is picked (a layout no longer offered included)
+  const layouts = $derived(TOUCH_OFFERED.filter((l) => l !== 'mine' || s.touchCustom).concat(TOUCH_OFFERED.includes(s.touchLayout) ? [] : [s.touchLayout]))
   // the editor works over the game : Settings closes
   const edit = () => { ui.settingsOpen = false; ui.touchEditor = true }
 </script>
@@ -69,6 +70,10 @@
       <label class="setrow">
         <span>{T.touchAutoBoost}<small>{T.touchAutoBoostHelp}</small></span>
         <input id="ctr-touch-auto-boost" type="checkbox" role="switch" class="switch" checked={s.touchAutoBoost} onchange={(e) => settings.patch({ touchAutoBoost: e.currentTarget.checked })} />
+      </label>
+      <label class="setrow">
+        <span>{T.touchSwipeSlide}<small>{T.touchSwipeSlideHelp}</small></span>
+        <input id="ctr-touch-swipe-slide" type="checkbox" role="switch" class="switch" checked={s.touchSwipeSlide} onchange={(e) => settings.patch({ touchSwipeSlide: e.currentTarget.checked })} />
       </label>
     {/if}
 

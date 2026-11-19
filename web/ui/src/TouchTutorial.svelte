@@ -26,7 +26,7 @@
   const controls = mode === 'minimal' ? layout('minimal', view, { size: s.touchSize })
     : s.touchLayout === 'mine' && s.touchCustom ? fromSpec(s.touchCustom, view, s.touchSize)
     : layout(s.touchLayout, view, { size: s.touchSize })
-  const list = cards(controls)
+  const list = cards(controls, { swipe: mode === 'enhanced' && s.touchSwipeSlide })
   let i = $state(0)
   let ticked = $state(false)
   const card = $derived(list[i])
@@ -94,6 +94,10 @@
     min-height: 34px; padding: 5px 14px; border-radius: 9px; border: 1px solid #e03131; background: rgba(23, 26, 36, 0.92); color: #ff8787; font: 600 13px var(--text); cursor: pointer; }
   .card { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 48px); left: calc(env(safe-area-inset-left, 0px) + 12px); width: min(340px, 42vw);
     box-sizing: border-box; padding: 8px 12px 10px 14px; border-radius: 12px; background: rgba(23, 26, 36, 0.92); border: 1px solid #3a3f52; transition: border-color 0.2s; }
+  /* upright : under the game (app.css), clear of the pause button, the width of the screen */
+  @media (orientation: portrait) and (pointer: coarse) {
+    .card { top: calc(env(safe-area-inset-top, 0px) + 75vw + 44px); right: 12px; width: auto; max-width: 420px; }
+  }
   .card.done { border-color: #40c057; }
   h3 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 4px; color: #ffb21e; font-size: 16px; }
   .tick { display: none; color: #40c057; }

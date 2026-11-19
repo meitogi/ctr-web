@@ -42,6 +42,12 @@ body.ctr-game input, body.ctr-game textarea { -webkit-user-select: text; user-se
   background: #000; outline: none; display: block;
   transition: left 220ms ease, transform 220ms ease;
 }
+/* a phone held upright : the game at the top, under the notch, the touch controls in the band under
+   it (lib/touch/layouts.js `band` puts them from the same place : the safe area's top + the game's
+   height) */
+@media (orientation: portrait) and (pointer: coarse) {
+  #canvas { top: calc(env(safe-area-inset-top, 0px) + 300px * var(--game-scale, 1)); }
+}
 /* the dev log stays in the page (suites read it), shown only with ?log */
 #log { display: none; }
 body.ctr-log #log {

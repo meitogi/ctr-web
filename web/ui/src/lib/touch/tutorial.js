@@ -10,8 +10,12 @@ import { PSX_BIT as B } from '../guest-input.js'
 
 const ids = (list) => list.map((c) => c.id)
 
-/** @param {object[]} controls the race layout's controls (layouts.js, custom.js fromSpec) */
-export function cards(controls) {
+/**
+ * @param {object[]} controls the race layout's controls (layouts.js, custom.js fromSpec)
+ * @param {{ swipe?: boolean }} [opts] `swipe` : the right side's swipe slide and item tap (pad.js
+ *   `swipeSlide`)
+ */
+export function cards(controls, { swipe = false } = {}) {
   const with_ = (fn) => controls.filter(fn)
   const stick = with_((c) => c.type === 'stick')
   const dpad = with_((c) => c.type === 'dpad')
@@ -34,11 +38,11 @@ export function cards(controls) {
   // the start first : the cards open during the track's fly-in, before the countdown
   if (gas) out.push({ id: 'start', parts: [gas[1]], targets: ids(gas[2]) })
   if (steer || gas) out.push({ id: 'go', parts: [steer?.[0], gas?.[0], brakeStick.length ? 'goStick' : null].filter(Boolean), targets: ids([...(steer?.[1] ?? []), ...(gas?.[2] ?? [])]) })
-  if (gesture.length) out.push({ id: 'slide', parts: ['slideGesture'], targets: ids(gesture) })
+  if (gesture.length) out.push({ id: 'slide', parts: [swipe ? 'slideSwipe' : 'slideGesture'], targets: ids(gesture) })
   else if (anchor.length) out.push({ id: 'slide', parts: [boost.length ? 'slideButton' : 'slideButtonAlone'], targets: ids([...anchor, ...boost]) })
   else if (glide.length) out.push({ id: 'slide', parts: ['slideGlide'], targets: ids(with_((c) => c.group)) })
   else if (r1.length) out.push({ id: 'slide', parts: ['slidePad'], targets: ids([...r1, ...boost]) })
-  if (gesture.length) out.push({ id: 'items', parts: ['itemSwipe'], targets: ids(gesture) })
+  if (gesture.length) out.push({ id: 'items', parts: [swipe ? 'itemTap' : 'itemSwipe'], targets: ids(gesture) })
   else if (item.length) out.push({ id: 'items', parts: [item.some((c) => c.bits & (B.up | B.down)) ? 'itemButtons' : 'itemButton'], targets: ids(item) })
   if (brakeStick.length) out.push({ id: 'brake', parts: ['brakeStick'], targets: ids(brakeStick) })
   else if (square.length) out.push({ id: 'brake', parts: ['brakeButton'], targets: ids(square) })
@@ -47,7 +51,7 @@ export function cards(controls) {
 }
 
 /** Every text key a card can say (strings.js has each, in every language : tutorial.test.js). */
-export const PARTS = ['steerStick', 'goStick', 'steerDpad', 'steerArrows', 'goGesture', 'goButton', 'goPad', 'startGesture', 'startButton', 'startPad', 'slideGesture', 'slideButton', 'slideButtonAlone', 'slideGlide', 'slidePad', 'itemSwipe', 'itemButtons', 'itemButton', 'brakeStick', 'brakeButton', 'look']
+export const PARTS = ['steerStick', 'goStick', 'steerDpad', 'steerArrows', 'goGesture', 'goButton', 'goPad', 'startGesture', 'startButton', 'startPad', 'slideGesture', 'slideSwipe', 'slideButton', 'slideButtonAlone', 'slideGlide', 'slidePad', 'itemSwipe', 'itemTap', 'itemButtons', 'itemButton', 'brakeStick', 'brakeButton', 'look']
 export const CARDS = ['start', 'go', 'slide', 'items', 'brake', 'look']
 
 /**

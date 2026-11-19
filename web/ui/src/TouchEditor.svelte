@@ -8,6 +8,7 @@
   // keeps it as the layout « Mine » (lib/settings.js touchCustom). Pause cannot be removed ; a pad
   // that cannot accelerate or steer is told, not refused.
   import { T } from './lib/strings.js'
+  import { band } from './lib/touch/layouts.js'
   import { pauseGame } from './lib/touch/pause.js'
   import { OPACITY, PALETTE, SCALE, STARTS, centre, fromPalette, fromSpec, missing, moveTo, scaleTo, startFrom, toSpec } from './lib/touch/custom.js'
   import { ui } from './state.svelte.js'
@@ -55,7 +56,9 @@
     if (drag && e.pointerId === drag.pointer) drag = null
   }
   function add(k) {
-    const c = fromPalette(k, controls, view, size, view.W / 2, view.H / 2)
+    // in the middle of where the controls go (in portrait, the band under the game)
+    const b = band(view)
+    const c = fromPalette(k, controls, view, size, view.W / 2, (b.y0 ?? 0) + b.H / 2)
     controls = [...controls, c]
     picked = c.id
     tray = null

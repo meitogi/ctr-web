@@ -25,6 +25,8 @@
   #video { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   /* the host's game, beside Settings when it is open (--sidebar, ui.css) */
   #video { position: fixed; top: 0; left: 0; width: calc(100% - var(--sidebar, 0px)); height: 100%; object-fit: contain; background: #000; transition: width 220ms ease; }
+  /* a phone held upright : the game at the top, the touch controls under it (ui/src/lib/touch/layouts.js `band`) */
+  @media (orientation: portrait) and (pointer: coarse) { #video { top: env(safe-area-inset-top, 0px); height: calc(75vw - var(--sidebar, 0px) * 0.75); } }
   /* without the interface (ui/ not built) : one line of text */
   #fallback { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; padding: 6px 10px; font: 12px/1.4 monospace; color: #ccc; background: #111; }
 </style>

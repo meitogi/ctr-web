@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { PSX_BIT as B } from '../src/lib/guest-input.js'
 import { HOLD_DELAY, createHold } from '../src/lib/touch/hold.js'
-import { KINDS, hit, layout } from '../src/lib/touch/layouts.js'
+import { KINDS, band, hit, layout } from '../src/lib/touch/layouts.js'
 import { PAD_ANALOG, PAD_DIGITAL, createTouchPad } from '../src/lib/touch/pad.js'
 
 const MINI = { W: 812, H: 375, left: 47, right: 47, bottom: 21, top: 0 }
@@ -230,6 +230,41 @@ test('the hold : a long press again on a locked GO keeps it locked ; the delay i
   assert.equal(h.state, 'pressing')
   h.update(1200, { go: true })
   assert.equal(h.state, 'held')
+})
+
+// upright : 375 × 812 (the notch's 50 on top, the home bar's 34), 430 × 932
+const MINI_UP = { W: 375, H: 812, left: 0, right: 0, top: 50, bottom: 34 }
+const MAX_UP = { W: 430, H: 932, left: 0, right: 0, top: 59, bottom: 34 }
+const box = (c) => (c.type === 'button' || c.type === 'dpad' ? [c.cx - c.r, c.cy - c.r, c.cx + c.r, c.cy + c.r] : [c.x, c.y, c.x + c.w, c.y + c.h])
+
+test('portrait : every layout in the band under the game (scaled to the width, under the notch), inside the screen, smaller than in landscape', () => {
+  for (const [up, flat] of [[MINI_UP, MINI], [MAX_UP, MAX]]) {
+    const game = up.top + up.W * 0.75
+    assert.equal(band(up).y0, Math.round(game))
+    for (const kind of KINDS) {
+      const list = layout(kind, up)
+      const wide = layout(kind, flat)
+      for (const c of list) {
+        const [x0, y0, x1, y1] = box(c)
+        assert.ok(x0 >= -0.5 && x1 <= up.W + 0.5, `${kind}/${c.id} x ${x0}..${x1}`)
+        assert.ok(y0 >= game && y1 <= up.H - up.bottom + 0.5, `${kind}/${c.id} y ${y0}..${y1} : under the game (${game}) and the home bar`)
+        const w = wide.find((k) => k.id === c.id)
+        if (c.r) assert.ok(c.r < w.r, `${kind}/${c.id} smaller : ${c.r} < ${w.r}`)
+      }
+    }
+  }
+  assert.equal(band(MINI), MINI, 'landscape : the viewport itself')
+  const b = band(MINI_UP)
+  assert.equal(band(b), b, 'a band stays as it is')
+})
+
+test('portrait : the pad plays there (a hit on GO\'s zone, the stick under the thumb)', () => {
+  const pad = make('e', MINI_UP)
+  const right = at(pad, 'right')
+  const z = at(pad, 'steer')
+  assert.equal(hit(pad.controls, right.x + 20, right.y + 20).id, 'right')
+  assert.equal(hit(pad.controls, z.x + 20, z.y + 20).id, 'steer')
+  assert.equal(hit(pad.controls, 100, 100), null, 'the game\'s picture is no control')
 })
 
 test('racing changes are told once', () => {
@@ -592,6 +627,85 @@ test('E : swipe up = the item with Up (a potion ahead), swipe down = the item wi
   assert.equal(pk(3050).bits, B.cross | B.circle | B.down, 'the item, behind ; GO stays held')
   pad.up(1, 3100)
   assert.equal(pk(3300).bits, B.cross, 'brief ; the direction let go with it')
+})
+
+// the variant to try (swipeSlide) : the packet with the game's « the kart holds an item »
+const eSwipe = () => {
+  const e = eRace()
+  e.pad.swipeSlide = true
+  const pk = (t, { slide = false, item = false } = {}) => { const p = new Uint8Array(8); e.pad.packet(p, 0, true, t, slide, false, false, 0, item); return { bits: ~(p[2] | (p[3] << 8)) & 0xffff, lx: p[6] } }
+  return { ...e, pk }
+}
+
+test('E swipe : a swipe right slides right, the stick turned that way until the game slides, then the player\'s (none : centred) ; the game ends it', () => {
+  const { pad, R, pk } = eSwipe()
+  pad.down(1, ...R, 2000)
+  pad.move(1, R[0] + 40, R[1] + 5)
+  const a = pk(2030)
+  assert.equal(a.bits, B.cross | B.r1, 'the hop held')
+  assert.ok(a.lx > 0xf0, `turned right : ${a.lx}`)
+  pad.up(1, 2080)
+  assert.ok(pk(2200).lx > 0xf0, 'still turned while the hop flies')
+  const b = pk(2300, { slide: true })
+  assert.equal(b.bits, B.cross | B.r1, 'the slide')
+  assert.equal(b.lx, 0x80, 'sliding : the stick is the player\'s again')
+  assert.equal(pk(3000, { slide: true }).bits & B.r1, B.r1, 'no thumb on the stick : it goes on')
+  assert.equal(pk(3100).bits & B.r1, 0, 'the game ended it')
+})
+
+test('E swipe : left slides left ; a steering thumb that came down during it ends it when lifted ; without the game sliding, 0.7 s', () => {
+  const { pad, R, z, pk } = eSwipe()
+  pad.down(1, ...R, 2000)
+  pad.move(1, R[0] - 40, R[1])
+  assert.ok(pk(2030).lx < 0x10, 'turned left')
+  pad.up(1, 2080)
+  pk(2300, { slide: true })
+  const [ox, oy] = [z.x + 60, z.y + z.h - 80]
+  pad.down(2, ox, oy, 2400)
+  pad.move(2, ox - z.reach, oy)
+  assert.ok(pk(2500, { slide: true }).lx < 0x10, 'the thumb doses it')
+  pad.up(2, 2600)
+  assert.equal(pk(2610, { slide: true }).bits & B.r1, 0, 'lifted : ended')
+  pk(2700)
+  pad.down(1, ...R, 4000)
+  pad.move(1, R[0] + 40, R[1])
+  pk(4010)
+  assert.equal(pk(4600).bits & B.r1, B.r1)
+  assert.equal(pk(4800).bits & B.r1, 0, 'no slide from the game : let go')
+})
+
+test('E swipe : a tap uses the item held (no hop) ; with none it hops ; held still 200 ms it hops, item or not ; swipes up / down unchanged', () => {
+  const { pad, R, pk } = eSwipe()
+  pad.down(1, ...R, 2000)
+  pk(2050, { item: true })
+  pad.up(1, 2100)
+  assert.equal(pk(2110, { item: true }).bits, B.cross | B.circle, 'the item, not the hop')
+  assert.equal(pk(2300).bits, B.cross, 'brief')
+  pad.down(1, ...R, 3000)
+  pk(3050)
+  pad.up(1, 3100)
+  assert.equal(pk(3110).bits, B.cross | B.r1, 'no item : the hop')
+  pad.down(1, ...R, 4000)
+  pk(4050, { item: true })
+  assert.equal(pk(4210, { item: true }).bits, B.cross | B.r1, 'held still : the hop, item or not')
+  pad.up(1, 4300)
+  pk(4500, { item: true })
+  pad.down(1, ...R, 5000)
+  pad.move(1, R[0], R[1] - 40)
+  assert.equal(pk(5050, { item: true }).bits, B.cross | B.circle | B.up, 'a swipe up : the item ahead')
+  pad.up(1, 5100)
+})
+
+test('E swipe off (the default) : a sideways move is a tap, a tap with an item hops', () => {
+  const { pad, R, pk } = eRace()
+  const item = (t) => { const p = new Uint8Array(8); pad.packet(p, 0, true, t, false, false, false, 0, true); return { bits: ~(p[2] | (p[3] << 8)) & 0xffff, lx: p[6] } }
+  pad.down(1, ...R, 2000)
+  pad.move(1, R[0] + 40, R[1])
+  item(2030)
+  pad.up(1, 2080)
+  const a = item(2090)
+  assert.equal(a.bits, B.cross | B.r1, 'the hop')
+  assert.equal(a.lx, 0x80, 'not turned')
 })
 
 test('E : the stick pulled straight down brakes (GO let go) ; a turn does not, nor a slide', () => {
